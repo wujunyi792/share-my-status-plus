@@ -37,15 +37,3 @@ struct CoverGetResponse {
     2: optional binary data;
     3: optional string contentType;
 }
-
-// 封面服务定义
-service CoverService {
-    // 查询封面是否存在
-    CoverExistsResponse CheckExists(1: CoverExistsRequest req) (api.get="/v1/cover/exists");
-    
-    // 上传封面
-    CoverUploadResponse Upload(1: CoverUploadRequest req) (api.post="/v1/cover/upload");
-    
-    // 获取封面
-    CoverGetResponse Get(1: CoverGetRequest req) (api.get="/v1/cover/{hash}");
-}

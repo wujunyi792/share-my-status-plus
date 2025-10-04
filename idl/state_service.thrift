@@ -24,12 +24,3 @@ struct QueryStateResponse {
     1: required common.BaseResponse base;
     2: optional common.StatusSnapshot snapshot;
 }
-
-// 状态服务定义
-service StateService {
-    // 批量上报状态
-    BatchReportResponse BatchReport(1: BatchReportRequest req) (api.post="/v1/state/report");
-    
-    // 查询最新状态
-    QueryStateResponse QueryState(1: QueryStateRequest req) (api.get="/v1/state/query");
-}

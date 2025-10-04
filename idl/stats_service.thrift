@@ -17,9 +17,3 @@ struct StatsQueryResponse {
     4: optional list<common.TopItem> topArtists;
     5: optional list<common.TopItem> topTracks;
 }
-
-// 统计服务定义
-service StatsService {
-    // 查询统计数据
-    StatsQueryResponse QueryStats(1: StatsQueryRequest req) (api.post="/v1/stats/query");
-}

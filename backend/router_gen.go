@@ -3,8 +3,9 @@
 package main
 
 import (
+	router "share-my-status/api/router"
+
 	"github.com/cloudwego/hertz/pkg/app/server"
-	router "share-my-status/biz/router"
 )
 
 // register registers all routers.

@@ -5,3 +5,63 @@ package share_my_status
 import (
 	"github.com/cloudwego/hertz/pkg/app"
 )
+
+func rootMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _v1Mw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _connectMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _coverMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _checkexistsMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _getMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _uploadMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _stateMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _querystateMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _batchreportMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _statsMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _querystatsMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}

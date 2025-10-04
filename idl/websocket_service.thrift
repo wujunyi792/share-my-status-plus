@@ -30,9 +30,3 @@ struct WSConnectResponse {
     1: required common.BaseResponse base;
     2: optional string sessionId;
 }
-
-// WebSocket服务定义（用于生成相关结构，实际WebSocket处理在HTTP层）
-service WebSocketService {
-    // WebSocket连接建立（实际通过HTTP升级）
-    WSConnectResponse Connect(1: WSConnectRequest req) (api.get="/v1/ws");
-}
