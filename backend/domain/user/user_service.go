@@ -1,14 +1,11 @@
-package service
+package user
 
 import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-
-	"share-my-status/internal/cache"
-	"share-my-status/internal/database"
-	"share-my-status/internal/model"
+	"share-my-status/model"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -22,10 +19,10 @@ type UserService struct {
 	cache *redis.Client
 }
 
-func NewUserService() *UserService {
+func NewUserService(db *gorm.DB, cache *redis.Client) *UserService {
 	return &UserService{
-		db:    database.GetDB(),
-		cache: cache.GetClient(),
+		db:    db,
+		cache: cache,
 	}
 }
 

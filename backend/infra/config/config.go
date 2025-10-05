@@ -9,9 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// GlobalConfig 全局配置
-var GlobalConfig *Config
-
 // Config 应用配置
 type Config struct {
 	// 应用配置
@@ -73,7 +70,7 @@ type SchedulerConfig struct {
 }
 
 // Init 初始化配置
-func Init() error {
+func Init() (*Config, error) {
 	// 加载环境变量文件
 	if err := loadEnv(); err != nil {
 		logrus.Warnf("Failed to load .env file: %v", err)
@@ -114,15 +111,13 @@ func Init() error {
 		},
 	}
 
-	GlobalConfig = config
-
 	// 设置日志级别
-	if err := setupLogger(); err != nil {
-		return err
+	if err := setupLogger(config); err != nil {
+		return nil, err
 	}
 
 	logrus.Infof("Config loaded successfully: %+v", config)
-	return nil
+	return config, nil
 }
 
 // loadEnv 加载环境变量文件
@@ -169,14 +164,14 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 }
 
 // setupLogger 设置日志配置
-func setupLogger() error {
-	level, err := logrus.ParseLevel(GlobalConfig.Log.Level)
+func setupLogger(cfg *Config) error {
+	level, err := logrus.ParseLevel(cfg.Log.Level)
 	if err != nil {
 		level = logrus.InfoLevel
 	}
 	logrus.SetLevel(level)
 
-	if GlobalConfig.Log.Format == "text" {
+	if cfg.Log.Format == "text" {
 		logrus.SetFormatter(&logrus.TextFormatter{
 			TimestampFormat: "2006-01-02 15:04:05",
 			FullTimestamp:   true,

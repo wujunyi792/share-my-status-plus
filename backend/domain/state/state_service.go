@@ -1,15 +1,15 @@
-package service
+package state
 
 import (
 	"context"
 	"fmt"
+	"share-my-status/domain/user"
+	"share-my-status/infra/ws"
+	"share-my-status/model"
 	"time"
 
 	common "share-my-status/api/model/share_my_status/common"
 	state "share-my-status/api/model/share_my_status/state"
-	"share-my-status/internal/cache"
-	"share-my-status/internal/database"
-	"share-my-status/internal/model"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
@@ -18,28 +18,24 @@ import (
 )
 
 type StateService struct {
-	db        *gorm.DB
-	cache     *redis.Client
-	wsService *DistributedWebSocketService
+	db          *gorm.DB
+	cache       *redis.Client
+	wsService   *ws.DistributedWebSocketService
+	userService *user.UserService
 }
 
-func NewStateService() *StateService {
+func NewStateService(db *gorm.DB, cache *redis.Client, wsService *ws.DistributedWebSocketService, userService *user.UserService) *StateService {
 	return &StateService{
-		db:        database.GetDB(),
-		cache:     cache.GetClient(),
-		wsService: nil, // 将通过SetWebSocketService设置
+		db:          db,
+		cache:       cache,
+		wsService:   wsService,
+		userService: userService,
 	}
 }
 
 // SetWebSocketService 设置WebSocket服务
-func (s *StateService) SetWebSocketService(wsService *DistributedWebSocketService) {
+func (s *StateService) SetWebSocketService(wsService *ws.DistributedWebSocketService) {
 	s.wsService = wsService
-}
-
-// InitWebSocketService 初始化WebSocket服务
-func (s *StateService) InitWebSocketService() {
-	serviceManager := GetServiceManager()
-	s.wsService = serviceManager.GetWebSocketService()
 }
 
 // BatchReport 批量上报状态
@@ -201,14 +197,13 @@ func (s *StateService) broadcastStatusUpdate(openID string, snapshot *common.Sta
 // QueryState 查询当前状态
 func (s *StateService) QueryState(ctx context.Context, sharingKey string) (*state.QueryStateResponse, error) {
 	// 获取用户
-	userService := NewUserService()
-	user, err := userService.GetUserBySharingKey(sharingKey)
+	user, err := s.userService.GetUserBySharingKey(sharingKey)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
 
 	// 检查公开访问权限
-	publicEnabled, err := userService.IsPublicEnabled(user.OpenID)
+	publicEnabled, err := s.userService.IsPublicEnabled(user.OpenID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check public access: %w", err)
 	}

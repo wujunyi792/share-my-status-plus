@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"share-my-status/infra/config"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -13,6 +14,7 @@ import (
 type Scheduler struct {
 	cron *cron.Cron
 	db   *gorm.DB
+	cfg  *config.Config
 }
 
 // Task 定时任务接口
@@ -23,18 +25,21 @@ type Task interface {
 }
 
 // NewScheduler 创建新的调度器实例
-func NewScheduler(db *gorm.DB) *Scheduler {
+func NewScheduler(db *gorm.DB, cfg *config.Config) *Scheduler {
 	return &Scheduler{
 		cron: cron.New(cron.WithSeconds()),
 		db:   db,
+		cfg:  cfg,
 	}
 }
 
 // Start 启动调度器
 func (s *Scheduler) Start() {
-	// 注册清理任务
-	cleanupTask := NewCleanupTask(s.db)
-	s.RegisterTask(cleanupTask)
+	if s.cfg.Scheduler.Enabled {
+		// 注册清理任务
+		cleanupTask := NewCleanupTask(s.db, s.cfg)
+		s.RegisterTask(cleanupTask)
+	}
 
 	s.cron.Start()
 	logrus.Info("Scheduler started successfully")

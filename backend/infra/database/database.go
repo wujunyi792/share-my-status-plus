@@ -1,17 +1,18 @@
-package providers
+package database
 
 import (
 	"context"
-	"share-my-status/internal/config"
-	"share-my-status/internal/model"
+	"share-my-status/infra/config"
+	"share-my-status/model"
+
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-// ProvideDatabase 提供数据库连接实例
-func ProvideDatabase(cfg *config.Config) (*gorm.DB, error) {
+// Init 初始化数据库连接
+func Init(cfg *config.Config) (*gorm.DB, error) {
 	dbCfg := cfg.Database
 
 	// 配置GORM日志

@@ -1,16 +1,15 @@
-package service
+package stats
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"share-my-status/domain/user"
+	"share-my-status/model"
 	"time"
 
 	common "share-my-status/api/model/share_my_status/common"
 	stats "share-my-status/api/model/share_my_status/stats"
-	"share-my-status/internal/cache"
-	"share-my-status/internal/database"
-	"share-my-status/internal/model"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
@@ -25,17 +24,17 @@ type StatsService struct {
 }
 
 // NewStatsService 创建统计服务
-func NewStatsService() *StatsService {
+func NewStatsService(db *gorm.DB, cache *redis.Client) *StatsService {
 	return &StatsService{
-		db:    database.GetDB(),
-		cache: cache.GetClient(),
+		db:    db,
+		cache: cache,
 	}
 }
 
 // QueryStats 查询音乐统计
 func (s *StatsService) QueryStats(ctx context.Context, openID string, req *stats.StatsQueryRequest) (*stats.StatsQueryResponse, error) {
 	// 检查用户是否授权音乐统计
-	userService := NewUserService()
+	userService := user.NewUserService(s.db, s.cache)
 	authorized, err := userService.IsMusicStatsAuthorized(openID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check music stats authorization: %w", err)

@@ -1,14 +1,15 @@
-package providers
+package cache
 
 import (
 	"context"
-	"share-my-status/internal/config"
+	"share-my-status/infra/config"
+
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 )
 
-// ProvideRedis 提供Redis客户端实例
-func ProvideRedis(cfg *config.Config) (*redis.Client, error) {
+// Init 初始化Redis连接
+func Init(cfg *config.Config) (*redis.Client, error) {
 	redisCfg := cfg.Redis
 
 	// 解析Redis URL

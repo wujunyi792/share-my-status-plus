@@ -1,4 +1,4 @@
-package service
+package cover
 
 import (
 	"context"
@@ -7,11 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"share-my-status/model"
 	"time"
-
-	"share-my-status/internal/cache"
-	"share-my-status/internal/database"
-	"share-my-status/internal/model"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
@@ -26,10 +23,10 @@ type CoverService struct {
 }
 
 // NewCoverService 创建封面服务实例
-func NewCoverService() *CoverService {
+func NewCoverService(db *gorm.DB, cache *redis.Client) *CoverService {
 	return &CoverService{
-		db:    database.GetDB(),
-		cache: cache.GetClient(),
+		db:    db,
+		cache: cache,
 	}
 }
 

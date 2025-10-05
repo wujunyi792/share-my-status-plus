@@ -2,22 +2,23 @@ package scheduler
 
 import (
 	"context"
+	"share-my-status/infra/config"
+	"share-my-status/model"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
-	"share-my-status/internal/config"
-	"share-my-status/internal/model"
 )
 
 // CleanupTask 清理过期快照的定时任务
 type CleanupTask struct {
-	db *gorm.DB
+	db  *gorm.DB
+	cfg *config.Config
 }
 
 // NewCleanupTask 创建清理任务
-func NewCleanupTask(db *gorm.DB) *CleanupTask {
-	return &CleanupTask{db: db}
+func NewCleanupTask(db *gorm.DB, cfg *config.Config) *CleanupTask {
+	return &CleanupTask{db: db, cfg: cfg}
 }
 
 // Name 返回任务名称
@@ -27,13 +28,13 @@ func (t *CleanupTask) Name() string {
 
 // Schedule 返回任务调度表达式
 func (t *CleanupTask) Schedule() string {
-	return config.GlobalConfig.Scheduler.CleanupCron
+	return t.cfg.Scheduler.CleanupCron
 }
 
 // Execute 执行清理任务
 func (t *CleanupTask) Execute(ctx context.Context) error {
 	// 计算过期时间
-	retentionHours := config.GlobalConfig.Scheduler.SnapshotRetentionHours
+	retentionHours := t.cfg.Scheduler.SnapshotRetentionHours
 	expiredTime := time.Now().Add(-time.Duration(retentionHours) * time.Hour)
 
 	logrus.WithFields(logrus.Fields{

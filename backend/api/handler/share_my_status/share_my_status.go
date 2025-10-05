@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"share-my-status/internal/service"
-
 	cover "share-my-status/api/model/share_my_status/cover"
 	state "share-my-status/api/model/share_my_status/state"
 	stats "share-my-status/api/model/share_my_status/stats"
 	websocket "share-my-status/api/model/share_my_status/websocket"
+	"share-my-status/infra"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
@@ -36,10 +35,8 @@ func BatchReport(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 调用状态服务
-	stateService := service.NewStateService()
-	stateService.InitWebSocketService() // 初始化WebSocket服务
-	resp, err := stateService.BatchReport(ctx, openID.(string), req.Events)
+	// 获取依赖并创建状态服务
+	resp, err := infra.GetGlobalAppDependencies().StateService.BatchReport(ctx, openID.(string), req.Events)
 	if err != nil {
 		logrus.Errorf("Failed to batch report: %v", err)
 		responseHelper.SendErrorResponse(c, &state.BatchReportResponse{}, 500, "Internal server error")
@@ -60,9 +57,8 @@ func QueryState(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 调用状态服务
-	stateService := service.NewStateService()
-	resp, err := stateService.QueryState(ctx, req.SharingKey)
+	// 获取依赖并创建状态服务
+	resp, err := infra.GetGlobalAppDependencies().StateService.QueryState(ctx, req.SharingKey)
 	if err != nil {
 		logrus.Errorf("Failed to query state: %v", err)
 		responseHelper.SendErrorResponse(c, &state.QueryStateResponse{}, 500, "Internal server error")
@@ -90,9 +86,8 @@ func QueryStats(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 调用统计服务
-	statsService := service.NewStatsService()
-	resp, err := statsService.QueryStats(ctx, openID.(string), &req)
+	// 获取依赖并创建统计服务
+	resp, err := infra.GetGlobalAppDependencies().StatsService.QueryStats(ctx, openID.(string), &req)
 	if err != nil {
 		logrus.Errorf("Failed to query stats: %v", err)
 		responseHelper.SendErrorResponse(c, &stats.StatsQueryResponse{}, 500, "Internal server error")
@@ -114,8 +109,7 @@ func CheckExists(ctx context.Context, c *app.RequestContext) {
 	}
 
 	// 调用封面服务
-	coverService := service.NewCoverService()
-	exists, err := coverService.CheckCoverExists(ctx, req.Md5)
+	exists, err := infra.GetGlobalAppDependencies().CoverService.CheckCoverExists(ctx, req.Md5)
 	if err != nil {
 		logrus.Errorf("Failed to check cover existence: %v", err)
 		responseHelper.SendErrorResponse(c, &cover.CoverExistsResponse{}, 500, "Internal server error")
@@ -147,7 +141,7 @@ func Upload(ctx context.Context, c *app.RequestContext) {
 	}
 
 	// 调用封面服务上传，直接使用B64数据
-	coverService := service.NewCoverService()
+	coverService := infra.GetGlobalAppDependencies().CoverService
 
 	// 解析data URL格式的base64数据
 	var data []byte
@@ -230,7 +224,7 @@ func Get(ctx context.Context, c *app.RequestContext) {
 	}
 
 	// 调用封面服务
-	coverService := service.NewCoverService()
+	coverService := infra.GetGlobalAppDependencies().CoverService
 	coverAsset, err := coverService.GetCover(ctx, req.Hash)
 	if err != nil {
 		logrus.Errorf("Failed to get cover: %v", err)
@@ -277,8 +271,7 @@ func Connect(ctx context.Context, c *app.RequestContext) {
 	}
 
 	// 获取WebSocket服务实例
-	serviceManager := service.GetServiceManager()
-	wsService := serviceManager.GetDistributedWebSocketService()
+	wsService := infra.GetGlobalAppDependencies().WSClient
 	if wsService == nil {
 		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 500, "WebSocket service not available")
 		return

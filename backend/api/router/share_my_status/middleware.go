@@ -1,7 +1,7 @@
 package share_my_status
 
 import (
-	"share-my-status/internal/middleware"
+	"share-my-status/api/middleware"
 
 	"github.com/cloudwego/hertz/pkg/app"
 )

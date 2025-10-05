@@ -6,11 +6,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"share-my-status/infra"
+	"share-my-status/model"
 	"time"
-
-	"share-my-status/internal/cache"
-	"share-my-status/internal/database"
-	"share-my-status/internal/model"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
@@ -38,7 +36,7 @@ func SecretKeyAuth() app.HandlerFunc {
 
 		// 查询用户
 		var user model.User
-		err := database.GetDB().Where("secret_key = ?", secretKeyHash).First(&user).Error
+		err := infra.GetGlobalAppDependencies().DB.Where("secret_key = ?", secretKeyHash).First(&user).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				c.JSON(http.StatusUnauthorized, utils.H{
@@ -90,7 +88,7 @@ func SharingKeyAuth() app.HandlerFunc {
 
 		// 查询用户
 		var user model.User
-		err := database.GetDB().Where("sharing_key = ?", sharingKey).First(&user).Error
+		err := infra.GetGlobalAppDependencies().DB.Where("sharing_key = ?", sharingKey).First(&user).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				c.JSON(http.StatusNotFound, utils.H{
@@ -120,7 +118,7 @@ func SharingKeyAuth() app.HandlerFunc {
 
 		// 检查用户设置中的公开授权
 		var settings model.UserSettings
-		err = database.GetDB().Where("open_id = ?", user.OpenID).First(&settings).Error
+		err = infra.GetGlobalAppDependencies().DB.Where("open_id = ?", user.OpenID).First(&settings).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
 			logrus.Errorf("Failed to query user settings: %v", err)
 			c.JSON(http.StatusInternalServerError, utils.H{
@@ -148,47 +146,6 @@ func SharingKeyAuth() app.HandlerFunc {
 
 		c.Next(ctx)
 	}
-}
-
-// LarkSignatureAuth 飞书签名验证中间件
-func LarkSignatureAuth() app.HandlerFunc {
-	return func(ctx context.Context, c *app.RequestContext) {
-		timestamp := string(c.GetHeader("X-Lark-Request-Timestamp"))
-		nonce := string(c.GetHeader("X-Lark-Request-Nonce"))
-		signature := string(c.GetHeader("X-Lark-Signature"))
-
-		if timestamp == "" || nonce == "" || signature == "" {
-			c.JSON(http.StatusUnauthorized, utils.H{
-				"code":    401,
-				"message": "Missing Lark signature headers",
-			})
-			c.Abort()
-			return
-		}
-
-		// 获取请求体
-		body := string(c.Request.Body())
-
-		// 验证签名
-		if !verifyLarkSignature(timestamp, nonce, signature, body) {
-			c.JSON(http.StatusUnauthorized, utils.H{
-				"code":    401,
-				"message": "Invalid Lark signature",
-			})
-			c.Abort()
-			return
-		}
-
-		c.Next(ctx)
-	}
-}
-
-// verifyLarkSignature 验证飞书签名
-func verifyLarkSignature(timestamp, nonce, signature, body string) bool {
-	// 这里应该实现飞书签名验证逻辑
-	// 由于需要飞书的AppSecret，这里先返回true
-	// 实际实现中应该使用飞书SDK的签名验证方法
-	return true
 }
 
 // RateLimit 滑动窗口限流中间件
@@ -224,7 +181,7 @@ func RateLimit(maxRequests int, window time.Duration) app.HandlerFunc {
 
 // checkRateLimit 检查限流（滑动窗口算法）
 func checkRateLimit(ctx context.Context, key string, windowSize time.Duration, maxRequests int) (bool, error) {
-	redisClient := cache.GetClient()
+	redisClient := infra.GetGlobalAppDependencies().RedisClient
 	now := time.Now()
 	windowStart := now.Add(-windowSize)
 

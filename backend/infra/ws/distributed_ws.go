@@ -1,17 +1,15 @@
-package service
+package ws
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"share-my-status/model"
 	"sync"
 	"time"
 
 	common "share-my-status/api/model/share_my_status/common"
 	websocket_api "share-my-status/api/model/share_my_status/websocket"
-	"share-my-status/internal/cache"
-	"share-my-status/internal/database"
-	"share-my-status/internal/model"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/hertz-contrib/websocket"
@@ -43,6 +41,9 @@ type DistributedWebSocketService struct {
 	// Redis客户端
 	redisClient *redis.Client
 
+	// 数据库连接
+	db *gorm.DB
+
 	// 节点ID（用于区分不同实例）
 	nodeID string
 
@@ -63,14 +64,15 @@ type WebSocketMessage struct {
 	Timestamp int64                  `json:"timestamp"`
 }
 
-// NewDistributedWebSocketService 创建分布式WebSocket服务
-func NewDistributedWebSocketService() *DistributedWebSocketService {
+// InitDistributedWebSocketService 创建分布式WebSocket服务
+func InitDistributedWebSocketService(redisClient *redis.Client, db *gorm.DB) *DistributedWebSocketService {
 	nodeID := fmt.Sprintf("node_%d", time.Now().UnixNano())
 
 	service := &DistributedWebSocketService{
 		localClients:      make(map[string]*WebSocketClient),
 		userSubscriptions: make(map[string]map[string]bool),
-		redisClient:       cache.GetClient(),
+		redisClient:       redisClient,
+		db:                db,
 		nodeID:            nodeID,
 		stopChan:          make(chan struct{}),
 	}
@@ -444,7 +446,7 @@ func (ws *DistributedWebSocketService) sendCurrentSnapshot(client *WebSocketClie
 func (ws *DistributedWebSocketService) getCurrentState(ctx context.Context, userID string) (*common.StatusSnapshot, error) {
 	// 直接查询数据库获取当前状态
 	var currentState model.CurrentState
-	err := database.GetDB().WithContext(ctx).Where("open_id = ?", userID).First(&currentState).Error
+	err := ws.db.WithContext(ctx).Where("open_id = ?", userID).First(&currentState).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// 返回空快照

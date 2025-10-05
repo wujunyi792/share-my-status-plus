@@ -108,8 +108,6 @@ volumes:
     driver: local
   grafana_dev_data:
     driver: local
-  go_mod_cache:
-    driver: local
 
 networks:
   dev-network:

@@ -4,21 +4,31 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"share-my-status/domain/user"
+	"share-my-status/model"
 	"strings"
 	"time"
 
-	"share-my-status/internal/database"
-	"share-my-status/internal/model"
-	"share-my-status/internal/service"
-
+	lark "github.com/larksuite/oapi-sdk-go/v3"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
+type EventHandler struct {
+	userService *user.UserService
+	db          *gorm.DB
+	larkClient  *lark.Client
+}
+
+// NewEventHandler 创建事件处理器
+func NewEventHandler(userService *user.UserService, db *gorm.DB, larkClient *lark.Client) *EventHandler {
+	return &EventHandler{userService: userService, db: db, larkClient: larkClient}
+}
+
 // OnP2MessageReceiveV1 处理飞书消息接收事件
-func OnP2MessageReceiveV1(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
+func (h *EventHandler) OnP2MessageReceiveV1(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
 	openID := *event.Event.Sender.SenderId.OpenId
 	message := ""
 	if event.Event.Message.Content != nil {
@@ -28,13 +38,13 @@ func OnP2MessageReceiveV1(ctx context.Context, event *larkim.P2MessageReceiveV1)
 	logrus.Infof("Received message from user %s: %s", openID, message)
 
 	// 解析命令
-	command := parseCommand(message)
+	command := h.parseCommand(message)
 	if command == nil {
 		return nil // 忽略非命令消息
 	}
 
 	// 获取或创建用户
-	userService := service.NewUserService()
+	userService := h.userService
 	user, err := userService.GetUserByOpenID(openID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -42,26 +52,26 @@ func OnP2MessageReceiveV1(ctx context.Context, event *larkim.P2MessageReceiveV1)
 			user, err = userService.CreateUser(openID)
 			if err != nil {
 				logrus.Errorf("Failed to create user: %v", err)
-				return sendMessage(ctx, openID, "❌ 创建用户失败，请稍后重试")
+				return h.sendMessage(ctx, openID, "❌ 创建用户失败，请稍后重试")
 			}
 		} else {
 			logrus.Errorf("Failed to get user: %v", err)
-			return sendMessage(ctx, openID, "❌ 获取用户信息失败")
+			return h.sendMessage(ctx, openID, "❌ 获取用户信息失败")
 		}
 	}
 
 	// 执行命令
-	response, err := executeCommand(ctx, user, command)
+	response, err := h.executeCommand(ctx, user, command)
 	if err != nil {
 		logrus.Errorf("Failed to execute command: %v", err)
-		return sendMessage(ctx, openID, fmt.Sprintf("❌ 执行命令失败: %v", err))
+		return h.sendMessage(ctx, openID, fmt.Sprintf("❌ 执行命令失败: %v", err))
 	}
 
-	return sendMessage(ctx, openID, response)
+	return h.sendMessage(ctx, openID, response)
 }
 
 // OnP2CardURLPreviewGet 处理链接预览事件
-func OnP2CardURLPreviewGet(ctx context.Context, event *callback.URLPreviewGetEvent) (*callback.URLPreviewGetResponse, error) {
+func (h *EventHandler) OnP2CardURLPreviewGet(ctx context.Context, event *callback.URLPreviewGetEvent) (*callback.URLPreviewGetResponse, error) {
 	logrus.Infof("URL preview request: %s", event.Event.Context.URL)
 
 	// 默认预览
@@ -80,7 +90,7 @@ func OnP2CardURLPreviewGet(ctx context.Context, event *callback.URLPreviewGetEve
 	}
 
 	// 提取参数
-	sharingKey := extractSharingKey(parsedURL.Path)
+	sharingKey := h.extractSharingKey(parsedURL.Path)
 	template := parsedURL.Query().Get("m")
 	if template == "" {
 		template = "{artist}的{title}"
@@ -92,7 +102,7 @@ func OnP2CardURLPreviewGet(ctx context.Context, event *callback.URLPreviewGetEve
 	}
 
 	// 获取用户状态
-	userService := service.NewUserService()
+	userService := h.userService
 	user, err := userService.GetUserBySharingKey(sharingKey)
 	if err != nil {
 		logrus.Errorf("Failed to get user by sharing key: %v", err)
@@ -112,14 +122,14 @@ func OnP2CardURLPreviewGet(ctx context.Context, event *callback.URLPreviewGetEve
 	}
 
 	// 获取当前状态
-	currentState, err := getCurrentState(ctx, user.OpenID)
+	currentState, err := h.getCurrentState(ctx, user.OpenID)
 	if err != nil {
 		logrus.Errorf("Failed to get current state: %v", err)
 		return urlPreview, nil
 	}
 
 	// 渲染模板
-	title := renderTemplate(template, currentState)
+	title := h.renderTemplate(template, currentState)
 	urlPreview.Inline.Title = title
 
 	// 如果有封面，设置封面图片
@@ -130,7 +140,7 @@ func OnP2CardURLPreviewGet(ctx context.Context, event *callback.URLPreviewGetEve
 
 	// 记录预览历史
 	if event.Event.Context.PreviewToken != "" {
-		recordPreviewHistory(ctx, user.ID, event.Event.Context.PreviewToken, event.Event.Operator.OpenID)
+		h.recordPreviewHistory(ctx, user.ID, event.Event.Context.PreviewToken, event.Event.Operator.OpenID)
 	}
 
 	return urlPreview, nil
@@ -143,7 +153,7 @@ type Command struct {
 }
 
 // parseCommand 解析命令
-func parseCommand(message string) *Command {
+func (h *EventHandler) parseCommand(message string) *Command {
 	message = strings.TrimSpace(message)
 	if !strings.HasPrefix(message, "/status") {
 		return nil
@@ -161,25 +171,25 @@ func parseCommand(message string) *Command {
 }
 
 // executeCommand 执行命令
-func executeCommand(ctx context.Context, user *model.User, command *Command) (string, error) {
-	userService := service.NewUserService()
+func (h *EventHandler) executeCommand(ctx context.Context, user *model.User, command *Command) (string, error) {
+	userService := h.userService
 
 	switch command.Action {
 	case "revoke":
-		return executeRevokeCommand(ctx, user, userService)
+		return h.executeRevokeCommand(ctx, user, userService)
 	case "rotate":
-		return executeRotateCommand(ctx, user, userService)
+		return h.executeRotateCommand(ctx, user, userService)
 	case "publish":
-		return executePublishCommand(ctx, user, userService, command.Params)
+		return h.executePublishCommand(ctx, user, userService, command.Params)
 	case "info":
-		return executeInfoCommand(ctx, user, userService)
+		return h.executeInfoCommand(ctx, user, userService)
 	default:
 		return "❓ 未知命令。支持的命令：\n• `/status revoke` - 撤销公开链接\n• `/status rotate` - 轮转密钥\n• `/status publish on|off` - 开启/关闭公开访问\n• `/status info` - 查看账户信息", nil
 	}
 }
 
 // executeRevokeCommand 执行撤销命令
-func executeRevokeCommand(ctx context.Context, user *model.User, userService *service.UserService) (string, error) {
+func (h *EventHandler) executeRevokeCommand(ctx context.Context, user *model.User, userService *user.UserService) (string, error) {
 	// 生成新的Sharing Key
 	newSharingKey, err := userService.RotateSharingKey(user.OpenID)
 	if err != nil {
@@ -190,7 +200,7 @@ func executeRevokeCommand(ctx context.Context, user *model.User, userService *se
 }
 
 // executeRotateCommand 执行轮转命令
-func executeRotateCommand(ctx context.Context, user *model.User, userService *service.UserService) (string, error) {
+func (h *EventHandler) executeRotateCommand(ctx context.Context, user *model.User, userService *user.UserService) (string, error) {
 	// 生成新的Secret Key
 	newSecretKey, err := userService.RotateSecretKey(user.OpenID)
 	if err != nil {
@@ -201,7 +211,7 @@ func executeRotateCommand(ctx context.Context, user *model.User, userService *se
 }
 
 // executePublishCommand 执行发布命令
-func executePublishCommand(ctx context.Context, user *model.User, userService *service.UserService, params []string) (string, error) {
+func (h *EventHandler) executePublishCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (string, error) {
 	if len(params) != 1 {
 		return "❌ 用法: `/status publish on|off`", nil
 	}
@@ -235,7 +245,7 @@ func executePublishCommand(ctx context.Context, user *model.User, userService *s
 }
 
 // executeInfoCommand 执行信息命令
-func executeInfoCommand(ctx context.Context, user *model.User, userService *service.UserService) (string, error) {
+func (h *EventHandler) executeInfoCommand(ctx context.Context, user *model.User, userService *user.UserService) (string, error) {
 	// 获取用户设置
 	settings, err := userService.GetUserSettings(user.OpenID)
 	if err != nil && err != gorm.ErrRecordNotFound {
@@ -250,7 +260,7 @@ func executeInfoCommand(ctx context.Context, user *model.User, userService *serv
 	}
 
 	// 获取当前状态
-	currentState, err := getCurrentState(ctx, user.OpenID)
+	currentState, err := h.getCurrentState(ctx, user.OpenID)
 	if err != nil {
 		logrus.Errorf("Failed to get current state: %v", err)
 	}
@@ -276,7 +286,7 @@ func executeInfoCommand(ctx context.Context, user *model.User, userService *serv
 }
 
 // extractSharingKey 从URL路径中提取Sharing Key
-func extractSharingKey(path string) string {
+func (h *EventHandler) extractSharingKey(path string) string {
 	// 假设路径格式为 /s/{sharingKey}
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) >= 2 && parts[0] == "s" {
@@ -286,7 +296,7 @@ func extractSharingKey(path string) string {
 }
 
 // renderTemplate 渲染模板
-func renderTemplate(template string, state *StateSnapshot) string {
+func (h *EventHandler) renderTemplate(template string, state *StateSnapshot) string {
 	if state == nil {
 		result := strings.ReplaceAll(template, "{artist}", "")
 		result = strings.ReplaceAll(result, "{title}", "未在播放")
@@ -370,9 +380,9 @@ type ActivityInfo struct {
 }
 
 // getCurrentState 获取当前状态
-func getCurrentState(ctx context.Context, openID string) (*StateSnapshot, error) {
+func (h *EventHandler) getCurrentState(ctx context.Context, openID string) (*StateSnapshot, error) {
 	var currentState model.CurrentState
-	err := database.GetDB().WithContext(ctx).Where("open_id = ?", openID).First(&currentState).Error
+	err := h.db.WithContext(ctx).Where("open_id = ?", openID).First(&currentState).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -432,14 +442,14 @@ func getCurrentState(ctx context.Context, openID string) (*StateSnapshot, error)
 }
 
 // recordPreviewHistory 记录预览历史
-func recordPreviewHistory(ctx context.Context, userID uint64, previewToken, viewerOpenID string) {
+func (h *EventHandler) recordPreviewHistory(ctx context.Context, userID uint64, previewToken, viewerOpenID string) {
 	// 这里可以记录预览历史，用于统计和分析
 	logrus.Infof("Preview history: userID=%d, token=%s, viewer=%s", userID, previewToken, viewerOpenID)
 }
 
 // sendMessage 发送消息
-func sendMessage(ctx context.Context, openID, content string) error {
-	client := GetClient()
+func (h *EventHandler) sendMessage(ctx context.Context, openID, content string) error {
+	client := h.larkClient
 	if client == nil {
 		return fmt.Errorf("lark client not initialized")
 	}
