@@ -1,0 +1,226 @@
+package service
+
+import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+
+	"share-my-status/internal/cache"
+	"share-my-status/internal/database"
+	"share-my-status/internal/model"
+
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
+)
+
+type UserService struct {
+	db    *gorm.DB
+	cache *redis.Client
+}
+
+func NewUserService() *UserService {
+	return &UserService{
+		db:    database.GetDB(),
+		cache: cache.GetClient(),
+	}
+}
+
+// CreateUser 创建用户
+func (s *UserService) CreateUser(openID string) (*model.User, error) {
+	// 生成密钥
+	secretKey, err := s.generateSecretKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate secret key: %w", err)
+	}
+
+	sharingKey, err := s.generateSharingKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate sharing key: %w", err)
+	}
+
+	// 创建用户
+	user := &model.User{
+		OpenID:     openID,
+		SecretKey:  []byte(secretKey),
+		SharingKey: sharingKey,
+		Status:     1,
+	}
+
+	if err := s.db.Create(user).Error; err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// 创建默认用户设置
+	defaultSettings := &model.UserSettings{
+		OpenID: openID,
+		Settings: map[string]interface{}{
+			"authorizedMusicStats": false,
+			"publicEnabled":        true,
+			"defaultTz":            "Asia/Shanghai",
+		},
+	}
+
+	if err := s.db.Create(defaultSettings).Error; err != nil {
+		logrus.Errorf("Failed to create user settings: %v", err)
+		// 不返回错误，因为用户已经创建成功
+	}
+
+	logrus.Infof("User created successfully: %s", openID)
+	return user, nil
+}
+
+// GetUserByOpenID 通过OpenID获取用户
+func (s *UserService) GetUserByOpenID(openID string) (*model.User, error) {
+	var user model.User
+	err := s.db.Where("open_id = ?", openID).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetUserBySecretKey 通过Secret Key获取用户
+func (s *UserService) GetUserBySecretKey(secretKey string) (*model.User, error) {
+	hash := sha256.Sum256([]byte(secretKey))
+	secretKeyHash := hex.EncodeToString(hash[:])
+
+	var user model.User
+	err := s.db.Where("secret_key = ?", secretKeyHash).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetUserBySharingKey 通过Sharing Key获取用户
+func (s *UserService) GetUserBySharingKey(sharingKey string) (*model.User, error) {
+	var user model.User
+	err := s.db.Where("sharing_key = ?", sharingKey).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// UpdateUserSettings 更新用户设置
+func (s *UserService) UpdateUserSettings(openID string, settings map[string]interface{}) error {
+	var userSettings model.UserSettings
+	err := s.db.Where("open_id = ?", openID).First(&userSettings).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// 创建新的用户设置
+			userSettings = model.UserSettings{
+				OpenID:   openID,
+				Settings: settings,
+			}
+			return s.db.Create(&userSettings).Error
+		}
+		return err
+	}
+
+	// 更新设置
+	userSettings.Settings = settings
+	return s.db.Save(&userSettings).Error
+}
+
+// GetUserSettings 获取用户设置
+func (s *UserService) GetUserSettings(openID string) (*model.UserSettings, error) {
+	var settings model.UserSettings
+	err := s.db.Where("open_id = ?", openID).First(&settings).Error
+	if err != nil {
+		return nil, err
+	}
+	return &settings, nil
+}
+
+// RotateSecretKey 轮转Secret Key
+func (s *UserService) RotateSecretKey(openID string) (string, error) {
+	newSecretKey, err := s.generateSecretKey()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate new secret key: %w", err)
+	}
+
+	hash := sha256.Sum256([]byte(newSecretKey))
+	secretKeyHash := hex.EncodeToString(hash[:])
+
+	err = s.db.Model(&model.User{}).Where("open_id = ?", openID).Update("secret_key", secretKeyHash).Error
+	if err != nil {
+		return "", fmt.Errorf("failed to update secret key: %w", err)
+	}
+
+	logrus.Infof("Secret key rotated for user: %s", openID)
+	return newSecretKey, nil
+}
+
+// RotateSharingKey 轮转Sharing Key
+func (s *UserService) RotateSharingKey(openID string) (string, error) {
+	newSharingKey, err := s.generateSharingKey()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate new sharing key: %w", err)
+	}
+
+	err = s.db.Model(&model.User{}).Where("open_id = ?", openID).Update("sharing_key", newSharingKey).Error
+	if err != nil {
+		return "", fmt.Errorf("failed to update sharing key: %w", err)
+	}
+
+	logrus.Infof("Sharing key rotated for user: %s", openID)
+	return newSharingKey, nil
+}
+
+// generateSecretKey 生成Secret Key
+func (s *UserService) generateSecretKey() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+// generateSharingKey 生成Sharing Key
+func (s *UserService) generateSharingKey() (string, error) {
+	// 使用UUID生成Sharing Key
+	id := uuid.New()
+	return id.String(), nil
+}
+
+// IsPublicEnabled 检查用户是否开启公开访问
+func (s *UserService) IsPublicEnabled(openID string) (bool, error) {
+	settings, err := s.GetUserSettings(openID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// 默认开启公开访问
+			return true, nil
+		}
+		return false, err
+	}
+
+	if publicEnabled, ok := settings.Settings["publicEnabled"].(bool); ok {
+		return publicEnabled, nil
+	}
+
+	// 默认开启公开访问
+	return true, nil
+}
+
+// IsMusicStatsAuthorized 检查用户是否授权音乐统计
+func (s *UserService) IsMusicStatsAuthorized(openID string) (bool, error) {
+	settings, err := s.GetUserSettings(openID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// 默认未授权
+			return false, nil
+		}
+		return false, err
+	}
+
+	if authorized, ok := settings.Settings["authorizedMusicStats"].(bool); ok {
+		return authorized, nil
+	}
+
+	// 默认未授权
+	return false, nil
+}
