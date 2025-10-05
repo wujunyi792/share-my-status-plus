@@ -1,0 +1,114 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Share My Status application logs
+  - job_name: share-my-status-backend
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: share-my-status-backend
+          service: share-backend
+          __path__: /var/log/share-my-status/*.log
+    pipeline_stages:
+      - json:
+          expressions:
+            timestamp: timestamp
+            level: level
+            message: message
+            service: service
+            trace_id: trace_id
+            span_id: span_id
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+      - labels:
+          level:
+          service:
+          trace_id:
+          span_id:
+
+  # System logs
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: system
+          __path__: /var/log/host/syslog
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\S+\s+\d+\s+\d+:\d+:\d+)\s+(?P<hostname>\S+)\s+(?P<service>\S+):\s+(?P<message>.*)$'
+      - timestamp:
+          source: timestamp
+          format: Jan 2 15:04:05
+      - labels:
+          hostname:
+          service:
+
+  # Docker container logs (if available)
+  - job_name: docker
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: docker
+          __path__: /var/log/host/containers/*.log
+    pipeline_stages:
+      - json:
+          expressions:
+            log: log
+            stream: stream
+            time: time
+      - timestamp:
+          source: time
+          format: RFC3339Nano
+      - output:
+          source: log
+
+  # MySQL logs
+  - job_name: mysql
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: mysql
+          service: mysql
+          __path__: /var/log/host/mysql/*.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+(?P<thread_id>\d+)\s+\[(?P<level>\w+)\]\s+(?P<message>.*)$'
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+      - labels:
+          level:
+          thread_id:
+
+  # Redis logs
+  - job_name: redis
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: redis
+          service: redis
+          __path__: /var/log/host/redis/*.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<pid>\d+):(?P<role>\w+)\s+(?P<timestamp>\d{2}\s+\w{3}\s+\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+)\s+(?P<level>[\*\#\-\.])\s+(?P<message>.*)$'
+      - timestamp:
+          source: timestamp
+          format: 02 Jan 2006 15:04:05.000
+      - labels:
+          level:
+          role:
+          pid:

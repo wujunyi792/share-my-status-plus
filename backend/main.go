@@ -77,6 +77,9 @@ func startHTTPServer(ctx context.Context) {
 	// 创建Hertz服务器
 	h := server.Default(serverConfig...)
 
+	// 启用WebSocket支持
+	h.NoHijackConnPool = true
+
 	// 配置CORS
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowAllOrigins = true

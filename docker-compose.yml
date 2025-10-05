@@ -1,0 +1,257 @@
+name: share-my-status
+
+x-env-file: &env_file
+  - .env
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.4.5
+    container_name: share-my-status-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-share_my_status}
+      MYSQL_USER: ${MYSQL_USER:-share_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-share123}
+    env_file: *env_file
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+      --innodb-buffer-pool-size=256M
+      --max-connections=200
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - share-network
+
+  # Redis Cache
+  redis:
+    image: redis:7.4-alpine
+    container_name: share-my-status-redis
+    restart: always
+    env_file: *env_file
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - share-network
+
+  # Share My Status Backend Application
+  share-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: share-my-status-backend
+    restart: always
+    env_file: *env_file
+    environment:
+      - APP_ENV=production
+      - HTTP_PORT=8080
+      - DB_DSN=${MYSQL_USER:-share_user}:${MYSQL_PASSWORD:-share123}@tcp(mysql:3306)/${MYSQL_DATABASE:-share_my_status}?charset=utf8mb4&parseTime=True&loc=Local
+      - REDIS_URL=redis://redis:6379
+      - DEFAULT_TZ=${DEFAULT_TZ:-Asia/Shanghai}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - share-network
+
+  # Prometheus for Monitoring
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: share-my-status-prometheus
+    restart: always
+    env_file: *env_file
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - share-network
+
+  # Grafana for Visualization
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: share-my-status-grafana
+    restart: always
+    env_file: *env_file
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=redis-datasource
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - share-network
+
+  # Jaeger for Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.64.0
+    container_name: share-my-status-jaeger
+    restart: always
+    env_file: *env_file
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+      - "${JAEGER_COLLECTOR_PORT:-14268}:14268"
+      - "${JAEGER_OTLP_GRPC_PORT:-14250}:14250"
+      - "${JAEGER_OTLP_HTTP_PORT:-14268}:14268"
+    volumes:
+      - jaeger_data:/tmp
+    networks:
+      - share-network
+
+  # Loki for Log Aggregation
+  loki:
+    image: grafana/loki:3.3.1
+    container_name: share-my-status-loki
+    restart: always
+    env_file: *env_file
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./docker/loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - share-network
+
+  # Promtail for Log Collection
+  promtail:
+    image: grafana/promtail:3.3.1
+    container_name: share-my-status-promtail
+    restart: always
+    env_file: *env_file
+    volumes:
+      - ./docker/promtail/promtail.yml:/etc/promtail/config.yml:ro
+      - ./logs:/var/log/share-my-status:ro
+      - /var/log:/var/log/host:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - share-network
+
+  # Node Exporter for System Metrics
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: share-my-status-node-exporter
+    restart: always
+    env_file: *env_file
+    ports:
+      - "${NODE_EXPORTER_PORT:-9100}:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - share-network
+
+  # Redis Exporter for Redis Metrics
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    container_name: share-my-status-redis-exporter
+    restart: always
+    env_file: *env_file
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "${REDIS_EXPORTER_PORT:-9121}:9121"
+    depends_on:
+      - redis
+    networks:
+      - share-network
+
+  # MySQL Exporter for MySQL Metrics
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.16.0
+    container_name: share-my-status-mysql-exporter
+    restart: always
+    env_file: *env_file
+    environment:
+      - DATA_SOURCE_NAME=${MYSQL_USER:-share_user}:${MYSQL_PASSWORD:-share123}@(mysql:3306)/${MYSQL_DATABASE:-share_my_status}
+    ports:
+      - "${MYSQL_EXPORTER_PORT:-9104}:9104"
+    depends_on:
+      - mysql
+    networks:
+      - share-network
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  jaeger_data:
+    driver: local
+  loki_data:
+    driver: local
+
+networks:
+  share-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

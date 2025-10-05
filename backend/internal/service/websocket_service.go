@@ -13,7 +13,7 @@ import (
 	"share-my-status/internal/model"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/gorilla/websocket"
+	"github.com/hertz-contrib/websocket"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -47,17 +47,47 @@ func NewWebSocketService() *WebSocketService {
 	}
 }
 
+var upgrader = websocket.HertzUpgrader{} // 使用默认选项
+
 // Connect 处理WebSocket连接
 func (ws *WebSocketService) Connect(ctx context.Context, c *app.RequestContext, userID string) error {
-	// 注意：这里简化了WebSocket升级过程
-	// 在实际生产环境中，可能需要使用Hertz的WebSocket支持或自定义实现
-
-	// 暂时返回一个模拟的连接，实际应该实现真正的WebSocket升级
 	logrus.Infof("WebSocket connection request for user: %s", userID)
 
-	// 这里应该实现真正的WebSocket升级逻辑
-	// 由于Hertz和gorilla/websocket的兼容性问题，这里先简化处理
-	return fmt.Errorf("WebSocket upgrade not implemented yet")
+	err := upgrader.Upgrade(c, func(conn *websocket.Conn) {
+		// 创建客户端
+		clientID := fmt.Sprintf("%s_%d", userID, time.Now().UnixNano())
+		client := &WebSocketClient{
+			ID:         clientID,
+			UserID:     userID,
+			Connection: conn,
+			Send:       make(chan []byte, 256),
+			Hub:        ws,
+			LastPing:   time.Now(),
+		}
+
+		// 注册客户端
+		ws.registerClient(client)
+
+		// 启动读写协程
+		go client.writePump()
+		go client.readPump()
+
+		// 发送欢迎消息
+		welcomeMsg := &websocket_api.WSMessage{
+			Type:      websocket_api.MessageType_PONG,
+			Timestamp: time.Now().UnixMilli(),
+		}
+		ws.sendMessageToClient(client, welcomeMsg)
+
+		logrus.Infof("WebSocket client connected: %s (user: %s)", clientID, userID)
+	})
+
+	if err != nil {
+		logrus.Errorf("Failed to upgrade WebSocket connection: %v", err)
+		return err
+	}
+
+	return nil
 }
 
 // registerClient 注册客户端
@@ -158,17 +188,23 @@ func (c *WebSocketClient) readPump() {
 	})
 
 	for {
-		var msg websocket_api.WSMessage
-		err := c.Connection.ReadJSON(&msg)
+		mt, message, err := c.Connection.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				logrus.Errorf("WebSocket error: %v", err)
-			}
+			logrus.Errorf("WebSocket read error: %v", err)
 			break
 		}
 
-		// 处理消息
-		c.handleMessage(&msg)
+		// 只处理文本消息
+		if mt == websocket.TextMessage {
+			var msg websocket_api.WSMessage
+			if err := json.Unmarshal(message, &msg); err != nil {
+				logrus.Errorf("Failed to unmarshal WebSocket message: %v", err)
+				continue
+			}
+
+			// 处理消息
+			c.handleMessage(&msg)
+		}
 	}
 }
 
