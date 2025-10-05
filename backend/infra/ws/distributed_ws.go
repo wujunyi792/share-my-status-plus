@@ -213,10 +213,11 @@ func (ws *DistributedWebSocketService) startRedisListener() {
 
 	// 订阅Redis频道
 	ws.pubSub = ws.redisClient.Subscribe(ctx, "websocket:broadcast")
-	defer ws.pubSub.Close()
 
 	// 启动消息处理协程
 	go func() {
+		defer ws.pubSub.Close() // 在协程结束时关闭pubSub
+
 		for {
 			select {
 			case <-ws.stopChan:
@@ -538,6 +539,12 @@ func (ws *DistributedWebSocketService) GetLocalClientsCount() int {
 func (ws *DistributedWebSocketService) Shutdown() {
 	// 停止Redis监听器
 	close(ws.stopChan)
+
+	// 等待Redis监听器关闭
+	if ws.pubSub != nil {
+		// 给监听器一些时间优雅关闭
+		time.Sleep(100 * time.Millisecond)
+	}
 
 	// 关闭所有本地连接
 	ws.clientsMux.Lock()
