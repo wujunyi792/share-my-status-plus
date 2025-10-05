@@ -13,8 +13,8 @@ RUN go mod download
 # Copy the entire source code
 COPY . .
 
-# Build the Go application with optimizations
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.version=1.0.0" -o share-my-status main.go
+# Make build script executable and run it
+RUN chmod +x build.sh && ./build.sh
 
 # Stage 2: Final runtime image
 FROM alpine:3.22.0
@@ -29,13 +29,17 @@ RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
 # Copy the built binary from builder stage
-COPY --from=builder /app/share-my-status /app/share-my-status
+COPY --from=builder /app/output/bin/hertz_service /app/share-my-status
+
+# Copy bootstrap script and other output files
+COPY --from=builder /app/output/bootstrap.sh /app/bootstrap.sh
 
 # Copy configuration files if they exist
 COPY --from=builder /app/.env.example /app/.env.example
 
 # Set proper ownership
-RUN chown -R appuser:appgroup /app
+RUN chown -R appuser:appgroup /app && \
+    chmod +x /app/bootstrap.sh
 
 # Switch to non-root user
 USER appuser
@@ -51,5 +55,5 @@ EXPOSE 8080
 ENV GIN_MODE=release
 ENV TZ=Asia/Shanghai
 
-# Run the application
-CMD ["/app/share-my-status"]
+# Run the application using bootstrap script
+CMD ["/app/bootstrap.sh"]
