@@ -2,12 +2,12 @@ package share_my_status
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
-	"io"
+	"strings"
 
 	"share-my-status/internal/service"
 
-	common "share-my-status/api/model/share_my_status/common"
 	cover "share-my-status/api/model/share_my_status/cover"
 	state "share-my-status/api/model/share_my_status/state"
 	stats "share-my-status/api/model/share_my_status/stats"
@@ -21,22 +21,18 @@ import (
 // BatchReport 批量上报状态
 // @router /v1/state/report [POST]
 func BatchReport(ctx context.Context, c *app.RequestContext) {
+	responseHelper := NewResponseHelper()
+
 	var req state.BatchReportRequest
 	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, map[string]interface{}{
-			"code":    400,
-			"message": "Invalid request: " + err.Error(),
-		})
+		responseHelper.SendErrorResponse(c, &state.BatchReportResponse{}, 400, "Invalid request: "+err.Error())
 		return
 	}
 
 	// 获取用户ID
 	openID, exists := c.Get("open_id")
 	if !exists {
-		c.JSON(consts.StatusUnauthorized, map[string]interface{}{
-			"code":    401,
-			"message": "Unauthorized",
-		})
+		responseHelper.SendErrorResponse(c, &state.BatchReportResponse{}, 401, "Unauthorized")
 		return
 	}
 
@@ -46,25 +42,21 @@ func BatchReport(ctx context.Context, c *app.RequestContext) {
 	resp, err := stateService.BatchReport(ctx, openID.(string), req.Events)
 	if err != nil {
 		logrus.Errorf("Failed to batch report: %v", err)
-		c.JSON(consts.StatusInternalServerError, map[string]interface{}{
-			"code":    500,
-			"message": "Internal server error",
-		})
+		responseHelper.SendErrorResponse(c, &state.BatchReportResponse{}, 500, "Internal server error")
 		return
 	}
 
-	c.JSON(consts.StatusOK, resp)
+	responseHelper.SendSuccessResponseWithAutoBase(c, &state.BatchReportResponse{}, resp)
 }
 
 // QueryState 查询状态
 // @router /v1/state/query [GET]
 func QueryState(ctx context.Context, c *app.RequestContext) {
+	responseHelper := NewResponseHelper()
+
 	var req state.QueryStateRequest
 	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, map[string]interface{}{
-			"code":    400,
-			"message": "Invalid request: " + err.Error(),
-		})
+		responseHelper.SendErrorResponse(c, &state.QueryStateResponse{}, 400, "Invalid request: "+err.Error())
 		return
 	}
 
@@ -73,35 +65,28 @@ func QueryState(ctx context.Context, c *app.RequestContext) {
 	resp, err := stateService.QueryState(ctx, req.SharingKey)
 	if err != nil {
 		logrus.Errorf("Failed to query state: %v", err)
-		c.JSON(consts.StatusInternalServerError, map[string]interface{}{
-			"code":    500,
-			"message": "Internal server error",
-		})
+		responseHelper.SendErrorResponse(c, &state.QueryStateResponse{}, 500, "Internal server error")
 		return
 	}
 
-	c.JSON(consts.StatusOK, resp)
+	responseHelper.SendSuccessResponseWithAutoBase(c, &state.QueryStateResponse{}, resp)
 }
 
 // QueryStats 查询统计
 // @router /v1/stats/query [POST]
 func QueryStats(ctx context.Context, c *app.RequestContext) {
+	responseHelper := NewResponseHelper()
+
 	var req stats.StatsQueryRequest
 	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, map[string]interface{}{
-			"code":    400,
-			"message": "Invalid request: " + err.Error(),
-		})
+		responseHelper.SendErrorResponse(c, &stats.StatsQueryResponse{}, 400, "Invalid request: "+err.Error())
 		return
 	}
 
 	// 获取用户ID
 	openID, exists := c.Get("open_id")
 	if !exists {
-		c.JSON(consts.StatusUnauthorized, map[string]interface{}{
-			"code":    401,
-			"message": "Unauthorized",
-		})
+		responseHelper.SendErrorResponse(c, &stats.StatsQueryResponse{}, 401, "Unauthorized")
 		return
 	}
 
@@ -110,25 +95,21 @@ func QueryStats(ctx context.Context, c *app.RequestContext) {
 	resp, err := statsService.QueryStats(ctx, openID.(string), &req)
 	if err != nil {
 		logrus.Errorf("Failed to query stats: %v", err)
-		c.JSON(consts.StatusInternalServerError, map[string]interface{}{
-			"code":    500,
-			"message": "Internal server error",
-		})
+		responseHelper.SendErrorResponse(c, &stats.StatsQueryResponse{}, 500, "Internal server error")
 		return
 	}
 
-	c.JSON(consts.StatusOK, resp)
+	responseHelper.SendSuccessResponseWithAutoBase(c, &stats.StatsQueryResponse{}, resp)
 }
 
 // CheckExists 检查封面是否存在
 // @router /v1/cover/exists [GET]
 func CheckExists(ctx context.Context, c *app.RequestContext) {
+	responseHelper := NewResponseHelper()
+
 	var req cover.CoverExistsRequest
 	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, map[string]interface{}{
-			"code":    400,
-			"message": "Invalid request: " + err.Error(),
-		})
+		responseHelper.SendErrorResponse(c, &cover.CoverExistsResponse{}, 400, "Invalid request: "+err.Error())
 		return
 	}
 
@@ -137,133 +118,131 @@ func CheckExists(ctx context.Context, c *app.RequestContext) {
 	exists, err := coverService.CheckCoverExists(ctx, req.Md5)
 	if err != nil {
 		logrus.Errorf("Failed to check cover existence: %v", err)
-		c.JSON(consts.StatusInternalServerError, map[string]interface{}{
-			"code":    500,
-			"message": "Internal server error",
-		})
+		responseHelper.SendErrorResponse(c, &cover.CoverExistsResponse{}, 500, "Internal server error")
 		return
 	}
 
-	message := "success"
-	resp := &cover.CoverExistsResponse{
-		Base: &common.BaseResponse{
-			Code:    0,
-			Message: &message,
-		},
-		Exists: &exists,
+	// 使用自动填充Base字段的方法
+	data := map[string]interface{}{
+		"Exists": &exists,
 	}
+	responseHelper.SendSuccessResponseWithAutoBase(c, &cover.CoverExistsResponse{}, data)
+}
 
-	c.JSON(consts.StatusOK, resp)
+// stringPtr 创建字符串指针的辅助函数
+func stringPtr(s string) *string {
+	return &s
 }
 
 // Upload 上传封面
-// @router /v1/cover/upload [POST]
+// @router /v1/cover [POST]
 func Upload(ctx context.Context, c *app.RequestContext) {
+	responseHelper := NewResponseHelper()
+
 	var req cover.CoverUploadRequest
 	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, map[string]interface{}{
-			"code":    400,
-			"message": "Invalid request: " + err.Error(),
-		})
+		logrus.Errorf("Failed to bind request: %v", err)
+		responseHelper.SendErrorResponse(c, &cover.CoverUploadResponse{}, 400, "Invalid request")
 		return
 	}
 
-	// 获取用户ID
-	_, exists := c.Get("open_id")
-	if !exists {
-		c.JSON(consts.StatusUnauthorized, map[string]interface{}{
-			"code":    401,
-			"message": "Unauthorized",
-		})
-		return
-	}
-
-	// 获取上传的文件数据
-	file, err := c.FormFile("cover")
-	if err != nil {
-		c.JSON(consts.StatusBadRequest, map[string]interface{}{
-			"code":    400,
-			"message": "Missing cover file",
-		})
-		return
-	}
-
-	// 打开文件
-	src, err := file.Open()
-	if err != nil {
-		c.JSON(consts.StatusInternalServerError, map[string]interface{}{
-			"code":    500,
-			"message": "Failed to open uploaded file",
-		})
-		return
-	}
-	defer src.Close()
-
-	// 读取文件数据
-	data, err := io.ReadAll(src)
-	if err != nil {
-		c.JSON(consts.StatusInternalServerError, map[string]interface{}{
-			"code":    500,
-			"message": "Failed to read uploaded file",
-		})
-		return
-	}
-
-	// 调用封面服务上传
+	// 调用封面服务上传，直接使用B64数据
 	coverService := service.NewCoverService()
-	coverHash, err := coverService.UploadCover(ctx, data, file.Header.Get("Content-Type"))
+
+	// 解析data URL格式的base64数据
+	var data []byte
+	var contentType string
+	var err error
+
+	b64Data := req.B64
+
+	// 检查是否是data URL格式 (data:image/png;base64,xxx)
+	if strings.HasPrefix(b64Data, "data:") {
+		// 解析data URL
+		parts := strings.SplitN(b64Data, ",", 2)
+		if len(parts) != 2 {
+			logrus.Errorf("Invalid data URL format")
+			responseHelper.SendErrorResponse(c, &cover.CoverUploadResponse{}, 400, "Invalid data URL format")
+			return
+		}
+
+		// 提取content type
+		header := parts[0] // data:image/png;base64
+		if strings.Contains(header, ";") {
+			contentTypePart := strings.Split(header, ";")[0]           // data:image/png
+			contentType = strings.TrimPrefix(contentTypePart, "data:") // image/png
+		} else {
+			contentType = "application/octet-stream" // 默认类型
+		}
+
+		// 解码base64数据
+		data, err = base64.StdEncoding.DecodeString(parts[1])
+		if err != nil {
+			logrus.Errorf("Failed to decode base64 data: %v", err)
+			responseHelper.SendErrorResponse(c, &cover.CoverUploadResponse{}, 400, "Invalid base64 data")
+			return
+		}
+	} else {
+		// 直接是base64数据，没有data URL前缀
+		data, err = base64.StdEncoding.DecodeString(b64Data)
+		if err != nil {
+			logrus.Errorf("Failed to decode base64 data: %v", err)
+			responseHelper.SendErrorResponse(c, &cover.CoverUploadResponse{}, 400, "Invalid base64 data")
+			return
+		}
+
+		// 检测内容类型（简单检测）
+		contentType = "image/jpeg" // 默认类型
+		if len(data) >= 4 {
+			if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
+				contentType = "image/png"
+			} else if data[0] == 0xFF && data[1] == 0xD8 {
+				contentType = "image/jpeg"
+			} else if data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 {
+				contentType = "image/gif"
+			}
+		}
+	}
+
+	coverHash, err := coverService.UploadCover(ctx, data, contentType)
 	if err != nil {
 		logrus.Errorf("Failed to upload cover: %v", err)
-		c.JSON(consts.StatusInternalServerError, map[string]interface{}{
-			"code":    500,
-			"message": "Failed to upload cover",
-		})
+		responseHelper.SendErrorResponse(c, &cover.CoverUploadResponse{}, 500, "Failed to upload cover")
 		return
 	}
 
-	message := "success"
-	resp := &cover.CoverUploadResponse{
-		Base: &common.BaseResponse{
-			Code:    0,
-			Message: &message,
-		},
-		CoverHash: &coverHash,
+	// 使用自动填充Base字段的方法
+	uploadData := map[string]interface{}{
+		"CoverHash": &coverHash,
 	}
-
-	c.JSON(consts.StatusOK, resp)
+	responseHelper.SendSuccessResponseWithAutoBase(c, &cover.CoverUploadResponse{}, uploadData)
 }
 
 // Get 获取封面
-// @router /v1/cover/{hash} [GET]
+// @router /v1/cover/:hash [GET]
 func Get(ctx context.Context, c *app.RequestContext) {
+	responseHelper := NewResponseHelper()
+
 	var req cover.CoverGetRequest
 	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, map[string]interface{}{
-			"code":    400,
-			"message": "Invalid request: " + err.Error(),
-		})
+		responseHelper.SendErrorResponse(c, &cover.CoverGetResponse{}, 400, "Invalid request: "+err.Error())
 		return
 	}
 
-	// 调用封面服务获取封面信息
+	// 调用封面服务
 	coverService := service.NewCoverService()
 	coverAsset, err := coverService.GetCover(ctx, req.Hash)
 	if err != nil {
 		logrus.Errorf("Failed to get cover: %v", err)
-		c.JSON(consts.StatusNotFound, map[string]interface{}{
-			"code":    404,
-			"message": "Cover not found",
-		})
+		responseHelper.SendErrorResponse(c, &cover.CoverGetResponse{}, 404, "Cover not found")
 		return
 	}
 
 	// 获取二进制数据
 	binaryData, err := coverService.GetCoverBinaryData(ctx, req.Hash)
 	if err != nil {
-		c.JSON(consts.StatusInternalServerError, map[string]interface{}{
-			"code":    500,
-			"message": "Failed to get cover binary data",
-		})
+		logrus.Errorf("Failed to get cover binary data: %v", err)
+		responseHelper.SendErrorResponse(c, &cover.CoverGetResponse{}, 500, "Internal server error")
 		return
 	}
 
@@ -282,32 +261,26 @@ func Get(ctx context.Context, c *app.RequestContext) {
 // Connect WebSocket连接
 // @router /v1/ws [GET]
 func Connect(ctx context.Context, c *app.RequestContext) {
+	responseHelper := NewResponseHelper()
+
 	var req websocket.WSConnectRequest
 	if err := c.BindAndValidate(&req); err != nil {
-		c.JSON(consts.StatusBadRequest, map[string]interface{}{
-			"code":    400,
-			"message": "Invalid request: " + err.Error(),
-		})
+		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 400, "Invalid request: "+err.Error())
 		return
 	}
 
 	// 获取用户ID
 	openID, exists := c.Get("open_id")
 	if !exists {
-		c.JSON(consts.StatusUnauthorized, map[string]interface{}{
-			"code":    401,
-			"message": "Unauthorized",
-		})
+		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 401, "Unauthorized")
 		return
 	}
 
-	// 获取WebSocket服务实例（这里应该从全局获取或注入）
-	wsService := getWebSocketService()
+	// 获取WebSocket服务实例
+	serviceManager := service.GetServiceManager()
+	wsService := serviceManager.GetDistributedWebSocketService()
 	if wsService == nil {
-		c.JSON(consts.StatusInternalServerError, map[string]interface{}{
-			"code":    500,
-			"message": "WebSocket service not available",
-		})
+		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 500, "WebSocket service not available")
 		return
 	}
 
@@ -315,16 +288,7 @@ func Connect(ctx context.Context, c *app.RequestContext) {
 	err := wsService.Connect(ctx, c, openID.(string))
 	if err != nil {
 		logrus.Errorf("Failed to establish WebSocket connection: %v", err)
-		c.JSON(consts.StatusInternalServerError, map[string]interface{}{
-			"code":    500,
-			"message": "Failed to establish WebSocket connection",
-		})
+		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 500, "Failed to establish WebSocket connection")
 		return
 	}
-}
-
-// getWebSocketService 获取WebSocket服务实例
-func getWebSocketService() *service.DistributedWebSocketService {
-	serviceManager := service.GetServiceManager()
-	return serviceManager.GetWebSocketService()
 }

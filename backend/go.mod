@@ -8,12 +8,14 @@ require (
 	github.com/apache/thrift v0.0.0-00010101000000-000000000000
 	github.com/cloudwego/hertz v0.10.2
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.3
+	github.com/google/wire v0.7.0
 	github.com/hertz-contrib/cors v0.1.0
+	github.com/hertz-contrib/websocket v0.2.0
 	github.com/joho/godotenv v1.5.1
 	github.com/larksuite/oapi-sdk-go/v3 v3.4.3
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/sirupsen/logrus v1.9.3
+	gorm.io/datatypes v1.2.7
 	gorm.io/driver/mysql v1.5.6
 	gorm.io/gorm v1.30.0
 )
@@ -32,7 +34,7 @@ require (
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
-	github.com/hertz-contrib/websocket v0.2.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
@@ -45,5 +47,4 @@ require (
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
-	gorm.io/datatypes v1.2.7 // indirect
 )

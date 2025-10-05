@@ -8,12 +8,9 @@ import (
 	"syscall"
 	"time"
 
-	"share-my-status/internal/cache"
-	"share-my-status/internal/config"
-	"share-my-status/internal/database"
 	"share-my-status/internal/lark"
 	"share-my-status/internal/middleware"
-	"share-my-status/internal/service"
+	"share-my-status/internal/providers"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -25,28 +22,17 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// 初始化配置
-	if err := config.Init(); err != nil {
-		logrus.Fatalf("Failed to initialize config: %v", err)
+	// 使用Wire初始化所有依赖
+	deps, err := providers.InitializeApp()
+	if err != nil {
+		logrus.Fatalf("Failed to initialize app dependencies: %v", err)
 	}
-
-	// 初始化数据库
-	if err := database.Init(ctx); err != nil {
-		logrus.Fatalf("Failed to initialize database: %v", err)
-	}
-	defer database.Close()
-
-	// 初始化Redis
-	if err := cache.Init(ctx); err != nil {
-		logrus.Fatalf("Failed to initialize Redis: %v", err)
-	}
-	defer cache.Close()
 
 	// 初始化飞书事件处理器
 	eventHandler := lark.InitEventHandler()
 
-	// 初始化飞书客户端
-	if err := lark.Init(eventHandler); err != nil {
+	// 初始化飞书客户端（使用注入的Lark客户端）
+	if err := lark.InitWithClient(eventHandler, deps.LarkClient); err != nil {
 		logrus.Fatalf("Failed to initialize Lark client: %v", err)
 	}
 
@@ -55,18 +41,17 @@ func main() {
 		logrus.Warnf("Failed to start Lark WebSocket: %v", err)
 	}
 
-	// 初始化服务管理器
-	serviceManager := service.GetServiceManager()
-	if err := serviceManager.InitWebSocketService(ctx); err != nil {
+	// 初始化WebSocket服务
+	if err := deps.ServiceManager.InitWebSocketService(ctx); err != nil {
 		logrus.Fatalf("Failed to initialize WebSocket service: %v", err)
 	}
 
 	// 启动HTTP服务器
-	startHTTPServer(ctx)
+	startHTTPServer(ctx, deps)
 }
 
-func startHTTPServer(ctx context.Context) {
-	cfg := config.GlobalConfig.App
+func startHTTPServer(ctx context.Context, deps *providers.AppDependencies) {
+	cfg := deps.Config.App
 
 	// 创建服务器配置
 	serverConfig := []hertzConfig.Option{
@@ -92,8 +77,8 @@ func startHTTPServer(ctx context.Context) {
 	h.Use(middleware.CORS())
 	h.Use(corsHandler)
 
-	// 注册路由
-	register(h)
+	// 注册路由（传递依赖）
+	registerWithDeps(h, deps)
 
 	// 健康检查端点
 	h.GET("/healthz", func(ctx context.Context, c *app.RequestContext) {
@@ -123,6 +108,16 @@ func startHTTPServer(ctx context.Context) {
 
 	if err := h.Shutdown(shutdownCtx); err != nil {
 		logrus.Errorf("Server forced to shutdown: %v", err)
+	}
+
+	// 关闭依赖资源
+	if deps.DB != nil {
+		if sqlDB, err := deps.DB.DB(); err == nil {
+			sqlDB.Close()
+		}
+	}
+	if deps.RedisClient != nil {
+		deps.RedisClient.Close()
 	}
 
 	logrus.Info("Server exited")

@@ -70,12 +70,11 @@ func (StateHistory) TableName() string {
 
 // CoverAssetPayload 封面资源载荷
 type CoverAssetPayload struct {
-	FilePath    string `json:"filePath"` // 文件存储路径
-	B64         string `json:"b64"`      // base64编码数据（用于小文件）
+	B64         string `json:"b64"` // base64编码数据
 	ContentType string `json:"contentType"`
 	Size        int64  `json:"size"`
 	UploadTime  int64  `json:"uploadTime"`
-	StorageType string `json:"storageType"` // "file" 或 "base64"
+	StorageType string `json:"storageType"` // 固定为 "base64"
 }
 
 // CoverAsset 封面资源表

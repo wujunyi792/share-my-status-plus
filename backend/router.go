@@ -3,6 +3,7 @@
 package main
 
 import (
+	"share-my-status/internal/providers"
 	"github.com/cloudwego/hertz/pkg/app/server"
 )
 
@@ -10,4 +11,10 @@ import (
 func customizedRegister(r *server.Hertz) {
 
 	// your code ...
+}
+
+// registerWithDeps registers all routers with dependencies.
+func registerWithDeps(r *server.Hertz, deps *providers.AppDependencies) {
+	// TODO: 传递依赖到路由注册
+	register(r)
 }

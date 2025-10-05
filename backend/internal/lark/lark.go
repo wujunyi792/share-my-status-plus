@@ -29,6 +29,29 @@ func InitEventHandler() *dispatcher.EventDispatcher {
 	).OnP2MessageReceiveV1(OnP2MessageReceiveV1).OnP2CardURLPreviewGet(OnP2CardURLPreviewGet)
 }
 
+// InitWithClient 使用提供的客户端初始化飞书服务
+func InitWithClient(eventHandler *dispatcher.EventDispatcher, client *lark.Client) error {
+	if client == nil {
+		logrus.Warn("Lark client is nil, skipping Lark initialization")
+		return nil
+	}
+
+	larkClient = client
+
+	// 创建WebSocket客户端
+	if eventHandler != nil {
+		larkWS = larkws.NewClient(
+			config.GlobalConfig.Lark.AppID,
+			config.GlobalConfig.Lark.AppSecret,
+			larkws.WithEventHandler(eventHandler),
+			larkws.WithLogLevel(larkcore.LogLevelError),
+		)
+	}
+
+	logrus.Info("Lark client initialized successfully")
+	return nil
+}
+
 // Init 初始化飞书客户端
 func Init(eventHandler *dispatcher.EventDispatcher) error {
 	cfg := config.GlobalConfig.Lark
