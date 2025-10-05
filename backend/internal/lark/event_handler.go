@@ -215,11 +215,11 @@ func executePublishCommand(ctx context.Context, user *model.User, userService *s
 	}
 
 	// 更新设置
-	newSettings := make(map[string]interface{})
+	var newSettings model.UserSettingsPayload
 	if settings != nil {
-		newSettings = settings.Settings
+		newSettings = settings.Settings.Data()
 	}
-	newSettings["publicEnabled"] = enable
+	newSettings.PublicEnabled = enable
 
 	err = userService.UpdateUserSettings(user.OpenID, newSettings)
 	if err != nil {
@@ -245,12 +245,8 @@ func executeInfoCommand(ctx context.Context, user *model.User, userService *serv
 	publicEnabled := false
 	musicStatsAuthorized := false
 	if settings != nil {
-		if val, ok := settings.Settings["publicEnabled"].(bool); ok {
-			publicEnabled = val
-		}
-		if val, ok := settings.Settings["authorizedMusicStats"].(bool); ok {
-			musicStatsAuthorized = val
-		}
+		publicEnabled = settings.Settings.Data().PublicEnabled
+		musicStatsAuthorized = settings.Settings.Data().AuthorizedMusicStats
 	}
 
 	// 获取当前状态
@@ -385,48 +381,49 @@ func getCurrentState(ctx context.Context, openID string) (*StateSnapshot, error)
 	}
 
 	snapshot := &StateSnapshot{}
+	snapshotData := currentState.Snapshot.Data()
 
 	// 解析音乐信息
-	if musicData, ok := currentState.Snapshot["music"].(map[string]interface{}); ok {
+	if snapshotData.Music != nil {
 		music := &MusicInfo{}
-		if val, ok := musicData["title"].(string); ok {
-			music.Title = &val
+		if snapshotData.Music.Title != nil {
+			music.Title = snapshotData.Music.Title
 		}
-		if val, ok := musicData["artist"].(string); ok {
-			music.Artist = &val
+		if snapshotData.Music.Artist != nil {
+			music.Artist = snapshotData.Music.Artist
 		}
-		if val, ok := musicData["album"].(string); ok {
-			music.Album = &val
+		if snapshotData.Music.Album != nil {
+			music.Album = snapshotData.Music.Album
 		}
-		if val, ok := musicData["coverHash"].(string); ok {
-			music.CoverHash = &val
+		if snapshotData.Music.CoverHash != nil {
+			music.CoverHash = snapshotData.Music.CoverHash
 		}
 		snapshot.Music = music
 	}
 
 	// 解析系统信息
-	if systemData, ok := currentState.Snapshot["system"].(map[string]interface{}); ok {
+	if snapshotData.System != nil {
 		system := &SystemInfo{}
-		if val, ok := systemData["batteryPct"].(float64); ok {
-			system.BatteryPct = &val
+		if snapshotData.System.BatteryPct != nil {
+			system.BatteryPct = snapshotData.System.BatteryPct
 		}
-		if val, ok := systemData["charging"].(bool); ok {
-			system.Charging = &val
+		if snapshotData.System.Charging != nil {
+			system.Charging = snapshotData.System.Charging
 		}
-		if val, ok := systemData["cpuPct"].(float64); ok {
-			system.CpuPct = &val
+		if snapshotData.System.CpuPct != nil {
+			system.CpuPct = snapshotData.System.CpuPct
 		}
-		if val, ok := systemData["memoryPct"].(float64); ok {
-			system.MemoryPct = &val
+		if snapshotData.System.MemoryPct != nil {
+			system.MemoryPct = snapshotData.System.MemoryPct
 		}
 		snapshot.System = system
 	}
 
 	// 解析活动信息
-	if activityData, ok := currentState.Snapshot["activity"].(map[string]interface{}); ok {
+	if snapshotData.Activity != nil {
 		activity := &ActivityInfo{}
-		if val, ok := activityData["label"].(string); ok {
-			activity.Label = val
+		if snapshotData.Activity.Label != "" {
+			activity.Label = snapshotData.Activity.Label
 		}
 		snapshot.Activity = activity
 	}

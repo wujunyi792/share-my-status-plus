@@ -4,14 +4,17 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"time"
 
+	"share-my-status/internal/cache"
 	"share-my-status/internal/database"
 	"share-my-status/internal/model"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -129,7 +132,7 @@ func SharingKeyAuth() app.HandlerFunc {
 		}
 
 		// 检查公开授权状态
-		if publicEnabled, ok := settings.Settings["publicEnabled"].(bool); ok && !publicEnabled {
+		if !settings.Settings.Data().PublicEnabled {
 			c.JSON(http.StatusForbidden, utils.H{
 				"code":    403,
 				"message": "Public access is disabled",
@@ -188,19 +191,76 @@ func verifyLarkSignature(timestamp, nonce, signature, body string) bool {
 	return true
 }
 
-// RateLimit 简单的速率限制中间件
+// RateLimit 滑动窗口限流中间件
 func RateLimit(maxRequests int, window time.Duration) app.HandlerFunc {
-	// 这里应该实现基于Redis的速率限制
-	// 简化版本，实际应该使用滑动窗口或令牌桶算法
 	return func(ctx context.Context, c *app.RequestContext) {
+		clientIP := c.ClientIP()
+		userAgent := string(c.UserAgent())
+
+		// 生成限流键（IP + User-Agent的组合）
+		limitKey := fmt.Sprintf("rate_limit:%s:%x", clientIP, sha256.Sum256([]byte(userAgent)))
+
 		// 检查是否超过限制
-		// 这里应该查询Redis中的计数器
-		// 简化版本直接通过
-		_ = maxRequests
-		_ = window
+		allowed, err := checkRateLimit(ctx, limitKey, window, maxRequests)
+		if err != nil {
+			logrus.Errorf("Rate limit check failed: %v", err)
+			// 出错时允许通过，避免影响正常服务
+			c.Next(ctx)
+			return
+		}
+
+		if !allowed {
+			c.JSON(http.StatusTooManyRequests, utils.H{
+				"code":    429,
+				"message": "Rate limit exceeded",
+			})
+			c.Abort()
+			return
+		}
 
 		c.Next(ctx)
 	}
+}
+
+// checkRateLimit 检查限流（滑动窗口算法）
+func checkRateLimit(ctx context.Context, key string, windowSize time.Duration, maxRequests int) (bool, error) {
+	redisClient := cache.GetClient()
+	now := time.Now()
+	windowStart := now.Add(-windowSize)
+
+	// 使用Redis的ZREMRANGEBYSCORE清理过期的请求记录
+	pipe := redisClient.Pipeline()
+
+	// 清理过期的请求记录
+	pipe.ZRemRangeByScore(ctx, key, "0", fmt.Sprintf("%d", windowStart.UnixNano()))
+
+	// 获取当前窗口内的请求数量
+	pipe.ZCard(ctx, key)
+
+	// 添加当前请求
+	pipe.ZAdd(ctx, key, redis.Z{
+		Score:  float64(now.UnixNano()),
+		Member: now.UnixNano(),
+	})
+
+	// 设置过期时间
+	pipe.Expire(ctx, key, windowSize)
+
+	results, err := pipe.Exec(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	// 获取当前请求数量
+	currentCount := results[1].(*redis.IntCmd).Val()
+
+	// 如果当前请求数量超过限制，移除刚添加的请求
+	if currentCount > int64(maxRequests) {
+		redisClient.ZRem(ctx, key, now.UnixNano())
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // CORS CORS中间件

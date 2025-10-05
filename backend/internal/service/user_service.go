@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -56,11 +57,10 @@ func (s *UserService) CreateUser(openID string) (*model.User, error) {
 	// 创建默认用户设置
 	defaultSettings := &model.UserSettings{
 		OpenID: openID,
-		Settings: map[string]interface{}{
-			"authorizedMusicStats": false,
-			"publicEnabled":        true,
-			"defaultTz":            "Asia/Shanghai",
-		},
+		Settings: datatypes.NewJSONType(model.UserSettingsPayload{
+			AuthorizedMusicStats: false,
+			PublicEnabled:        true,
+		}),
 	}
 
 	if err := s.db.Create(defaultSettings).Error; err != nil {
@@ -106,7 +106,7 @@ func (s *UserService) GetUserBySharingKey(sharingKey string) (*model.User, error
 }
 
 // UpdateUserSettings 更新用户设置
-func (s *UserService) UpdateUserSettings(openID string, settings map[string]interface{}) error {
+func (s *UserService) UpdateUserSettings(openID string, settings model.UserSettingsPayload) error {
 	var userSettings model.UserSettings
 	err := s.db.Where("open_id = ?", openID).First(&userSettings).Error
 	if err != nil {
@@ -114,7 +114,7 @@ func (s *UserService) UpdateUserSettings(openID string, settings map[string]inte
 			// 创建新的用户设置
 			userSettings = model.UserSettings{
 				OpenID:   openID,
-				Settings: settings,
+				Settings: datatypes.NewJSONType(settings),
 			}
 			return s.db.Create(&userSettings).Error
 		}
@@ -122,7 +122,7 @@ func (s *UserService) UpdateUserSettings(openID string, settings map[string]inte
 	}
 
 	// 更新设置
-	userSettings.Settings = settings
+	userSettings.Settings = datatypes.NewJSONType(settings)
 	return s.db.Save(&userSettings).Error
 }
 
@@ -198,12 +198,7 @@ func (s *UserService) IsPublicEnabled(openID string) (bool, error) {
 		return false, err
 	}
 
-	if publicEnabled, ok := settings.Settings["publicEnabled"].(bool); ok {
-		return publicEnabled, nil
-	}
-
-	// 默认开启公开访问
-	return true, nil
+	return settings.Settings.Data().PublicEnabled, nil
 }
 
 // IsMusicStatsAuthorized 检查用户是否授权音乐统计
@@ -217,10 +212,5 @@ func (s *UserService) IsMusicStatsAuthorized(openID string) (bool, error) {
 		return false, err
 	}
 
-	if authorized, ok := settings.Settings["authorizedMusicStats"].(bool); ok {
-		return authorized, nil
-	}
-
-	// 默认未授权
-	return false, nil
+	return settings.Settings.Data().AuthorizedMusicStats, nil
 }

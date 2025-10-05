@@ -3,8 +3,12 @@ package service
 import (
 	"context"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"share-my-status/internal/cache"
@@ -13,20 +17,34 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
 // CoverService 封面服务
 type CoverService struct {
-	db    *gorm.DB
-	cache *redis.Client
+	db          *gorm.DB
+	cache       *redis.Client
+	storagePath string // 文件存储路径
 }
 
 // NewCoverService 创建封面服务
 func NewCoverService() *CoverService {
+	// 默认存储路径
+	storagePath := "./uploads/covers"
+	if os.Getenv("COVER_STORAGE_PATH") != "" {
+		storagePath = os.Getenv("COVER_STORAGE_PATH")
+	}
+
+	// 确保存储目录存在
+	if err := os.MkdirAll(storagePath, 0755); err != nil {
+		logrus.Errorf("Failed to create cover storage directory: %v", err)
+	}
+
 	return &CoverService{
-		db:    database.GetDB(),
-		cache: cache.GetClient(),
+		db:          database.GetDB(),
+		cache:       cache.GetClient(),
+		storagePath: storagePath,
 	}
 }
 
@@ -73,16 +91,38 @@ func (s *CoverService) UploadCover(ctx context.Context, data []byte, contentType
 		return coverHash, nil
 	}
 
-	// 创建封面资产记录
-	asset := map[string]interface{}{
-		"contentType": contentType,
-		"size":        len(data),
-		"uploadTime":  time.Now().Unix(),
+	// 决定存储方式：小文件用base64，大文件用文件系统
+	var assetPayload model.CoverAssetPayload
+	const maxBase64Size = 1024 * 1024 // 1MB
+
+	if len(data) <= maxBase64Size {
+		// 小文件：存储为base64
+		assetPayload = model.CoverAssetPayload{
+			B64:         base64.StdEncoding.EncodeToString(data),
+			ContentType: contentType,
+			Size:        int64(len(data)),
+			UploadTime:  time.Now().Unix(),
+			StorageType: "base64",
+		}
+	} else {
+		// 大文件：存储到文件系统
+		filePath := filepath.Join(s.storagePath, coverHash)
+		if err := os.WriteFile(filePath, data, 0644); err != nil {
+			return "", fmt.Errorf("failed to write cover file: %w", err)
+		}
+
+		assetPayload = model.CoverAssetPayload{
+			FilePath:    filePath,
+			ContentType: contentType,
+			Size:        int64(len(data)),
+			UploadTime:  time.Now().Unix(),
+			StorageType: "file",
+		}
 	}
 
 	coverAsset := &model.CoverAsset{
 		CoverHash: coverHash,
-		Asset:     asset,
+		Asset:     datatypes.NewJSONType(assetPayload),
 	}
 
 	// 保存到数据库
@@ -104,7 +144,11 @@ func (s *CoverService) GetCover(ctx context.Context, coverHash string) (*model.C
 	cacheKey := fmt.Sprintf("cover:asset:%s", coverHash)
 	cached, err := s.cache.Get(ctx, cacheKey).Result()
 	if err == nil && cached != "" {
-		// 这里应该反序列化缓存的数据，为了简化直接查询数据库
+		// 反序列化缓存的数据
+		var coverAsset model.CoverAsset
+		if err := json.Unmarshal([]byte(cached), &coverAsset); err == nil {
+			return &coverAsset, nil
+		}
 	}
 
 	// 查询数据库
@@ -121,9 +165,32 @@ func (s *CoverService) GetCover(ctx context.Context, coverHash string) (*model.C
 	s.cache.Set(ctx, fmt.Sprintf("cover:last_access:%s", coverHash), time.Now().Unix(), 24*time.Hour)
 
 	// 缓存资产信息（1小时）
-	s.cache.Set(ctx, cacheKey, "cached", time.Hour)
+	if assetJSON, err := json.Marshal(coverAsset); err == nil {
+		s.cache.Set(ctx, cacheKey, string(assetJSON), time.Hour)
+	}
 
 	return &coverAsset, nil
+}
+
+// GetCoverBinaryData 获取封面二进制数据
+func (s *CoverService) GetCoverBinaryData(ctx context.Context, coverHash string) ([]byte, error) {
+	coverAsset, err := s.GetCover(ctx, coverHash)
+	if err != nil {
+		return nil, err
+	}
+
+	assetData := coverAsset.Asset.Data()
+
+	switch assetData.StorageType {
+	case "base64":
+		// 从base64解码
+		return base64.StdEncoding.DecodeString(assetData.B64)
+	case "file":
+		// 从文件系统读取
+		return os.ReadFile(assetData.FilePath)
+	default:
+		return nil, fmt.Errorf("unknown storage type: %s", assetData.StorageType)
+	}
 }
 
 // DeleteCover 删除封面

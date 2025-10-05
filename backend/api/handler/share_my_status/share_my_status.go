@@ -2,6 +2,7 @@ package share_my_status
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"share-my-status/internal/service"
@@ -256,18 +257,26 @@ func Get(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 设置响应头
-	if contentType, ok := coverAsset.Asset["contentType"].(string); ok {
-		c.Header("Content-Type", contentType)
+	// 获取二进制数据
+	binaryData, err := coverService.GetCoverBinaryData(ctx, req.Hash)
+	if err != nil {
+		c.JSON(consts.StatusInternalServerError, map[string]interface{}{
+			"code":    500,
+			"message": "Failed to get cover binary data",
+		})
+		return
 	}
 
-	// 返回封面数据（这里简化处理，实际应该从存储中读取二进制数据）
-	c.JSON(consts.StatusOK, map[string]interface{}{
-		"coverHash":   coverAsset.CoverHash,
-		"contentType": coverAsset.Asset["contentType"],
-		"size":        coverAsset.Asset["size"],
-		"uploadTime":  coverAsset.Asset["uploadTime"],
-	})
+	// 获取资产元数据
+	assetData := coverAsset.Asset.Data()
+
+	// 设置响应头
+	c.Header("Content-Type", assetData.ContentType)
+	c.Header("Content-Length", fmt.Sprintf("%d", len(binaryData)))
+	c.Header("Cache-Control", "public, max-age=86400") // 缓存1天
+
+	// 返回二进制数据
+	c.Data(consts.StatusOK, assetData.ContentType, binaryData)
 }
 
 // Connect WebSocket连接
@@ -315,7 +324,7 @@ func Connect(ctx context.Context, c *app.RequestContext) {
 }
 
 // getWebSocketService 获取WebSocket服务实例
-func getWebSocketService() *service.WebSocketService {
+func getWebSocketService() *service.DistributedWebSocketService {
 	serviceManager := service.GetServiceManager()
 	return serviceManager.GetWebSocketService()
 }

@@ -9,8 +9,8 @@ import (
 
 // ServiceManager 服务管理器
 type ServiceManager struct {
-	wsService *WebSocketService
-	mu        sync.RWMutex
+	distributedWSService *DistributedWebSocketService
+	mu                   sync.RWMutex
 }
 
 var (
@@ -31,27 +31,34 @@ func (sm *ServiceManager) InitWebSocketService(ctx context.Context) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	if sm.wsService != nil {
+	if sm.distributedWSService != nil {
 		return nil // 已经初始化
 	}
 
-	sm.wsService = NewWebSocketService()
-	logrus.Info("WebSocket service initialized")
+	sm.distributedWSService = NewDistributedWebSocketService()
+	logrus.Info("Distributed WebSocket service initialized")
 	return nil
 }
 
-// GetWebSocketService 获取WebSocket服务
-func (sm *ServiceManager) GetWebSocketService() *WebSocketService {
+// GetWebSocketService 获取WebSocket服务（兼容性方法）
+func (sm *ServiceManager) GetWebSocketService() *DistributedWebSocketService {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
-	return sm.wsService
+	return sm.distributedWSService
+}
+
+// GetDistributedWebSocketService 获取分布式WebSocket服务
+func (sm *ServiceManager) GetDistributedWebSocketService() *DistributedWebSocketService {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.distributedWSService
 }
 
 // SetWebSocketService 设置WebSocket服务（用于测试）
-func (sm *ServiceManager) SetWebSocketService(ws *WebSocketService) {
+func (sm *ServiceManager) SetWebSocketService(ws *DistributedWebSocketService) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	sm.wsService = ws
+	sm.distributedWSService = ws
 }
 
 // Shutdown 关闭所有服务
@@ -59,9 +66,9 @@ func (sm *ServiceManager) Shutdown(ctx context.Context) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
-	if sm.wsService != nil {
-		// WebSocket服务没有显式的关闭方法，这里只是记录日志
-		logrus.Info("WebSocket service shutdown")
+	if sm.distributedWSService != nil {
+		sm.distributedWSService.Shutdown()
+		logrus.Info("Distributed WebSocket service shutdown")
 	}
 
 	return nil

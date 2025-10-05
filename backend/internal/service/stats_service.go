@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -50,7 +52,7 @@ func (s *StatsService) QueryStats(ctx context.Context, openID string, req *stats
 	}
 
 	// 计算时间窗口
-	window, err := s.calculateTimeWindow(req.Window.Type.String(), req.Window.Tz)
+	window, err := s.calculateTimeWindow(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate time window: %w", err)
 	}
@@ -78,11 +80,11 @@ func (s *StatsService) QueryStats(ctx context.Context, openID string, req *stats
 }
 
 // calculateTimeWindow 计算时间窗口
-func (s *StatsService) calculateTimeWindow(windowType string, tz string) (*TimeWindow, error) {
+func (s *StatsService) calculateTimeWindow(req *stats.StatsQueryRequest) (*TimeWindow, error) {
+	tz := req.Window.Tz
 	if tz == "" {
 		tz = "Asia/Shanghai" // 默认时区
 	}
-
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
 		return nil, fmt.Errorf("invalid timezone: %w", err)
@@ -91,26 +93,40 @@ func (s *StatsService) calculateTimeWindow(windowType string, tz string) (*TimeW
 	now := time.Now().In(loc)
 	var startTime, endTime time.Time
 
-	switch windowType {
-	case "rolling_3d":
+	switch req.Window.Type {
+	case common.WindowType_ROLLING_3D:
 		startTime = now.AddDate(0, 0, -3)
 		endTime = now
-	case "rolling_7d":
+	case common.WindowType_ROLLING_7D:
 		startTime = now.AddDate(0, 0, -7)
 		endTime = now
-	case "month_to_date":
+	case common.WindowType_MONTH_TO_DATE:
 		startTime = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
 		endTime = now
-	case "year_to_date":
+	case common.WindowType_YEAR_TO_DATE:
 		startTime = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, loc)
 		endTime = now
-	case "custom":
-		// 自定义时间窗口，需要从请求中获取开始和结束时间
-		// 这里简化处理，使用最近7天
-		startTime = now.AddDate(0, 0, -7)
-		endTime = now
+	case common.WindowType_CUSTOM:
+		// 自定义时间窗口，从请求中获取开始和结束时间
+		if req.Window.Custom == nil {
+			return nil, fmt.Errorf("custom window parameters are required")
+		}
+
+		// 将毫秒时间戳转换为time.Time
+		startTime = time.Unix(req.Window.Custom.FromTs/1000, (req.Window.Custom.FromTs%1000)*1000000).In(loc)
+		endTime = time.Unix(req.Window.Custom.ToTs/1000, (req.Window.Custom.ToTs%1000)*1000000).In(loc)
+
+		// 验证时间范围
+		if startTime.After(endTime) {
+			return nil, fmt.Errorf("start time cannot be after end time")
+		}
+
+		// 限制时间范围（最多1年）
+		if endTime.Sub(startTime) > 365*24*time.Hour {
+			return nil, fmt.Errorf("time window cannot exceed 1 year")
+		}
 	default:
-		return nil, fmt.Errorf("unsupported window type: %s", windowType)
+		return nil, fmt.Errorf("unsupported window type: %s", req.Window.Type.String())
 	}
 
 	return &TimeWindow{
@@ -133,7 +149,19 @@ func (s *StatsService) getMusicStats(ctx context.Context, openID string, window 
 	cacheKey := fmt.Sprintf("stats:%s:%s:%d:%d", openID, window.Timezone, window.StartTime.Unix(), window.EndTime.Unix())
 	cached, err := s.cache.Get(ctx, cacheKey).Result()
 	if err == nil && cached != "" {
-		// 这里应该反序列化缓存的数据，为了简化直接查询数据库
+		// 反序列化缓存的数据
+		var cachedStats struct {
+			Summary    *common.StatsSummary `json:"summary"`
+			TopArtists []*common.TopItem    `json:"topArtists"`
+			TopTracks  []*common.TopItem    `json:"topTracks"`
+		}
+
+		if err := json.Unmarshal([]byte(cached), &cachedStats); err == nil {
+			logrus.Debugf("Cache hit for stats: %s", cacheKey)
+			return cachedStats.Summary, cachedStats.TopArtists, cachedStats.TopTracks, nil
+		} else {
+			logrus.Warnf("Failed to unmarshal cached stats: %v", err)
+		}
 	}
 
 	// 查询历史状态数据
@@ -151,7 +179,14 @@ func (s *StatsService) getMusicStats(ctx context.Context, openID string, window 
 	summary, topArtists, topTracks := s.analyzeMusicData(histories)
 
 	// 缓存结果（1小时）
-	s.cache.Set(ctx, cacheKey, "cached", time.Hour)
+	cacheData := map[string]interface{}{
+		"summary":    summary,
+		"topArtists": topArtists,
+		"topTracks":  topTracks,
+	}
+	if cacheJSON, err := json.Marshal(cacheData); err == nil {
+		s.cache.Set(ctx, cacheKey, string(cacheJSON), time.Hour)
+	}
 
 	return summary, topArtists, topTracks, nil
 }
@@ -168,23 +203,22 @@ func (s *StatsService) analyzeMusicData(histories []model.StateHistory) (*common
 	var totalPlayTime int64 // 总播放时间（毫秒）
 
 	for _, history := range histories {
-		snapshot := history.Snapshot
+		snapshot := history.Snapshot.Data()
 
 		// 提取音乐信息
-		musicData, ok := snapshot["music"].(map[string]interface{})
-		if !ok {
+		if snapshot.Music == nil {
 			continue
 		}
 
 		music := &common.Music{}
-		if title, ok := musicData["title"].(string); ok {
-			music.Title = &title
+		if snapshot.Music.Title != nil {
+			music.Title = snapshot.Music.Title
 		}
-		if artist, ok := musicData["artist"].(string); ok {
-			music.Artist = &artist
+		if snapshot.Music.Artist != nil {
+			music.Artist = snapshot.Music.Artist
 		}
-		if album, ok := musicData["album"].(string); ok {
-			music.Album = &album
+		if snapshot.Music.Album != nil {
+			music.Album = snapshot.Music.Album
 		}
 
 		// 计算播放时间
@@ -367,10 +401,10 @@ func (s *StatsService) convertToStatsResponse(trackStats map[string]*TrackStat, 
 // SaveMusicStats 保存音乐统计到数据库
 func (s *StatsService) SaveMusicStats(ctx context.Context, openID string, windowType string, tz string, startTime, endTime time.Time, summary *common.StatsSummary, topArtists, topTracks []*common.TopItem) error {
 	// 构建统计数据
-	statsData := map[string]interface{}{
-		"summary":    summary,
-		"topArtists": topArtists,
-		"topTracks":  topTracks,
+	statsPayload := model.MusicStatsPayload{
+		Summary:    summary,
+		TopArtists: topArtists,
+		TopTracks:  topTracks,
 	}
 
 	// 创建音乐统计记录
@@ -380,7 +414,7 @@ func (s *StatsService) SaveMusicStats(ctx context.Context, openID string, window
 		Tz:         tz,
 		StartTime:  startTime,
 		EndTime:    endTime,
-		Stats:      statsData,
+		Stats:      datatypes.NewJSONType(statsPayload),
 	}
 
 	// 使用REPLACE INTO或UPSERT操作
