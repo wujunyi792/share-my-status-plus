@@ -96,12 +96,7 @@ create_backup() {
         success "Prometheus backup completed"
     fi
     
-    # Backup Loki data
-    if [[ -d "data/loki" ]]; then
-        log "Backing up Loki data..."
-        tar -czf "$backup_path/loki_data.tar.gz" -C data loki/
-        success "Loki backup completed"
-    fi
+
     
     # Backup configuration files
     log "Backing up configuration files..."
@@ -201,11 +196,7 @@ restore_backup() {
         tar -xzf "$backup_path/prometheus_data.tar.gz" -C data/
     fi
     
-    if [[ -f "$backup_path/loki_data.tar.gz" ]]; then
-        log "Restoring Loki data..."
-        rm -rf data/loki
-        tar -xzf "$backup_path/loki_data.tar.gz" -C data/
-    fi
+
     
     # Restore configuration files
     if [[ -d "$backup_path/config" ]]; then
@@ -219,7 +210,7 @@ restore_backup() {
     sudo chown -R 999:999 data/mysql 2>/dev/null || true
     sudo chown -R 999:999 data/redis 2>/dev/null || true
     sudo chown -R 472:472 data/grafana 2>/dev/null || true
-    sudo chown -R 10001:10001 data/loki 2>/dev/null || true
+
     
     success "Backup restored successfully"
     

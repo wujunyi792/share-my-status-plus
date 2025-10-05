@@ -8,9 +8,11 @@ import (
 	"syscall"
 	"time"
 
+	"share-my-status/internal/config"
 	"share-my-status/internal/lark"
 	"share-my-status/internal/middleware"
 	"share-my-status/internal/providers"
+	"share-my-status/internal/scheduler"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -46,11 +48,20 @@ func main() {
 		logrus.Fatalf("Failed to initialize WebSocket service: %v", err)
 	}
 
-	// 启动HTTP服务器
-	startHTTPServer(ctx, deps)
+	// 初始化并启动定时任务调度器
+	if config.GlobalConfig.Scheduler.Enabled {
+		sched := scheduler.NewScheduler(deps.DB)
+		sched.Start()
+
+		// 启动HTTP服务器
+		startHTTPServer(ctx, deps, sched)
+	} else {
+		// 启动HTTP服务器（不启用定时任务）
+		startHTTPServer(ctx, deps, nil)
+	}
 }
 
-func startHTTPServer(ctx context.Context, deps *providers.AppDependencies) {
+func startHTTPServer(ctx context.Context, deps *providers.AppDependencies, sched *scheduler.Scheduler) {
 	cfg := deps.Config.App
 
 	// 创建服务器配置
@@ -101,6 +112,11 @@ func startHTTPServer(ctx context.Context, deps *providers.AppDependencies) {
 	<-quit
 
 	logrus.Info("Shutting down server...")
+
+	// 停止定时任务调度器
+	if sched != nil {
+		sched.Stop()
+	}
 
 	// 优雅关闭
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

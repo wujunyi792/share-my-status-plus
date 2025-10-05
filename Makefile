@@ -164,7 +164,7 @@ setup-dev: ## Setup development environment
 	@./scripts/dev.sh start
 	@echo "✅ Development environment ready!"
 	@echo "🌐 Backend: http://localhost:8080"
-	@echo "🔍 Jaeger: http://localhost:16686"
+
 
 setup-prod: ## Setup production environment
 	@echo "🛠️ Setting up production environment..."
@@ -173,7 +173,7 @@ setup-prod: ## Setup production environment
 	@echo "🌐 Backend: http://localhost:8080"
 	@echo "📊 Grafana: http://localhost:3000"
 	@echo "📈 Prometheus: http://localhost:9090"
-	@echo "🔍 Jaeger: http://localhost:16686"
+
 
 # Documentation
 docs: ## Generate documentation

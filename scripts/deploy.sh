@@ -75,14 +75,14 @@ create_directories() {
     log "Creating necessary directories..."
     
     mkdir -p logs
-    mkdir -p data/{mysql,redis,prometheus,grafana,loki}
+    mkdir -p data/{mysql,redis,prometheus,grafana}
     mkdir -p "$BACKUP_DIR"
     
     # Set proper permissions for data directories
     sudo chown -R 999:999 data/mysql 2>/dev/null || true
     sudo chown -R 999:999 data/redis 2>/dev/null || true
     sudo chown -R 472:472 data/grafana 2>/dev/null || true
-    sudo chown -R 10001:10001 data/loki 2>/dev/null || true
+
     
     success "Directories created successfully"
 }
@@ -207,7 +207,7 @@ show_status() {
     echo "  Backend API: http://localhost:8080"
     echo "  Grafana: http://localhost:3000 (admin/admin_password_change_me)"
     echo "  Prometheus: http://localhost:9090"
-    echo "  Jaeger: http://localhost:16686"
+
 }
 
 # Cleanup old backups

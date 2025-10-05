@@ -155,7 +155,7 @@ show_status() {
     log "Service Health:"
     
     # Check each service health
-    local services=("mysql" "redis" "share-backend" "prometheus" "grafana" "jaeger" "loki")
+    local services=("mysql" "redis" "share-backend" "prometheus" "grafana")
     for service in "${services[@]}"; do
         local status=$(docker-compose --env-file "$ENV_FILE" ps -q "$service" 2>/dev/null)
         if [[ -n "$status" ]]; then
@@ -177,7 +177,7 @@ show_status() {
     echo "  🌐 Backend API: http://localhost:8080"
     echo "  📊 Grafana: http://localhost:3000"
     echo "  📈 Prometheus: http://localhost:9090"
-    echo "  🔍 Jaeger: http://localhost:16686"
+
     echo ""
     log "Useful Commands:"
     echo "  📋 View logs: docker-compose --env-file $ENV_FILE logs -f [service]"

@@ -19,7 +19,6 @@ services:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
@@ -135,56 +134,6 @@ services:
     networks:
       - share-network
 
-  # Jaeger for Distributed Tracing
-  jaeger:
-    image: jaegertracing/all-in-one:1.64.0
-    container_name: share-my-status-jaeger
-    restart: always
-    env_file: *env_file
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
-    ports:
-      - "${JAEGER_UI_PORT:-16686}:16686"
-      - "${JAEGER_COLLECTOR_PORT:-14268}:14268"
-      - "${JAEGER_OTLP_GRPC_PORT:-14250}:14250"
-      - "${JAEGER_OTLP_HTTP_PORT:-14268}:14268"
-    volumes:
-      - jaeger_data:/tmp
-    networks:
-      - share-network
-
-  # Loki for Log Aggregation
-  loki:
-    image: grafana/loki:3.3.1
-    container_name: share-my-status-loki
-    restart: always
-    env_file: *env_file
-    ports:
-      - "${LOKI_PORT:-3100}:3100"
-    volumes:
-      - ./docker/loki/loki.yml:/etc/loki/local-config.yaml:ro
-      - loki_data:/loki
-    command: -config.file=/etc/loki/local-config.yaml
-    networks:
-      - share-network
-
-  # Promtail for Log Collection
-  promtail:
-    image: grafana/promtail:3.3.1
-    container_name: share-my-status-promtail
-    restart: always
-    env_file: *env_file
-    volumes:
-      - ./docker/promtail/promtail.yml:/etc/promtail/config.yml:ro
-      - ./logs:/var/log/share-my-status:ro
-      - /var/log:/var/log/host:ro
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      - loki
-    networks:
-      - share-network
-
   # Node Exporter for System Metrics
   node-exporter:
     image: prom/node-exporter:v1.8.2
@@ -244,14 +193,7 @@ volumes:
     driver: local
   grafana_data:
     driver: local
-  jaeger_data:
-    driver: local
-  loki_data:
-    driver: local
 
 networks:
   share-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16

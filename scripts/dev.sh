@@ -123,8 +123,6 @@ services:
       - "3306:3306"
     volumes:
       - mysql_dev_data:/var/lib/mysql
-      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
     command: --default-authentication-plugin=mysql_native_password
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]

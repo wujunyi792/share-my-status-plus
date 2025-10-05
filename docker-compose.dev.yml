@@ -1,0 +1,117 @@
+name: share-my-status-dev
+
+x-env-file: &env_file
+  - .env.dev
+
+services:
+  # MySQL Database for Development - 简化配置
+  mysql-dev:
+    image: mysql:8.4.5
+    container_name: share-my-status-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-share_my_status_dev}
+      MYSQL_USER: ${MYSQL_USER:-dev_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-dev123}
+    env_file: *env_file
+    ports:
+      - "${MYSQL_PORT:-3307}:3306"  # 使用不同端口避免冲突
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+    # 使用最简配置，依靠GORM AutoMigrate创建表结构
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - dev-network
+
+  # Redis Cache for Development
+  redis-dev:
+    image: redis:7.4-alpine
+    container_name: share-my-status-redis-dev
+    restart: unless-stopped
+    env_file: *env_file
+    ports:
+      - "${REDIS_PORT:-6380}:6379"  # 使用不同端口避免冲突
+    volumes:
+      - redis_dev_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dev-network
+
+  # 轻量级监控 - Prometheus (可选)
+  prometheus-dev:
+    image: prom/prometheus:v2.55.1
+    container_name: share-my-status-prometheus-dev
+    restart: unless-stopped
+    env_file: *env_file
+    ports:
+      - "${PROMETHEUS_PORT:-9091}:9090"  # 使用不同端口
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_dev_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=7d'  # 开发环境保留7天即可
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - dev-network
+
+  # 轻量级可视化 - Grafana (可选)
+  grafana-dev:
+    image: grafana/grafana:11.4.0
+    container_name: share-my-status-grafana-dev
+    restart: unless-stopped
+    env_file: *env_file
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=true  # 开发环境允许注册
+      - GF_INSTALL_PLUGINS=redis-datasource
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"  # 使用不同端口
+    volumes:
+      - grafana_dev_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus-dev
+    networks:
+      - dev-network
+
+volumes:
+  mysql_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+  prometheus_dev_data:
+    driver: local
+  grafana_dev_data:
+    driver: local
+  go_mod_cache:
+    driver: local
+
+networks:
+  dev-network:
+    driver: bridge
+    name: share-my-status-dev-network
