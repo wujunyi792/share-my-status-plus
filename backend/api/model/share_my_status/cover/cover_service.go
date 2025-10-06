@@ -783,7 +783,7 @@ func (p *CoverUploadResponse) String() string {
 
 // 封面获取请求
 type CoverGetRequest struct {
-	Hash string `thrift:"hash,1,required" form:"hash,required" json:"hash,required" query:"hash,required"`
+	Hash string `thrift:"hash,1,required" json:"hash,required" path:"hash,required"`
 	// 128, 256等
 	Size int32 `thrift:"size,2,optional" form:"size" json:"size,omitempty" query:"size"`
 }

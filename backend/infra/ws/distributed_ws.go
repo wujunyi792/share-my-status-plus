@@ -96,7 +96,7 @@ func (ws *DistributedWebSocketService) Connect(ctx context.Context, c *app.Reque
 
 	err := distributedUpgrader.Upgrade(c, func(conn *websocket.Conn) {
 		// 创建客户端
-		clientID := fmt.Sprintf("%s_%s_%d", ws.nodeID, subscribedUserID, time.Now().UnixNano())
+		clientID := fmt.Sprintf("%s_%d_%d", ws.nodeID, subscribedUserID, time.Now().UnixNano())
 		client := &WebSocketClient{
 			ID:               clientID,
 			SubscribedUserID: subscribedUserID,
@@ -115,7 +115,7 @@ func (ws *DistributedWebSocketService) Connect(ctx context.Context, c *app.Reque
 		}
 		ws.sendMessageToClient(client, welcomeMsg)
 
-		logrus.Infof("WebSocket client connected: %s (subscribed user: %s)", clientID, subscribedUserID)
+		logrus.Infof("WebSocket client connected: %s (subscribed user: %d)", clientID, subscribedUserID)
 
 		// 启动写协程
 		go ws.clientWritePump(client)

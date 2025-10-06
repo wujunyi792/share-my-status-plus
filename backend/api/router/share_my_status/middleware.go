@@ -34,9 +34,7 @@ func _checkexistsMw() []app.HandlerFunc {
 
 func _getMw() []app.HandlerFunc {
 	// 封面获取需要Sharing Key认证
-	return []app.HandlerFunc{
-		middleware.SharingKeyAuth(),
-	}
+	return []app.HandlerFunc{}
 }
 
 func _uploadMw() []app.HandlerFunc {

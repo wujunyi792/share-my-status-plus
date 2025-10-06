@@ -27,7 +27,7 @@ struct CoverUploadResponse {
 
 // 封面获取请求
 struct CoverGetRequest {
-    1: required string hash;
+    1: required string hash(api.path="hash");
     2: optional i32 size = 256;  // 128, 256等
 }
 
