@@ -18,22 +18,29 @@ func Register(r *server.Hertz) {
 
 	root := r.Group("/", rootMw()...)
 	{
-		_v1 := root.Group("/v1", _v1Mw()...)
-		_v1.GET("/ws", append(_connectMw(), share_my_status.Connect)...)
+		_api := root.Group("/api", _apiMw()...)
 		{
-			_cover := _v1.Group("/cover", _coverMw()...)
-			_cover.GET("/exists", append(_checkexistsMw(), share_my_status.CheckExists)...)
-			_cover.GET("/{hash}", append(_getMw(), share_my_status.Get)...)
-			_cover.POST("/upload", append(_uploadMw(), share_my_status.Upload)...)
+			_v1 := _api.Group("/v1", _v1Mw()...)
+			_v1.GET("/ws", append(_connectMw(), share_my_status.Connect)...)
+			{
+				_cover := _v1.Group("/cover", _coverMw()...)
+				_cover.GET("/exists", append(_checkexistsMw(), share_my_status.CheckExists)...)
+				_cover.GET("/:hash", append(_getMw(), share_my_status.Get)...)
+				_cover.POST("/upload", append(_uploadMw(), share_my_status.Upload)...)
+			}
+			{
+				_state := _v1.Group("/state", _stateMw()...)
+				_state.GET("/query", append(_querystateMw(), share_my_status.QueryState)...)
+				_state.POST("/report", append(_batchreportMw(), share_my_status.BatchReport)...)
+			}
+			{
+				_stats := _v1.Group("/stats", _statsMw()...)
+				_stats.POST("/query", append(_querystatsMw(), share_my_status.QueryStats)...)
+			}
 		}
-		{
-			_state := _v1.Group("/state", _stateMw()...)
-			_state.GET("/query", append(_querystateMw(), share_my_status.QueryState)...)
-			_state.POST("/report", append(_batchreportMw(), share_my_status.BatchReport)...)
-		}
-		{
-			_stats := _v1.Group("/stats", _statsMw()...)
-			_stats.POST("/query", append(_querystatsMw(), share_my_status.QueryStats)...)
-		}
+	}
+	{
+		_s := root.Group("/s", _sMw()...)
+		_s.GET("/:sharingKey", append(_redirectMw(), share_my_status.Redirect)...)
 	}
 }

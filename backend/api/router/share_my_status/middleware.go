@@ -28,7 +28,7 @@ func _coverMw() []app.HandlerFunc {
 func _checkexistsMw() []app.HandlerFunc {
 	// 封面存在性检查需要Sharing Key认证
 	return []app.HandlerFunc{
-		middleware.SharingKeyAuth(),
+		middleware.SecretKeyAuth(),
 	}
 }
 
@@ -73,4 +73,19 @@ func _querystatsMw() []app.HandlerFunc {
 	return []app.HandlerFunc{
 		middleware.SecretKeyAuth(),
 	}
+}
+
+func _apiMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _sMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _redirectMw() []app.HandlerFunc {
+	// your code...
+	return nil
 }

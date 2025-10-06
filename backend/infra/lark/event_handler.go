@@ -2,8 +2,10 @@ package lark
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"share-my-status/api/model/share_my_status/common"
 	"share-my-status/domain/user"
 	"share-my-status/model"
 	"strings"
@@ -13,6 +15,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
 	"gorm.io/gorm"
 )
 
@@ -154,14 +157,14 @@ type Command struct {
 
 // parseCommand 解析命令
 func (h *EventHandler) parseCommand(message string) *Command {
-	message = strings.TrimSpace(message)
+	message = strings.TrimSpace(gjson.Get(message, "text").String())
 	if !strings.HasPrefix(message, "/status") {
-		return nil
+		return &Command{}
 	}
 
 	parts := strings.Fields(message)
 	if len(parts) < 2 {
-		return nil
+		return &Command{}
 	}
 
 	return &Command{
@@ -296,7 +299,7 @@ func (h *EventHandler) extractSharingKey(path string) string {
 }
 
 // renderTemplate 渲染模板
-func (h *EventHandler) renderTemplate(template string, state *StateSnapshot) string {
+func (h *EventHandler) renderTemplate(template string, state *common.StatusSnapshot) string {
 	if state == nil {
 		result := strings.ReplaceAll(template, "{artist}", "")
 		result = strings.ReplaceAll(result, "{title}", "未在播放")
@@ -351,36 +354,8 @@ func (h *EventHandler) renderTemplate(template string, state *StateSnapshot) str
 	return result
 }
 
-// StateSnapshot 状态快照
-type StateSnapshot struct {
-	Music    *MusicInfo    `json:"music,omitempty"`
-	System   *SystemInfo   `json:"system,omitempty"`
-	Activity *ActivityInfo `json:"activity,omitempty"`
-}
-
-// MusicInfo 音乐信息
-type MusicInfo struct {
-	Title     *string `json:"title,omitempty"`
-	Artist    *string `json:"artist,omitempty"`
-	Album     *string `json:"album,omitempty"`
-	CoverHash *string `json:"coverHash,omitempty"`
-}
-
-// SystemInfo 系统信息
-type SystemInfo struct {
-	BatteryPct *float64 `json:"batteryPct,omitempty"`
-	Charging   *bool    `json:"charging,omitempty"`
-	CpuPct     *float64 `json:"cpuPct,omitempty"`
-	MemoryPct  *float64 `json:"memoryPct,omitempty"`
-}
-
-// ActivityInfo 活动信息
-type ActivityInfo struct {
-	Label string `json:"label"`
-}
-
 // getCurrentState 获取当前状态
-func (h *EventHandler) getCurrentState(ctx context.Context, openID string) (*StateSnapshot, error) {
+func (h *EventHandler) getCurrentState(ctx context.Context, openID string) (*common.StatusSnapshot, error) {
 	var currentState model.CurrentState
 	err := h.db.WithContext(ctx).Where("open_id = ?", openID).First(&currentState).Error
 	if err != nil {
@@ -390,55 +365,9 @@ func (h *EventHandler) getCurrentState(ctx context.Context, openID string) (*Sta
 		return nil, err
 	}
 
-	snapshot := &StateSnapshot{}
-	snapshotData := currentState.Snapshot.Data()
+	snapshot := currentState.Snapshot.Data()
 
-	// 解析音乐信息
-	if snapshotData.Music != nil {
-		music := &MusicInfo{}
-		if snapshotData.Music.Title != nil {
-			music.Title = snapshotData.Music.Title
-		}
-		if snapshotData.Music.Artist != nil {
-			music.Artist = snapshotData.Music.Artist
-		}
-		if snapshotData.Music.Album != nil {
-			music.Album = snapshotData.Music.Album
-		}
-		if snapshotData.Music.CoverHash != nil {
-			music.CoverHash = snapshotData.Music.CoverHash
-		}
-		snapshot.Music = music
-	}
-
-	// 解析系统信息
-	if snapshotData.System != nil {
-		system := &SystemInfo{}
-		if snapshotData.System.BatteryPct != nil {
-			system.BatteryPct = snapshotData.System.BatteryPct
-		}
-		if snapshotData.System.Charging != nil {
-			system.Charging = snapshotData.System.Charging
-		}
-		if snapshotData.System.CpuPct != nil {
-			system.CpuPct = snapshotData.System.CpuPct
-		}
-		if snapshotData.System.MemoryPct != nil {
-			system.MemoryPct = snapshotData.System.MemoryPct
-		}
-		snapshot.System = system
-	}
-
-	// 解析活动信息
-	if snapshotData.Activity != nil {
-		activity := &ActivityInfo{}
-		if snapshotData.Activity.Label != "" {
-			activity.Label = snapshotData.Activity.Label
-		}
-		snapshot.Activity = activity
-	}
-
-	return snapshot, nil
+	return &snapshot, nil
 }
 
 // recordPreviewHistory 记录预览历史
@@ -454,12 +383,16 @@ func (h *EventHandler) sendMessage(ctx context.Context, openID, content string) 
 		return fmt.Errorf("lark client not initialized")
 	}
 
+	data, _ := json.Marshal(map[string]string{
+		"text": content,
+	})
+
 	req := larkim.NewCreateMessageReqBuilder().
 		ReceiveIdType("open_id").
 		Body(larkim.NewCreateMessageReqBodyBuilder().
 			ReceiveId(openID).
 			MsgType("text").
-			Content(fmt.Sprintf(`{"text":"%s"}`, content)).
+			Content(string(data)).
 			Uuid(fmt.Sprintf("%d", time.Now().UnixNano())).
 			Build()).
 		Build()

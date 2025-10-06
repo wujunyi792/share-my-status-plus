@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"share-my-status/api/model/share_my_status/redirect"
 	"strings"
 
 	cover "share-my-status/api/model/share_my_status/cover"
@@ -18,7 +19,7 @@ import (
 )
 
 // BatchReport 批量上报状态
-// @router /v1/state/report [POST]
+// @router /api/v1/state/report [POST]
 func BatchReport(ctx context.Context, c *app.RequestContext) {
 	responseHelper := NewResponseHelper()
 
@@ -43,11 +44,11 @@ func BatchReport(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	responseHelper.SendSuccessResponseWithAutoBase(c, &state.BatchReportResponse{}, resp)
+	responseHelper.SendSuccessResponse(c, resp)
 }
 
 // QueryState 查询状态
-// @router /v1/state/query [GET]
+// @router /api/v1/state/query [GET]
 func QueryState(ctx context.Context, c *app.RequestContext) {
 	responseHelper := NewResponseHelper()
 
@@ -65,11 +66,11 @@ func QueryState(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	responseHelper.SendSuccessResponseWithAutoBase(c, &state.QueryStateResponse{}, resp)
+	responseHelper.SendSuccessResponse(c, resp)
 }
 
 // QueryStats 查询统计
-// @router /v1/stats/query [POST]
+// @router /api/v1/stats/query [POST]
 func QueryStats(ctx context.Context, c *app.RequestContext) {
 	responseHelper := NewResponseHelper()
 
@@ -94,11 +95,11 @@ func QueryStats(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	responseHelper.SendSuccessResponseWithAutoBase(c, &stats.StatsQueryResponse{}, resp)
+	responseHelper.SendSuccessResponse(c, resp)
 }
 
 // CheckExists 检查封面是否存在
-// @router /v1/cover/exists [GET]
+// @router /api/v1/cover/exists [GET]
 func CheckExists(ctx context.Context, c *app.RequestContext) {
 	responseHelper := NewResponseHelper()
 
@@ -116,20 +117,14 @@ func CheckExists(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 使用自动填充Base字段的方法
-	data := map[string]interface{}{
-		"Exists": &exists,
-	}
-	responseHelper.SendSuccessResponseWithAutoBase(c, &cover.CoverExistsResponse{}, data)
-}
-
-// stringPtr 创建字符串指针的辅助函数
-func stringPtr(s string) *string {
-	return &s
+	responseHelper.SendSuccessResponse(c, &cover.CoverExistsResponse{
+		Exists:    &exists,
+		CoverHash: &req.Md5,
+	})
 }
 
 // Upload 上传封面
-// @router /v1/cover [POST]
+// @router /api/v1/cover [POST]
 func Upload(ctx context.Context, c *app.RequestContext) {
 	responseHelper := NewResponseHelper()
 
@@ -205,15 +200,13 @@ func Upload(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 使用自动填充Base字段的方法
-	uploadData := map[string]interface{}{
-		"CoverHash": &coverHash,
-	}
-	responseHelper.SendSuccessResponseWithAutoBase(c, &cover.CoverUploadResponse{}, uploadData)
+	responseHelper.SendSuccessResponse(c, &cover.CoverUploadResponse{
+		CoverHash: &coverHash,
+	})
 }
 
 // Get 获取封面
-// @router /v1/cover/:hash [GET]
+// @router /api/v1/cover/:hash [GET]
 func Get(ctx context.Context, c *app.RequestContext) {
 	responseHelper := NewResponseHelper()
 
@@ -253,7 +246,7 @@ func Get(ctx context.Context, c *app.RequestContext) {
 }
 
 // Connect WebSocket连接
-// @router /v1/ws [GET]
+// @router /api/v1/ws [GET]
 func Connect(ctx context.Context, c *app.RequestContext) {
 	responseHelper := NewResponseHelper()
 
@@ -284,4 +277,33 @@ func Connect(ctx context.Context, c *app.RequestContext) {
 		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 500, "Failed to establish WebSocket connection")
 		return
 	}
+}
+
+// Redirect .
+// @router /s/{sharingKey} [GET]
+func Redirect(ctx context.Context, c *app.RequestContext) {
+	// 获取路径参数 sharingKey
+	//sharingKey := c.Param("sharingKey")
+	//if sharingKey == "" {
+	//	c.String(consts.StatusBadRequest, "sharingKey is required")
+	//	return
+	//}
+	var req redirect.RedirectRequest
+	if err := c.BindAndValidate(&req); err != nil {
+		NewResponseHelper().SendErrorResponse(c, &redirect.RedirectResponse{}, 400, "Invalid request: "+err.Error())
+		return
+	}
+
+	// 获取查询参数 r
+	redirectURL := req.GetR()
+
+	// 如果没有提供 r 参数，使用默认配置
+	if redirectURL == "" {
+		// 从配置中获取默认跳转目标，并替换占位符
+		defaultTarget := infra.GetGlobalAppDependencies().Config.Redirect.DefaultTarget
+		redirectURL = strings.Replace(defaultTarget, "{SharingKey}", req.GetSharingKey(), -1)
+	}
+
+	// 进行 302 重定向
+	c.Redirect(consts.StatusFound, []byte(redirectURL))
 }

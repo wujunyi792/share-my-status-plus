@@ -70,7 +70,7 @@ func startHTTPServer(ctx context.Context, deps *infra.AppDependencies) *server.H
 	h.Use(corsHandler)
 
 	// 注册路由
-	customizedRegister(h)
+	register(h)
 
 	// 健康检查端点
 	h.GET("/healthz", func(ctx context.Context, c *app.RequestContext) {

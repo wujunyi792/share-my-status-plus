@@ -23,6 +23,8 @@ type Config struct {
 	Log LogConfig `json:"log"`
 	// 定时任务配置
 	Scheduler SchedulerConfig `json:"scheduler"`
+	// 重定向配置
+	Redirect RedirectConfig `json:"redirect"`
 }
 
 // AppConfig 应用配置
@@ -69,6 +71,11 @@ type SchedulerConfig struct {
 	SnapshotRetentionHours int    `json:"snapshotRetentionHours"`
 }
 
+// RedirectConfig 重定向配置
+type RedirectConfig struct {
+	DefaultTarget string `json:"defaultTarget"` // 默认跳转目标，支持{SharingKey}占位符
+}
+
 // Init 初始化配置
 func Init() (*Config, error) {
 	// 加载环境变量文件
@@ -108,6 +115,9 @@ func Init() (*Config, error) {
 			Enabled:                getEnvAsBool("SCHEDULER_ENABLED", true),
 			CleanupCron:            getEnv("SCHEDULER_CLEANUP_CRON", "0 * * * *"), // 每小时执行一次
 			SnapshotRetentionHours: getEnvAsInt("SCHEDULER_SNAPSHOT_RETENTION_HOURS", 24),
+		},
+		Redirect: RedirectConfig{
+			DefaultTarget: getEnv("REDIRECT_DEFAULT_TARGET", "https://example.com/status/{SharingKey}"),
 		},
 	}
 

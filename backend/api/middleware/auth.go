@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"share-my-status/infra"
@@ -30,13 +29,9 @@ func SecretKeyAuth() app.HandlerFunc {
 			return
 		}
 
-		// 将Secret Key转换为哈希
-		hash := sha256.Sum256([]byte(secretKey))
-		secretKeyHash := hex.EncodeToString(hash[:])
-
 		// 查询用户
 		var user model.User
-		err := infra.GetGlobalAppDependencies().DB.Where("secret_key = ?", secretKeyHash).First(&user).Error
+		err := infra.GetGlobalAppDependencies().DB.Where("secret_key = ?", secretKey).First(&user).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				c.JSON(http.StatusUnauthorized, utils.H{
