@@ -13,7 +13,6 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -32,10 +31,12 @@ func NewStatsService(db *gorm.DB, cache *redis.Client) *StatsService {
 }
 
 // QueryStats 查询音乐统计
-func (s *StatsService) QueryStats(ctx context.Context, openID string, req *stats.StatsQueryRequest) (*stats.StatsQueryResponse, error) {
-	// 检查用户是否授权音乐统计
+func (s *StatsService) QueryStats(ctx context.Context, userID uint64, req *stats.StatsQueryRequest) (*stats.StatsQueryResponse, error) {
+	// 通过userID获取用户信息
 	userService := user.NewUserService(s.db, s.cache)
-	authorized, err := userService.IsMusicStatsAuthorized(openID)
+
+	// 检查用户是否授权音乐统计
+	authorized, err := userService.IsMusicStatsAuthorized(userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check music stats authorization: %w", err)
 	}
@@ -57,7 +58,7 @@ func (s *StatsService) QueryStats(ctx context.Context, openID string, req *stats
 	}
 
 	// 查询统计数据
-	summary, topArtists, topTracks, err := s.getMusicStats(ctx, openID, window)
+	summary, topArtists, topTracks, err := s.getMusicStats(ctx, userID, window)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get music stats: %w", err)
 	}
@@ -143,9 +144,9 @@ type TimeWindow struct {
 }
 
 // getMusicStats 获取音乐统计
-func (s *StatsService) getMusicStats(ctx context.Context, openID string, window *TimeWindow) (*common.StatsSummary, []*common.TopItem, []*common.TopItem, error) {
+func (s *StatsService) getMusicStats(ctx context.Context, userID uint64, window *TimeWindow) (*common.StatsSummary, []*common.TopItem, []*common.TopItem, error) {
 	// 先检查缓存
-	cacheKey := fmt.Sprintf("stats:%s:%s:%d:%d", openID, window.Timezone, window.StartTime.Unix(), window.EndTime.Unix())
+	cacheKey := fmt.Sprintf("stats:%d:%s:%d:%d", userID, window.Timezone, window.StartTime.Unix(), window.EndTime.Unix())
 	cached, err := s.cache.Get(ctx, cacheKey).Result()
 	if err == nil && cached != "" {
 		// 反序列化缓存的数据
@@ -166,8 +167,8 @@ func (s *StatsService) getMusicStats(ctx context.Context, openID string, window 
 	// 查询历史状态数据
 	var histories []model.StateHistory
 	err = s.db.WithContext(ctx).
-		Where("open_id = ? AND recorded_at >= ? AND recorded_at <= ?",
-			openID, window.StartTime, window.EndTime).
+		Where("user_id = ? AND recorded_at >= ? AND recorded_at <= ?",
+			userID, window.StartTime, window.EndTime).
 		Order("recorded_at ASC").
 		Find(&histories).Error
 	if err != nil {
@@ -395,33 +396,4 @@ func (s *StatsService) convertToStatsResponse(trackStats map[string]*TrackStat, 
 	}
 
 	return summary, topArtists, topTracks
-}
-
-// SaveMusicStats 保存音乐统计到数据库
-func (s *StatsService) SaveMusicStats(ctx context.Context, openID string, windowType string, tz string, startTime, endTime time.Time, summary *common.StatsSummary, topArtists, topTracks []*common.TopItem) error {
-	// 构建统计数据
-	statsPayload := model.MusicStatsPayload{
-		Summary:    summary,
-		TopArtists: topArtists,
-		TopTracks:  topTracks,
-	}
-
-	// 创建音乐统计记录
-	musicStats := &model.MusicStats{
-		OpenID:     openID,
-		WindowType: windowType,
-		Tz:         tz,
-		StartTime:  startTime,
-		EndTime:    endTime,
-		Stats:      datatypes.NewJSONType(statsPayload),
-	}
-
-	// 使用REPLACE INTO或UPSERT操作
-	err := s.db.WithContext(ctx).Save(musicStats).Error
-	if err != nil {
-		return fmt.Errorf("failed to save music stats: %w", err)
-	}
-
-	logrus.Infof("Music stats saved for user %s, window %s", openID, windowType)
-	return nil
 }

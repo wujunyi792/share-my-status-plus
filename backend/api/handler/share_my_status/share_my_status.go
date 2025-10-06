@@ -30,14 +30,14 @@ func BatchReport(ctx context.Context, c *app.RequestContext) {
 	}
 
 	// 获取用户ID
-	openID, exists := c.Get("open_id")
+	userID, exists := c.Get("user_id")
 	if !exists {
 		responseHelper.SendErrorResponse(c, &state.BatchReportResponse{}, 401, "Unauthorized")
 		return
 	}
 
 	// 获取依赖并创建状态服务
-	resp, err := infra.GetGlobalAppDependencies().StateService.BatchReport(ctx, openID.(string), req.Events)
+	resp, err := infra.GetGlobalAppDependencies().StateService.BatchReport(ctx, userID.(uint64), req.Events)
 	if err != nil {
 		logrus.Errorf("Failed to batch report: %v", err)
 		responseHelper.SendErrorResponse(c, &state.BatchReportResponse{}, 500, "Internal server error")
@@ -81,14 +81,14 @@ func QueryStats(ctx context.Context, c *app.RequestContext) {
 	}
 
 	// 获取用户ID
-	openID, exists := c.Get("open_id")
+	userID, exists := c.Get("user_id")
 	if !exists {
 		responseHelper.SendErrorResponse(c, &stats.StatsQueryResponse{}, 401, "Unauthorized")
 		return
 	}
 
 	// 获取依赖并创建统计服务
-	resp, err := infra.GetGlobalAppDependencies().StatsService.QueryStats(ctx, openID.(string), &req)
+	resp, err := infra.GetGlobalAppDependencies().StatsService.QueryStats(ctx, userID.(uint64), &req)
 	if err != nil {
 		logrus.Errorf("Failed to query stats: %v", err)
 		responseHelper.SendErrorResponse(c, &stats.StatsQueryResponse{}, 500, "Internal server error")
@@ -257,7 +257,7 @@ func Connect(ctx context.Context, c *app.RequestContext) {
 	}
 
 	// 获取用户ID
-	openID, exists := c.Get("open_id")
+	userID, exists := c.Get("user_id")
 	if !exists {
 		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 401, "Unauthorized")
 		return
@@ -271,7 +271,7 @@ func Connect(ctx context.Context, c *app.RequestContext) {
 	}
 
 	// 建立WebSocket连接
-	err := wsService.Connect(ctx, c, openID.(string))
+	err := wsService.Connect(ctx, c, userID.(uint64))
 	if err != nil {
 		logrus.Errorf("Failed to establish WebSocket connection: %v", err)
 		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 500, "Failed to establish WebSocket connection")

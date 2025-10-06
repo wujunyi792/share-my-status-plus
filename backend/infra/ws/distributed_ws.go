@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"share-my-status/model"
+	"share-my-status/pkg/dbutil"
 	"sync"
 	"time"
 
@@ -20,12 +20,11 @@ import (
 
 // WebSocketClient WebSocket客户端
 type WebSocketClient struct {
-	ID         string
-	UserID     string
-	Connection *websocket.Conn
-	Send       chan []byte
-	Hub        *DistributedWebSocketService
-	LastPing   time.Time
+	ID               string
+	SubscribedUserID uint64
+	Connection       *websocket.Conn
+	Send             chan []byte
+	LastPing         time.Time
 }
 
 // DistributedWebSocketService 分布式WebSocket服务
@@ -35,7 +34,7 @@ type DistributedWebSocketService struct {
 	clientsMux   sync.RWMutex
 
 	// 用户订阅管理
-	userSubscriptions map[string]map[string]bool // userID -> connectionID -> true
+	userSubscriptions map[uint64]map[string]bool // userID -> connectionID -> true
 	subscriptionsMux  sync.RWMutex
 
 	// Redis客户端
@@ -56,12 +55,12 @@ type DistributedWebSocketService struct {
 
 // WebSocketMessage 分布式WebSocket消息
 type WebSocketMessage struct {
-	Type      string                 `json:"type"`
-	NodeID    string                 `json:"nodeId"`
-	UserID    string                 `json:"userId"`
-	ClientID  string                 `json:"clientId,omitempty"`
-	Data      map[string]interface{} `json:"data"`
-	Timestamp int64                  `json:"timestamp"`
+	Type      string                   `json:"type"`
+	NodeID    string                   `json:"nodeId"`
+	UserID    uint64                   `json:"userId"`
+	ClientID  string                   `json:"clientId,omitempty"`
+	Message   *websocket_api.WSMessage `json:"message"`
+	Timestamp int64                    `json:"timestamp"`
 }
 
 // InitDistributedWebSocketService 创建分布式WebSocket服务
@@ -70,7 +69,7 @@ func InitDistributedWebSocketService(redisClient *redis.Client, db *gorm.DB) *Di
 
 	service := &DistributedWebSocketService{
 		localClients:      make(map[string]*WebSocketClient),
-		userSubscriptions: make(map[string]map[string]bool),
+		userSubscriptions: make(map[uint64]map[string]bool),
 		redisClient:       redisClient,
 		db:                db,
 		nodeID:            nodeID,
@@ -84,30 +83,30 @@ func InitDistributedWebSocketService(redisClient *redis.Client, db *gorm.DB) *Di
 	return service
 }
 
-var distributedUpgrader = websocket.HertzUpgrader{} // 使用默认选项
+var distributedUpgrader = websocket.HertzUpgrader{
+	CheckOrigin: func(c *app.RequestContext) bool {
+		// 允许所有来源的WebSocket连接
+		return true
+	},
+}
 
 // Connect 处理WebSocket连接
-func (ws *DistributedWebSocketService) Connect(ctx context.Context, c *app.RequestContext, userID string) error {
-	logrus.Infof("WebSocket connection request for user: %s", userID)
+func (ws *DistributedWebSocketService) Connect(ctx context.Context, c *app.RequestContext, subscribedUserID uint64) error {
+	logrus.Infof("WebSocket connection request for subscribed user: %s", subscribedUserID)
 
 	err := distributedUpgrader.Upgrade(c, func(conn *websocket.Conn) {
 		// 创建客户端
-		clientID := fmt.Sprintf("%s_%s_%d", ws.nodeID, userID, time.Now().UnixNano())
+		clientID := fmt.Sprintf("%s_%s_%d", ws.nodeID, subscribedUserID, time.Now().UnixNano())
 		client := &WebSocketClient{
-			ID:         clientID,
-			UserID:     userID,
-			Connection: conn,
-			Send:       make(chan []byte, 256),
-			Hub:        nil, // 分布式模式下不需要Hub
-			LastPing:   time.Now(),
+			ID:               clientID,
+			SubscribedUserID: subscribedUserID,
+			Connection:       conn,
+			Send:             make(chan []byte, 256),
+			LastPing:         time.Now(),
 		}
 
 		// 注册本地客户端
 		ws.registerLocalClient(client)
-
-		// 启动读写协程
-		go ws.clientWritePump(client)
-		go ws.clientReadPump(client)
 
 		// 发送欢迎消息
 		welcomeMsg := &websocket_api.WSMessage{
@@ -116,7 +115,14 @@ func (ws *DistributedWebSocketService) Connect(ctx context.Context, c *app.Reque
 		}
 		ws.sendMessageToClient(client, welcomeMsg)
 
-		logrus.Infof("WebSocket client connected: %s (user: %s)", clientID, userID)
+		logrus.Infof("WebSocket client connected: %s (subscribed user: %s)", clientID, subscribedUserID)
+
+		// 启动写协程
+		go ws.clientWritePump(client)
+
+		// 在当前goroutine中运行读协程，这样handler不会立即退出
+		// 当读协程结束时，连接会被正确关闭
+		ws.clientReadPump(client)
 	})
 
 	if err != nil {
@@ -138,10 +144,10 @@ func (ws *DistributedWebSocketService) registerLocalClient(client *WebSocketClie
 	ws.subscriptionsMux.Lock()
 	defer ws.subscriptionsMux.Unlock()
 
-	if ws.userSubscriptions[client.UserID] == nil {
-		ws.userSubscriptions[client.UserID] = make(map[string]bool)
+	if ws.userSubscriptions[client.SubscribedUserID] == nil {
+		ws.userSubscriptions[client.SubscribedUserID] = make(map[string]bool)
 	}
-	ws.userSubscriptions[client.UserID][client.ID] = true
+	ws.userSubscriptions[client.SubscribedUserID][client.ID] = true
 }
 
 // unregisterLocalClient 注销本地客户端
@@ -155,10 +161,10 @@ func (ws *DistributedWebSocketService) unregisterLocalClient(client *WebSocketCl
 	ws.subscriptionsMux.Lock()
 	defer ws.subscriptionsMux.Unlock()
 
-	if userSubs, exists := ws.userSubscriptions[client.UserID]; exists {
+	if userSubs, exists := ws.userSubscriptions[client.SubscribedUserID]; exists {
 		delete(userSubs, client.ID)
 		if len(userSubs) == 0 {
-			delete(ws.userSubscriptions, client.UserID)
+			delete(ws.userSubscriptions, client.SubscribedUserID)
 		}
 	}
 
@@ -166,15 +172,13 @@ func (ws *DistributedWebSocketService) unregisterLocalClient(client *WebSocketCl
 }
 
 // BroadcastToUser 向指定用户的所有连接广播消息
-func (ws *DistributedWebSocketService) BroadcastToUser(userID string, message *websocket_api.WSMessage) {
+func (ws *DistributedWebSocketService) BroadcastToUser(userID uint64, message *websocket_api.WSMessage) {
 	// 发布到Redis，让所有节点都能收到
 	wsMessage := &WebSocketMessage{
-		Type:   "broadcast",
-		NodeID: ws.nodeID,
-		UserID: userID,
-		Data: map[string]interface{}{
-			"message": message,
-		},
+		Type:      "broadcast",
+		NodeID:    ws.nodeID,
+		UserID:    userID,
+		Message:   message,
 		Timestamp: time.Now().UnixMilli(),
 	}
 
@@ -182,7 +186,7 @@ func (ws *DistributedWebSocketService) BroadcastToUser(userID string, message *w
 }
 
 // BroadcastStatusUpdate 广播状态更新
-func (ws *DistributedWebSocketService) BroadcastStatusUpdate(userID string, snapshot *common.StatusSnapshot) {
+func (ws *DistributedWebSocketService) BroadcastStatusUpdate(userID uint64, snapshot *common.StatusSnapshot) {
 	updateMsg := &websocket_api.WSMessage{
 		Type:      websocket_api.MessageType_STATUS_UPDATE,
 		Snapshot:  snapshot,
@@ -248,16 +252,9 @@ func (ws *DistributedWebSocketService) handleRedisMessage(payload string) {
 		return
 	}
 
-	// 忽略自己发布的消息
-	if message.NodeID == ws.nodeID {
-		return
-	}
-
 	switch message.Type {
 	case "broadcast":
 		ws.handleBroadcastMessage(&message)
-	case "disconnect":
-		ws.handleDisconnectMessage(&message)
 	default:
 		logrus.Warnf("Unknown message type: %s", message.Type)
 	}
@@ -276,45 +273,20 @@ func (ws *DistributedWebSocketService) handleBroadcastMessage(message *WebSocket
 		return // 本地没有该用户的连接
 	}
 
-	// 获取消息数据
-	messageData, ok := message.Data["message"].(map[string]interface{})
-	if !ok {
-		logrus.Errorf("Invalid message data format")
+	// 直接使用消息中的WebSocket消息
+	if message.Message == nil {
+		logrus.Errorf("Invalid message: Message field is nil")
 		return
-	}
-
-	// 转换为WebSocket消息
-	wsMsg := &websocket_api.WSMessage{}
-	if msgType, ok := messageData["type"].(float64); ok {
-		wsMsg.Type = websocket_api.MessageType(int32(msgType))
-	}
-	if timestamp, ok := messageData["timestamp"].(float64); ok {
-		wsMsg.Timestamp = int64(timestamp)
-	}
-	if snapshotData, ok := messageData["snapshot"].(map[string]interface{}); ok {
-		// 将Redis消息中的snapshot数据转换为common.StatusSnapshot
-		snapshot, err := convertMapToStatusSnapshot(snapshotData)
-		if err != nil {
-			logrus.Errorf("Failed to convert snapshot from Redis message: %v", err)
-			return
-		}
-		wsMsg.Snapshot = snapshot
 	}
 
 	// 向本地连接发送消息
 	ws.clientsMux.RLock()
 	for clientID := range userSubs {
 		if client, exists := ws.localClients[clientID]; exists {
-			ws.sendMessageToClient(client, wsMsg)
+			ws.sendMessageToClient(client, message.Message)
 		}
 	}
 	ws.clientsMux.RUnlock()
-}
-
-// handleDisconnectMessage 处理断开连接消息
-func (ws *DistributedWebSocketService) handleDisconnectMessage(message *WebSocketMessage) {
-	// 处理其他节点发送的断开连接消息
-	logrus.Infof("Received disconnect message for user: %s", message.UserID)
 }
 
 // sendMessageToClient 发送消息给客户端
@@ -370,10 +342,9 @@ func (ws *DistributedWebSocketService) clientReadPump(client *WebSocketClient) {
 
 // clientWritePump 客户端写入协程
 func (ws *DistributedWebSocketService) clientWritePump(client *WebSocketClient) {
-	ticker := time.NewTicker(54 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	defer func() {
 		ticker.Stop()
-		client.Connection.Close()
 	}()
 
 	for {
@@ -422,7 +393,7 @@ func (ws *DistributedWebSocketService) handleClientMessage(client *WebSocketClie
 // sendCurrentSnapshot 发送当前状态快照
 func (ws *DistributedWebSocketService) sendCurrentSnapshot(client *WebSocketClient) {
 	// 从数据库获取当前状态
-	currentState, err := ws.getCurrentState(context.Background(), client.UserID)
+	currentState, err := ws.getCurrentState(context.Background(), client.SubscribedUserID)
 	if err != nil {
 		logrus.Errorf("Failed to get current state for WebSocket client %s: %v", client.ID, err)
 		errorMsg := &websocket_api.WSMessage{
@@ -444,23 +415,9 @@ func (ws *DistributedWebSocketService) sendCurrentSnapshot(client *WebSocketClie
 }
 
 // getCurrentState 获取用户当前状态
-func (ws *DistributedWebSocketService) getCurrentState(ctx context.Context, userID string) (*common.StatusSnapshot, error) {
-	// 直接查询数据库获取当前状态
-	var currentState model.CurrentState
-	err := ws.db.WithContext(ctx).Where("open_id = ?", userID).First(&currentState).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			// 返回空快照
-			return &common.StatusSnapshot{
-				LastUpdateTs: time.Now().UnixMilli(),
-			}, nil
-		}
-		return nil, err
-	}
-
-	// 获取快照数据
-	snapshotData := currentState.Snapshot.Data()
-	return &snapshotData, nil
+func (ws *DistributedWebSocketService) getCurrentState(ctx context.Context, userID uint64) (*common.StatusSnapshot, error) {
+	// 使用统一的辅助函数获取当前状态
+	return dbutil.GetCurrentStateFromDB(ctx, ws.db, userID)
 }
 
 // convertMapToStatusSnapshot 将map[string]interface{}转换为common.StatusSnapshot

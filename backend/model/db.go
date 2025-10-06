@@ -33,7 +33,7 @@ type UserSettingsPayload struct {
 
 // UserSettings 用户设置表
 type UserSettings struct {
-	OpenID    string                                  `gorm:"column:open_id;type:varchar(64);primaryKey" json:"openId"`
+	UserID    uint64                                  `gorm:"column:user_id;primaryKey" json:"userId"`
 	Settings  datatypes.JSONType[UserSettingsPayload] `gorm:"column:settings;type:json;not null" json:"settings"`
 	UpdatedAt time.Time                               `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }
@@ -45,7 +45,7 @@ func (UserSettings) TableName() string {
 
 // CurrentState 当前状态表
 type CurrentState struct {
-	OpenID    string                                    `gorm:"column:open_id;type:varchar(64);primaryKey" json:"openId"`
+	UserID    uint64                                    `gorm:"column:user_id;primaryKey" json:"userId"`
 	Snapshot  datatypes.JSONType[common.StatusSnapshot] `gorm:"column:snapshot;type:json;not null" json:"snapshot"`
 	UpdatedAt time.Time                                 `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }
@@ -58,7 +58,7 @@ func (CurrentState) TableName() string {
 // StateHistory 历史状态表
 type StateHistory struct {
 	ID         uint64                                    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	OpenID     string                                    `gorm:"column:open_id;type:varchar(64);index:ix_hist_user_time,priority:1" json:"openId"`
+	UserID     uint64                                    `gorm:"column:user_id;index:ix_hist_user_time,priority:1" json:"userId"`
 	RecordedAt time.Time                                 `gorm:"column:recorded_at;index:ix_hist_user_time,priority:2" json:"recordedAt"`
 	Snapshot   datatypes.JSONType[common.StatusSnapshot] `gorm:"column:snapshot;type:json;not null" json:"snapshot"`
 }
@@ -97,24 +97,6 @@ type MusicStatsPayload struct {
 	TopTracks  []*common.TopItem    `json:"topTracks"`
 }
 
-// MusicStats 音乐统计表
-type MusicStats struct {
-	ID         uint64                                `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	OpenID     string                                `gorm:"column:open_id;type:varchar(64);index:uk_user_window,unique,priority:1" json:"openId"`
-	WindowType string                                `gorm:"column:window_type;type:enum('rolling_3d','rolling_7d','month_to_date','year_to_date','custom');index:uk_user_window,unique,priority:2" json:"windowType"`
-	Tz         string                                `gorm:"column:tz;size:32;not null" json:"tz"`
-	StartTime  time.Time                             `gorm:"column:start_time;index:uk_user_window,unique,priority:3" json:"startTime"`
-	EndTime    time.Time                             `gorm:"column:end_time;index:uk_user_window,unique,priority:4" json:"endTime"`
-	Stats      datatypes.JSONType[MusicStatsPayload] `gorm:"column:stats;type:json;not null" json:"stats"`
-	CreatedAt  time.Time                             `gorm:"column:created_at" json:"createdAt"`
-	UpdatedAt  time.Time                             `gorm:"column:updated_at" json:"updatedAt"`
-}
-
-// TableName 指定表名
-func (MusicStats) TableName() string {
-	return "music_stats"
-}
-
 // CreateTables 创建数据库表
 func CreateTables(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -123,6 +105,5 @@ func CreateTables(db *gorm.DB) error {
 		&CurrentState{},
 		&StateHistory{},
 		&CoverAsset{},
-		&MusicStats{},
 	)
 }

@@ -81,6 +81,29 @@ func startHTTPServer(ctx context.Context, deps *infra.AppDependencies) *server.H
 		})
 	})
 
+	//h.GET("/echo", func(_ context.Context, c *app.RequestContext) {
+	//	var upgrader = websocket.HertzUpgrader{} // use default options
+	//	err := upgrader.Upgrade(c, func(conn *websocket.Conn) {
+	//		for {
+	//			mt, message, err := conn.ReadMessage()
+	//			if err != nil {
+	//				log.Println("read:", err)
+	//				break
+	//			}
+	//			log.Printf("recv: %s", message)
+	//			err = conn.WriteMessage(mt, message)
+	//			if err != nil {
+	//				log.Println("write:", err)
+	//				break
+	//			}
+	//		}
+	//	})
+	//	if err != nil {
+	//		log.Print("upgrade:", err)
+	//		return
+	//	}
+	//})
+
 	// 启动服务器
 	go func() {
 		logrus.Infof("Starting HTTP server on port %d", cfg.App.Port)

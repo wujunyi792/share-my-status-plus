@@ -8,6 +8,7 @@ import (
 	"share-my-status/api/model/share_my_status/common"
 	"share-my-status/domain/user"
 	"share-my-status/model"
+	"share-my-status/pkg/dbutil"
 	"strings"
 	"time"
 
@@ -113,7 +114,7 @@ func (h *EventHandler) OnP2CardURLPreviewGet(ctx context.Context, event *callbac
 	}
 
 	// 检查公开访问权限
-	publicEnabled, err := userService.IsPublicEnabled(user.OpenID)
+	publicEnabled, err := userService.IsPublicEnabled(user.ID)
 	if err != nil {
 		logrus.Errorf("Failed to check public access: %v", err)
 		return urlPreview, nil
@@ -125,7 +126,7 @@ func (h *EventHandler) OnP2CardURLPreviewGet(ctx context.Context, event *callbac
 	}
 
 	// 获取当前状态
-	currentState, err := h.getCurrentState(ctx, user.OpenID)
+	currentState, err := h.getCurrentState(ctx, user.ID)
 	if err != nil {
 		logrus.Errorf("Failed to get current state: %v", err)
 		return urlPreview, nil
@@ -194,7 +195,7 @@ func (h *EventHandler) executeCommand(ctx context.Context, user *model.User, com
 // executeRevokeCommand 执行撤销命令
 func (h *EventHandler) executeRevokeCommand(ctx context.Context, user *model.User, userService *user.UserService) (string, error) {
 	// 生成新的Sharing Key
-	newSharingKey, err := userService.RotateSharingKey(user.OpenID)
+	newSharingKey, err := userService.RotateSharingKey(user.ID)
 	if err != nil {
 		return "", fmt.Errorf("failed to rotate sharing key: %w", err)
 	}
@@ -205,7 +206,7 @@ func (h *EventHandler) executeRevokeCommand(ctx context.Context, user *model.Use
 // executeRotateCommand 执行轮转命令
 func (h *EventHandler) executeRotateCommand(ctx context.Context, user *model.User, userService *user.UserService) (string, error) {
 	// 生成新的Secret Key
-	newSecretKey, err := userService.RotateSecretKey(user.OpenID)
+	newSecretKey, err := userService.RotateSecretKey(user.ID)
 	if err != nil {
 		return "", fmt.Errorf("failed to rotate secret key: %w", err)
 	}
@@ -222,7 +223,7 @@ func (h *EventHandler) executePublishCommand(ctx context.Context, user *model.Us
 	enable := params[0] == "on"
 
 	// 获取当前设置
-	settings, err := userService.GetUserSettings(user.OpenID)
+	settings, err := userService.GetUserSettings(user.ID)
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return "", fmt.Errorf("failed to get user settings: %w", err)
 	}
@@ -234,7 +235,7 @@ func (h *EventHandler) executePublishCommand(ctx context.Context, user *model.Us
 	}
 	newSettings.PublicEnabled = enable
 
-	err = userService.UpdateUserSettings(user.OpenID, newSettings)
+	err = userService.UpdateUserSettings(user.ID, newSettings)
 	if err != nil {
 		return "", fmt.Errorf("failed to update settings: %w", err)
 	}
@@ -250,7 +251,7 @@ func (h *EventHandler) executePublishCommand(ctx context.Context, user *model.Us
 // executeInfoCommand 执行信息命令
 func (h *EventHandler) executeInfoCommand(ctx context.Context, user *model.User, userService *user.UserService) (string, error) {
 	// 获取用户设置
-	settings, err := userService.GetUserSettings(user.OpenID)
+	settings, err := userService.GetUserSettings(user.ID)
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return "", fmt.Errorf("failed to get user settings: %w", err)
 	}
@@ -263,7 +264,7 @@ func (h *EventHandler) executeInfoCommand(ctx context.Context, user *model.User,
 	}
 
 	// 获取当前状态
-	currentState, err := h.getCurrentState(ctx, user.OpenID)
+	currentState, err := h.getCurrentState(ctx, user.ID)
 	if err != nil {
 		logrus.Errorf("Failed to get current state: %v", err)
 	}
@@ -355,19 +356,8 @@ func (h *EventHandler) renderTemplate(template string, state *common.StatusSnaps
 }
 
 // getCurrentState 获取当前状态
-func (h *EventHandler) getCurrentState(ctx context.Context, openID string) (*common.StatusSnapshot, error) {
-	var currentState model.CurrentState
-	err := h.db.WithContext(ctx).Where("open_id = ?", openID).First(&currentState).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	snapshot := currentState.Snapshot.Data()
-
-	return &snapshot, nil
+func (h *EventHandler) getCurrentState(ctx context.Context, userID uint64) (*common.StatusSnapshot, error) {
+	return dbutil.GetCurrentStateFromDB(ctx, h.db, userID)
 }
 
 // recordPreviewHistory 记录预览历史

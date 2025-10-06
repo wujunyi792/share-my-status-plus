@@ -53,7 +53,7 @@ func (s *UserService) CreateUser(openID string) (*model.User, error) {
 
 	// 创建默认用户设置
 	defaultSettings := &model.UserSettings{
-		OpenID: openID,
+		UserID: user.ID,
 		Settings: datatypes.NewJSONType(model.UserSettingsPayload{
 			AuthorizedMusicStats: false,
 			PublicEnabled:        true,
@@ -69,6 +69,16 @@ func (s *UserService) CreateUser(openID string) (*model.User, error) {
 	return user, nil
 }
 
+// GetUserByID 通过ID获取用户
+func (s *UserService) GetUserByID(userID uint64) (*model.User, error) {
+	var user model.User
+	err := s.db.Where("id = ?", userID).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 // GetUserByOpenID 通过OpenID获取用户
 func (s *UserService) GetUserByOpenID(openID string) (*model.User, error) {
 	var user model.User
@@ -81,11 +91,8 @@ func (s *UserService) GetUserByOpenID(openID string) (*model.User, error) {
 
 // GetUserBySecretKey 通过Secret Key获取用户
 func (s *UserService) GetUserBySecretKey(secretKey string) (*model.User, error) {
-	hash := sha256.Sum256([]byte(secretKey))
-	secretKeyHash := hex.EncodeToString(hash[:])
-
 	var user model.User
-	err := s.db.Where("secret_key = ?", secretKeyHash).First(&user).Error
+	err := s.db.Where("secret_key = ?", secretKey).First(&user).Error
 	if err != nil {
 		return nil, err
 	}
@@ -103,14 +110,14 @@ func (s *UserService) GetUserBySharingKey(sharingKey string) (*model.User, error
 }
 
 // UpdateUserSettings 更新用户设置
-func (s *UserService) UpdateUserSettings(openID string, settings model.UserSettingsPayload) error {
+func (s *UserService) UpdateUserSettings(userID uint64, settings model.UserSettingsPayload) error {
 	var userSettings model.UserSettings
-	err := s.db.Where("open_id = ?", openID).First(&userSettings).Error
+	err := s.db.Where("user_id = ?", userID).First(&userSettings).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// 创建新的用户设置
 			userSettings = model.UserSettings{
-				OpenID:   openID,
+				UserID:   userID,
 				Settings: datatypes.NewJSONType(settings),
 			}
 			return s.db.Create(&userSettings).Error
@@ -124,9 +131,9 @@ func (s *UserService) UpdateUserSettings(openID string, settings model.UserSetti
 }
 
 // GetUserSettings 获取用户设置
-func (s *UserService) GetUserSettings(openID string) (*model.UserSettings, error) {
+func (s *UserService) GetUserSettings(userID uint64) (*model.UserSettings, error) {
 	var settings model.UserSettings
-	err := s.db.Where("open_id = ?", openID).First(&settings).Error
+	err := s.db.Where("user_id = ?", userID).First(&settings).Error
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +141,7 @@ func (s *UserService) GetUserSettings(openID string) (*model.UserSettings, error
 }
 
 // RotateSecretKey 轮转Secret Key
-func (s *UserService) RotateSecretKey(openID string) (string, error) {
+func (s *UserService) RotateSecretKey(userID uint64) (string, error) {
 	newSecretKey, err := s.generateSecretKey()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate new secret key: %w", err)
@@ -143,28 +150,28 @@ func (s *UserService) RotateSecretKey(openID string) (string, error) {
 	hash := sha256.Sum256([]byte(newSecretKey))
 	secretKeyHash := hex.EncodeToString(hash[:])
 
-	err = s.db.Model(&model.User{}).Where("open_id = ?", openID).Update("secret_key", secretKeyHash).Error
+	err = s.db.Model(&model.User{}).Where("id = ?", userID).Update("secret_key", secretKeyHash).Error
 	if err != nil {
 		return "", fmt.Errorf("failed to update secret key: %w", err)
 	}
 
-	logrus.Infof("Secret key rotated for user: %s", openID)
+	logrus.Infof("Secret key rotated for user: %d", userID)
 	return newSecretKey, nil
 }
 
 // RotateSharingKey 轮转Sharing Key
-func (s *UserService) RotateSharingKey(openID string) (string, error) {
+func (s *UserService) RotateSharingKey(userID uint64) (string, error) {
 	newSharingKey, err := s.generateSharingKey()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate new sharing key: %w", err)
 	}
 
-	err = s.db.Model(&model.User{}).Where("open_id = ?", openID).Update("sharing_key", newSharingKey).Error
+	err = s.db.Model(&model.User{}).Where("id = ?", userID).Update("sharing_key", newSharingKey).Error
 	if err != nil {
 		return "", fmt.Errorf("failed to update sharing key: %w", err)
 	}
 
-	logrus.Infof("Sharing key rotated for user: %s", openID)
+	logrus.Infof("Sharing key rotated for user: %d", userID)
 	return newSharingKey, nil
 }
 
@@ -185,8 +192,8 @@ func (s *UserService) generateSharingKey() (string, error) {
 }
 
 // IsPublicEnabled 检查用户是否开启公开访问
-func (s *UserService) IsPublicEnabled(openID string) (bool, error) {
-	settings, err := s.GetUserSettings(openID)
+func (s *UserService) IsPublicEnabled(userID uint64) (bool, error) {
+	settings, err := s.GetUserSettings(userID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// 默认开启公开访问
@@ -199,8 +206,8 @@ func (s *UserService) IsPublicEnabled(openID string) (bool, error) {
 }
 
 // IsMusicStatsAuthorized 检查用户是否授权音乐统计
-func (s *UserService) IsMusicStatsAuthorized(openID string) (bool, error) {
-	settings, err := s.GetUserSettings(openID)
+func (s *UserService) IsMusicStatsAuthorized(userID uint64) (bool, error) {
+	settings, err := s.GetUserSettings(userID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// 默认未授权

@@ -113,7 +113,7 @@ func SharingKeyAuth() app.HandlerFunc {
 
 		// 检查用户设置中的公开授权
 		var settings model.UserSettings
-		err = infra.GetGlobalAppDependencies().DB.Where("open_id = ?", user.OpenID).First(&settings).Error
+		err = infra.GetGlobalAppDependencies().DB.Where("user_id = ?", user.ID).First(&settings).Error
 		if err != nil && err != gorm.ErrRecordNotFound {
 			logrus.Errorf("Failed to query user settings: %v", err)
 			c.JSON(http.StatusInternalServerError, utils.H{

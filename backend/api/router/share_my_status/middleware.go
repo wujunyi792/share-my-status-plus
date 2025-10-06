@@ -71,7 +71,7 @@ func _statsMw() []app.HandlerFunc {
 func _querystatsMw() []app.HandlerFunc {
 	// 统计查询需要Secret Key认证
 	return []app.HandlerFunc{
-		middleware.SecretKeyAuth(),
+		middleware.SharingKeyAuth(),
 	}
 }
 
