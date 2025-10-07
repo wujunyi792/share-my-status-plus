@@ -1,7 +1,6 @@
-import React from 'react';
-import { Activity, Clock, User } from 'lucide-react';
+import { Activity, Clock } from 'lucide-react';
 import type { ActivityState } from '@/types';
-import { cn } from '@/utils';
+import { cn, formatRelativeTime } from '@/utils';
 
 interface ActivityCardProps {
   activity: ActivityState;
@@ -62,58 +61,41 @@ export function ActivityCard({ activity, className }: ActivityCardProps) {
 
   return (
     <div className={cn(
-      "bg-white rounded-xl shadow-sm border border-gray-200 p-4 transition-all duration-200 hover:shadow-md",
+      "bg-white rounded-xl shadow-sm border border-gray-200 p-6 transition-all duration-200 hover:shadow-md h-full flex flex-col justify-center",
       className
     )}>
       <div className="flex items-center space-x-4">
         {/* 活动图标 */}
         <div className={cn(
-          "w-12 h-12 rounded-lg flex items-center justify-center text-2xl",
+          "w-16 h-16 rounded-xl flex items-center justify-center text-3xl flex-shrink-0",
           config.bgColor,
           config.borderColor,
-          "border"
+          "border-2 shadow-sm"
         )}>
           {config.icon}
         </div>
 
         {/* 活动信息 */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center space-x-2 mb-1">
+          <div className="flex items-center space-x-2 mb-2">
             <Activity className={cn("w-4 h-4", config.color)} />
-            <span className="text-sm font-medium text-gray-900">
-              正在做的事
+            <span className="text-sm font-medium text-gray-500">
+              当前活动
             </span>
           </div>
           
-          <p className={cn("text-lg font-semibold", config.color)}>
+          <p className={cn("text-2xl font-bold truncate", config.color)}>
             {activity.label}
           </p>
         </div>
       </div>
 
-      {/* 活动状态指示器 */}
-      <div className="mt-4 flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          <span className="text-xs text-gray-500">活跃中</span>
-        </div>
-        
-        <div className="flex items-center space-x-1 text-gray-500">
+      {/* 更新时间 */}
+      <div className="mt-6 pt-4 border-t border-gray-100">
+        <div className="flex items-center justify-center space-x-1 text-gray-500">
           <Clock className="w-3 h-3" />
-          <span className="text-xs">实时更新</span>
+          <span className="text-xs">{formatRelativeTime(activity.ts)}</span>
         </div>
-      </div>
-
-      {/* 活动类型标签 */}
-      <div className="mt-3">
-        <span className={cn(
-          "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
-          config.bgColor,
-          config.color
-        )}>
-          <User className="w-3 h-3 mr-1" />
-          {activity.label}
-        </span>
       </div>
     </div>
   );

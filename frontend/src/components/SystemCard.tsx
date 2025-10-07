@@ -1,11 +1,10 @@
-import React from 'react';
-import { Battery, Cpu, HardDrive, Zap, ZapOff } from 'lucide-react';
+import { Battery, Cpu, HardDrive, Zap, Clock } from 'lucide-react';
 import type { SystemState } from '@/types';
 import { 
   formatPercentage, 
-  formatBatteryStatus, 
   getBatteryColor, 
-  getResourceColor 
+  getResourceColor,
+  formatRelativeTime
 } from '@/utils';
 import { cn } from '@/utils';
 
@@ -46,10 +45,10 @@ export function SystemCard({ system, className }: SystemCardProps) {
 
   return (
     <div className={cn(
-      "bg-white rounded-xl shadow-sm border border-gray-200 p-4",
+      "bg-white rounded-xl shadow-sm border border-gray-200 p-4 h-full flex flex-col",
       className
     )}>
-      <div className="space-y-4">
+      <div className="space-y-4 flex-1">
         {/* 电池状态 */}
         {batteryPct !== undefined && (
           <div className="flex items-center justify-between">
@@ -110,6 +109,14 @@ export function SystemCard({ system, className }: SystemCardProps) {
             <span className="text-xs">充电中</span>
           </div>
         )}
+      </div>
+
+      {/* 更新时间 */}
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        <div className="flex items-center justify-center space-x-1 text-gray-500">
+          <Clock className="w-3 h-3" />
+          <span className="text-xs">{formatRelativeTime(system.ts)}</span>
+        </div>
       </div>
     </div>
   );

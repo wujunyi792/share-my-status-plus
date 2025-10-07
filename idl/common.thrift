@@ -13,6 +13,7 @@ struct Music {
     2: optional string artist;
     3: optional string album;
     4: optional string coverHash;
+    5: required i64 ts;  // 毫秒时间戳
 }
 
 // 系统信息结构
@@ -21,21 +22,22 @@ struct System {
     2: optional bool charging;
     3: optional double cpuPct;      // 0-1
     4: optional double memoryPct;   // 0-1
+    5: required i64 ts;  // 毫秒时间戳
 }
 
 // 活动信息结构
 struct Activity {
     1: required string label;  // 如：在工作、在写代码
+    2: required i64 ts;  // 毫秒时间戳
 }
 
 // 上报事件结构
 struct ReportEvent {
     1: required string version = "1";
-    2: required i64 ts;  // 毫秒时间戳
-    3: optional System system;
-    4: optional Music music;
-    5: optional Activity activity;
-    6: optional string idempotencyKey;  // 幂等键
+    2: optional System system;
+    3: optional Music music;
+    4: optional Activity activity;
+    5: optional string idempotencyKey;  // 幂等键
 }
 
 // 状态快照结构

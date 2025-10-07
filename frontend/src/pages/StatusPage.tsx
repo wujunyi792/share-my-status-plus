@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useParams } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useAppStore } from '@/store/useAppStore';
@@ -9,7 +9,6 @@ import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { formatRelativeTime } from '@/utils';
-import { cn } from '@/utils';
 
 export function StatusPage() {
   const { sharingKey } = useParams<{ sharingKey: string }>();
@@ -20,21 +19,24 @@ export function StatusPage() {
   
   // 模拟数据
   const demoState = {
-    ts: Date.now(),
+    lastUpdateTs: Date.now(),
     music: {
       title: "Yellow",
       artist: "Coldplay",
       album: "Parachutes",
-      coverHash: "demo-cover-hash"
+      coverHash: "demo-cover-hash",
+      ts: Date.now()
     },
     system: {
       batteryPct: 0.82,
       charging: true,
       cpuPct: 0.23,
-      memoryPct: 0.58
+      memoryPct: 0.58,
+      ts: Date.now()
     },
     activity: {
-      label: "在工作"
+      label: "在工作",
+      ts: Date.now()
     }
   };
 
@@ -141,7 +143,7 @@ export function StatusPage() {
                 <div>
                   <dt className="text-sm font-medium text-gray-500">最后更新时间</dt>
                   <dd className="mt-1 text-sm text-gray-900">
-                    {formatRelativeTime(currentState.ts)}
+                    {formatRelativeTime(currentState.lastUpdateTs)}
                   </dd>
                 </div>
                 <div>

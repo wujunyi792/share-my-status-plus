@@ -16,7 +16,7 @@ func TestStateService_mergeSnapshots(t *testing.T) {
 		expected *common.StatusSnapshot
 	}{
 		{
-			name: "merge system info - partial update",
+			name: "merge system info - whole replacement",
 			existing: &common.StatusSnapshot{
 				LastUpdateTs: 1000,
 				System: &common.System{
@@ -24,27 +24,28 @@ func TestStateService_mergeSnapshots(t *testing.T) {
 					Charging:   func() *bool { v := true; return &v }(),
 					CpuPct:     func() *float64 { v := 0.5; return &v }(),
 					MemoryPct:  func() *float64 { v := 0.6; return &v }(),
+					Ts:         1000,
 				},
 			},
 			new: &common.StatusSnapshot{
 				LastUpdateTs: 2000,
 				System: &common.System{
-					BatteryPct: func() *float64 { v := 0.7; return &v }(), // 更新电池
-					// 其他字段为空，应该保留原值
+					BatteryPct: func() *float64 { v := 0.7; return &v }(),
+					Ts:         2000,
+					// 整体替换，其他字段为空就是空
 				},
 			},
 			expected: &common.StatusSnapshot{
 				LastUpdateTs: 2000,
 				System: &common.System{
-					BatteryPct: func() *float64 { v := 0.7; return &v }(), // 新值
-					Charging:   func() *bool { v := true; return &v }(),    // 保留原值
-					CpuPct:     func() *float64 { v := 0.5; return &v }(),  // 保留原值
-					MemoryPct:  func() *float64 { v := 0.6; return &v }(),  // 保留原值
+					BatteryPct: func() *float64 { v := 0.7; return &v }(),
+					Ts:         2000,
+					// 整体替换后，其他字段不再保留旧值
 				},
 			},
 		},
 		{
-			name: "merge music info - partial update",
+			name: "merge music info - whole replacement",
 			existing: &common.StatusSnapshot{
 				LastUpdateTs: 1000,
 				Music: &common.Music{
@@ -52,44 +53,49 @@ func TestStateService_mergeSnapshots(t *testing.T) {
 					Artist:    func() *string { v := "Old Artist"; return &v }(),
 					Album:     func() *string { v := "Old Album"; return &v }(),
 					CoverHash: func() *string { v := "old_hash"; return &v }(),
+					Ts:        1000,
 				},
 			},
 			new: &common.StatusSnapshot{
 				LastUpdateTs: 2000,
 				Music: &common.Music{
-					Title:  func() *string { v := "New Song"; return &v }(), // 更新歌曲名
-					Artist: func() *string { v := "New Artist"; return &v }(), // 更新歌手
-					// Album 和 CoverHash 为空，应该保留原值
+					Title:  func() *string { v := "New Song"; return &v }(),
+					Artist: func() *string { v := "New Artist"; return &v }(),
+					Ts:     2000,
+					// 整体替换，Album 和 CoverHash 为空
 				},
 			},
 			expected: &common.StatusSnapshot{
 				LastUpdateTs: 2000,
 				Music: &common.Music{
-					Title:     func() *string { v := "New Song"; return &v }(),    // 新值
-					Artist:    func() *string { v := "New Artist"; return &v }(),  // 新值
-					Album:     func() *string { v := "Old Album"; return &v }(),   // 保留原值
-					CoverHash: func() *string { v := "old_hash"; return &v }(),    // 保留原值
+					Title:  func() *string { v := "New Song"; return &v }(),
+					Artist: func() *string { v := "New Artist"; return &v }(),
+					Ts:     2000,
+					// 整体替换后，Album 和 CoverHash 不再保留旧值
 				},
 			},
 		},
 		{
-			name: "merge activity info",
+			name: "merge activity info - whole replacement",
 			existing: &common.StatusSnapshot{
 				LastUpdateTs: 1000,
 				Activity: &common.Activity{
 					Label: "在工作",
+					Ts:    1000,
 				},
 			},
 			new: &common.StatusSnapshot{
 				LastUpdateTs: 2000,
 				Activity: &common.Activity{
 					Label: "在写代码",
+					Ts:    2000,
 				},
 			},
 			expected: &common.StatusSnapshot{
 				LastUpdateTs: 2000,
 				Activity: &common.Activity{
-					Label: "在写代码", // 新值
+					Label: "在写代码",
+					Ts:    2000,
 				},
 			},
 		},
@@ -102,48 +108,95 @@ func TestStateService_mergeSnapshots(t *testing.T) {
 				LastUpdateTs: 2000,
 				System: &common.System{
 					BatteryPct: func() *float64 { v := 0.9; return &v }(),
+					Ts:         2000,
 				},
 				Music: &common.Music{
 					Title: func() *string { v := "New Song"; return &v }(),
+					Ts:    2000,
 				},
 				Activity: &common.Activity{
 					Label: "在学习",
+					Ts:    2000,
 				},
 			},
 			expected: &common.StatusSnapshot{
 				LastUpdateTs: 2000,
 				System: &common.System{
 					BatteryPct: func() *float64 { v := 0.9; return &v }(),
+					Ts:         2000,
 				},
 				Music: &common.Music{
 					Title: func() *string { v := "New Song"; return &v }(),
+					Ts:    2000,
 				},
 				Activity: &common.Activity{
 					Label: "在学习",
+					Ts:    2000,
 				},
 			},
 		},
 		{
-			name: "empty string should not override existing values",
+			name: "new snapshot is nil - keep existing",
 			existing: &common.StatusSnapshot{
 				LastUpdateTs: 1000,
 				Music: &common.Music{
 					Title:  func() *string { v := "Existing Song"; return &v }(),
 					Artist: func() *string { v := "Existing Artist"; return &v }(),
+					Ts:     1000,
 				},
 			},
 			new: &common.StatusSnapshot{
 				LastUpdateTs: 2000,
-				Music: &common.Music{
-					Title:  func() *string { v := ""; return &v }(), // 空字符串不应该覆盖
-					Artist: func() *string { v := "New Artist"; return &v }(),
-				},
+				// Music 为 nil，应该保留旧值
 			},
 			expected: &common.StatusSnapshot{
 				LastUpdateTs: 2000,
 				Music: &common.Music{
-					Title:  func() *string { v := "Existing Song"; return &v }(), // 保留原值
-					Artist: func() *string { v := "New Artist"; return &v }(),    // 新值
+					Title:  func() *string { v := "Existing Song"; return &v }(),
+					Artist: func() *string { v := "Existing Artist"; return &v }(),
+					Ts:     1000,
+				},
+			},
+		},
+		{
+			name: "mixed update - some modules updated, some kept",
+			existing: &common.StatusSnapshot{
+				LastUpdateTs: 1000,
+				System: &common.System{
+					BatteryPct: func() *float64 { v := 0.8; return &v }(),
+					Ts:         1000,
+				},
+				Music: &common.Music{
+					Title: func() *string { v := "Old Song"; return &v }(),
+					Ts:    1000,
+				},
+				Activity: &common.Activity{
+					Label: "在工作",
+					Ts:    1000,
+				},
+			},
+			new: &common.StatusSnapshot{
+				LastUpdateTs: 2000,
+				// 只更新 Music，System 和 Activity 为 nil
+				Music: &common.Music{
+					Title: func() *string { v := "New Song"; return &v }(),
+					Ts:    2000,
+				},
+			},
+			expected: &common.StatusSnapshot{
+				LastUpdateTs: 2000,
+				// System 和 Activity 保留旧值
+				System: &common.System{
+					BatteryPct: func() *float64 { v := 0.8; return &v }(),
+					Ts:         1000,
+				},
+				Music: &common.Music{
+					Title: func() *string { v := "New Song"; return &v }(),
+					Ts:    2000,
+				},
+				Activity: &common.Activity{
+					Label: "在工作",
+					Ts:    1000,
 				},
 			},
 		},
@@ -167,23 +220,36 @@ func TestStateService_mergeSnapshots(t *testing.T) {
 						if result.System.BatteryPct == nil || *result.System.BatteryPct != *tt.expected.System.BatteryPct {
 							t.Errorf("BatteryPct = %v, want %v", result.System.BatteryPct, tt.expected.System.BatteryPct)
 						}
+					} else if result.System.BatteryPct != nil {
+						t.Errorf("BatteryPct should be nil, got %v", *result.System.BatteryPct)
 					}
 					if tt.expected.System.Charging != nil {
 						if result.System.Charging == nil || *result.System.Charging != *tt.expected.System.Charging {
 							t.Errorf("Charging = %v, want %v", result.System.Charging, tt.expected.System.Charging)
 						}
+					} else if result.System.Charging != nil {
+						t.Errorf("Charging should be nil, got %v", *result.System.Charging)
 					}
 					if tt.expected.System.CpuPct != nil {
 						if result.System.CpuPct == nil || *result.System.CpuPct != *tt.expected.System.CpuPct {
 							t.Errorf("CpuPct = %v, want %v", result.System.CpuPct, tt.expected.System.CpuPct)
 						}
+					} else if result.System.CpuPct != nil {
+						t.Errorf("CpuPct should be nil, got %v", *result.System.CpuPct)
 					}
 					if tt.expected.System.MemoryPct != nil {
 						if result.System.MemoryPct == nil || *result.System.MemoryPct != *tt.expected.System.MemoryPct {
 							t.Errorf("MemoryPct = %v, want %v", result.System.MemoryPct, tt.expected.System.MemoryPct)
 						}
+					} else if result.System.MemoryPct != nil {
+						t.Errorf("MemoryPct should be nil, got %v", *result.System.MemoryPct)
+					}
+					if result.System.Ts != tt.expected.System.Ts {
+						t.Errorf("System.Ts = %v, want %v", result.System.Ts, tt.expected.System.Ts)
 					}
 				}
+			} else if result.System != nil {
+				t.Errorf("System should be nil, got %+v", result.System)
 			}
 
 			// 检查音乐信息
@@ -195,23 +261,36 @@ func TestStateService_mergeSnapshots(t *testing.T) {
 						if result.Music.Title == nil || *result.Music.Title != *tt.expected.Music.Title {
 							t.Errorf("Music.Title = %v, want %v", result.Music.Title, tt.expected.Music.Title)
 						}
+					} else if result.Music.Title != nil {
+						t.Errorf("Music.Title should be nil, got %v", *result.Music.Title)
 					}
 					if tt.expected.Music.Artist != nil {
 						if result.Music.Artist == nil || *result.Music.Artist != *tt.expected.Music.Artist {
 							t.Errorf("Music.Artist = %v, want %v", result.Music.Artist, tt.expected.Music.Artist)
 						}
+					} else if result.Music.Artist != nil {
+						t.Errorf("Music.Artist should be nil, got %v", *result.Music.Artist)
 					}
 					if tt.expected.Music.Album != nil {
 						if result.Music.Album == nil || *result.Music.Album != *tt.expected.Music.Album {
 							t.Errorf("Music.Album = %v, want %v", result.Music.Album, tt.expected.Music.Album)
 						}
+					} else if result.Music.Album != nil {
+						t.Errorf("Music.Album should be nil, got %v", *result.Music.Album)
 					}
 					if tt.expected.Music.CoverHash != nil {
 						if result.Music.CoverHash == nil || *result.Music.CoverHash != *tt.expected.Music.CoverHash {
 							t.Errorf("Music.CoverHash = %v, want %v", result.Music.CoverHash, tt.expected.Music.CoverHash)
 						}
+					} else if result.Music.CoverHash != nil {
+						t.Errorf("Music.CoverHash should be nil, got %v", *result.Music.CoverHash)
+					}
+					if result.Music.Ts != tt.expected.Music.Ts {
+						t.Errorf("Music.Ts = %v, want %v", result.Music.Ts, tt.expected.Music.Ts)
 					}
 				}
+			} else if result.Music != nil {
+				t.Errorf("Music should be nil, got %+v", result.Music)
 			}
 
 			// 检查活动信息
@@ -222,7 +301,12 @@ func TestStateService_mergeSnapshots(t *testing.T) {
 					if result.Activity.Label != tt.expected.Activity.Label {
 						t.Errorf("Activity.Label = %v, want %v", result.Activity.Label, tt.expected.Activity.Label)
 					}
+					if result.Activity.Ts != tt.expected.Activity.Ts {
+						t.Errorf("Activity.Ts = %v, want %v", result.Activity.Ts, tt.expected.Activity.Ts)
+					}
 				}
+			} else if result.Activity != nil {
+				t.Errorf("Activity should be nil, got %+v", result.Activity)
 			}
 		})
 	}

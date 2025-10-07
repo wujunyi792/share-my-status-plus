@@ -41,6 +41,10 @@ dev-backend: ## Run backend locally with hot reload
 	@echo "🔥 Starting backend with hot reload..."
 	@./scripts/dev.sh backend
 
+hz-update: ## Update backend code from IDL files
+	@echo "🔄 Updating backend code from IDL..."
+	@cd backend && hz update -idl ../idl/api.thrift
+
 # Production Commands
 prod: prod-start ## Start production services (alias for prod-start)
 

@@ -87,15 +87,29 @@ func (s *StateService) BatchReport(ctx context.Context, userID uint64, events []
 
 // processEvent 处理单个事件
 func (s *StateService) processEvent(ctx context.Context, userID uint64, event *common.ReportEvent) error {
-	// 构建状态快照
-	snapshot := &common.StatusSnapshot{
-		LastUpdateTs: event.Ts,
+	// 计算最新的时间戳 - 从各个数据结构中取最大值
+	var lastUpdateTs int64
+	if event.System != nil && event.System.Ts > lastUpdateTs {
+		lastUpdateTs = event.System.Ts
+	}
+	if event.Music != nil && event.Music.Ts > lastUpdateTs {
+		lastUpdateTs = event.Music.Ts
+	}
+	if event.Activity != nil && event.Activity.Ts > lastUpdateTs {
+		lastUpdateTs = event.Activity.Ts
+	}
+	// 如果所有字段都为空，使用当前时间
+	if lastUpdateTs == 0 {
+		lastUpdateTs = time.Now().UnixMilli()
 	}
 
-	// 使用辅助函数处理各种信息
-	snapshot.System = event.System
-	snapshot.Music = event.Music
-	snapshot.Activity = event.Activity
+	// 构建状态快照
+	snapshot := &common.StatusSnapshot{
+		LastUpdateTs: lastUpdateTs,
+		System:       event.System,
+		Music:        event.Music,
+		Activity:     event.Activity,
+	}
 
 	// 更新当前状态
 	if err := s.updateCurrentState(ctx, userID, snapshot); err != nil {
@@ -136,92 +150,40 @@ func (s *StateService) updateCurrentState(ctx context.Context, userID uint64, sn
 	// 合并现有记录和新快照
 	existingSnapshot := currentState.Snapshot.Data()
 	mergedSnapshot := s.mergeSnapshots(&existingSnapshot, snapshot)
-	
+
 	// 更新现有记录
 	currentState.Snapshot = datatypes.NewJSONType(*mergedSnapshot)
 	return s.db.Save(&currentState).Error
 }
 
-// mergeSnapshots 合并两个状态快照，新快照的非空字段会覆盖旧快照的对应字段
+// mergeSnapshots 合并两个状态快照
+// 新的合并策略：对每次上报的音乐、系统和活动信息分别作为一个整体做覆盖
+// 如果新快照中某个模块不为空，则整体替换旧快照中的对应模块
 func (s *StateService) mergeSnapshots(existing *common.StatusSnapshot, new *common.StatusSnapshot) *common.StatusSnapshot {
 	// 创建合并后的快照，从现有快照开始
 	merged := &common.StatusSnapshot{
 		LastUpdateTs: new.LastUpdateTs, // 总是使用新的时间戳
 	}
 
-	// 合并系统信息
-	if existing.System != nil {
-		// 复制现有系统信息
-		merged.System = &common.System{
-			BatteryPct: existing.System.BatteryPct,
-			Charging:   existing.System.Charging,
-			CpuPct:     existing.System.CpuPct,
-			MemoryPct:  existing.System.MemoryPct,
-		}
-	}
+	// 系统信息：如果新快照中有 System，整体覆盖；否则保留旧的
 	if new.System != nil {
-		if merged.System == nil {
-			merged.System = &common.System{}
-		}
-		// 用新的非空字段覆盖
-		if new.System.BatteryPct != nil {
-			merged.System.BatteryPct = new.System.BatteryPct
-		}
-		if new.System.Charging != nil {
-			merged.System.Charging = new.System.Charging
-		}
-		if new.System.CpuPct != nil {
-			merged.System.CpuPct = new.System.CpuPct
-		}
-		if new.System.MemoryPct != nil {
-			merged.System.MemoryPct = new.System.MemoryPct
-		}
+		merged.System = new.System
+	} else {
+		merged.System = existing.System
 	}
 
-	// 合并音乐信息
-	if existing.Music != nil {
-		// 复制现有音乐信息
-		merged.Music = &common.Music{
-			Title:     existing.Music.Title,
-			Artist:    existing.Music.Artist,
-			Album:     existing.Music.Album,
-			CoverHash: existing.Music.CoverHash,
-		}
-	}
+	// 音乐信息：如果新快照中有 Music，整体覆盖；否则保留旧的
 	if new.Music != nil {
-		if merged.Music == nil {
-			merged.Music = &common.Music{}
-		}
-		// 用新的非空字段覆盖
-		if new.Music.Title != nil && *new.Music.Title != "" {
-			merged.Music.Title = new.Music.Title
-		}
-		if new.Music.Artist != nil && *new.Music.Artist != "" {
-			merged.Music.Artist = new.Music.Artist
-		}
-		if new.Music.Album != nil && *new.Music.Album != "" {
-			merged.Music.Album = new.Music.Album
-		}
-		if new.Music.CoverHash != nil && *new.Music.CoverHash != "" {
-			merged.Music.CoverHash = new.Music.CoverHash
-		}
+		merged.Music = new.Music
+	} else {
+		merged.Music = existing.Music
 	}
 
-	// 合并活动信息
-	if existing.Activity != nil {
-		// 复制现有活动信息
-		merged.Activity = &common.Activity{
-			Label: existing.Activity.Label,
-		}
-	}
+	// 活动信息：如果新快照中有 Activity，整体覆盖；否则保留旧的
 	if new.Activity != nil {
-		if merged.Activity == nil {
-			merged.Activity = &common.Activity{}
-		}
-		// 用新的非空字段覆盖
-		if new.Activity.Label != "" {
-			merged.Activity.Label = new.Activity.Label
-		}
+		merged.Activity = new.Activity
+	} else {
+		merged.Activity = existing.Activity
 	}
 
 	return merged

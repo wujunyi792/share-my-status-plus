@@ -4,6 +4,7 @@ export interface SystemState {
   charging?: boolean;
   cpuPct?: number; // 0-1
   memoryPct?: number; // 0-1
+  ts: number; // 毫秒时间戳
 }
 
 // 音乐状态类型
@@ -12,11 +13,13 @@ export interface MusicState {
   artist: string;
   album: string;
   coverHash?: string;
+  ts: number; // 毫秒时间戳
 }
 
 // 活动状态类型
 export interface ActivityState {
   label: string;
+  ts: number; // 毫秒时间戳
 }
 
 // 状态快照类型
@@ -24,7 +27,7 @@ export interface StateSnapshot {
   system?: SystemState;
   music?: MusicState;
   activity?: ActivityState;
-  ts: number;
+  lastUpdateTs: number; // 最后更新时间戳（毫秒）
 }
 
 // WebSocket消息类型
