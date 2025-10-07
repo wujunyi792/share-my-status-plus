@@ -1,0 +1,29 @@
+# Xcode
+.DS_Store
+*.xcuserstate
+*.xcuserdatad
+xcuserdata/
+*.moved-aside
+*.perspectivev3
+*.mode1v3
+*.mode2v3
+
+# Build
+build/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# MediaRemote Adapter (downloaded separately)
+Services/Media/mediaremote-adapter.pl
+Services/Media/MediaRemoteAdapter.framework
+
+# User settings
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+

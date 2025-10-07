@@ -36,6 +36,7 @@ func NewEventHandler(userService *user.UserService, db *gorm.DB, larkClient *lar
 // OnP2MessageReceiveV1 处理飞书消息接收事件
 func (h *EventHandler) OnP2MessageReceiveV1(ctx context.Context, event *larkim.P2MessageReceiveV1) error {
 	openID := *event.Event.Sender.SenderId.OpenId
+	messageID := *event.Event.Message.MessageId
 	message := ""
 	if event.Event.Message.Content != nil {
 		message = *event.Event.Message.Content
@@ -58,11 +59,11 @@ func (h *EventHandler) OnP2MessageReceiveV1(ctx context.Context, event *larkim.P
 			user, err = userService.CreateUser(openID)
 			if err != nil {
 				logrus.Errorf("Failed to create user: %v", err)
-				return h.sendMessage(ctx, openID, "❌ 创建用户失败，请稍后重试")
+				return h.replyMessage(ctx, messageID, "❌ 创建用户失败，请稍后重试")
 			}
 		} else {
 			logrus.Errorf("Failed to get user: %v", err)
-			return h.sendMessage(ctx, openID, "❌ 获取用户信息失败")
+			return h.replyMessage(ctx, messageID, "❌ 获取用户信息失败")
 		}
 	}
 
@@ -70,10 +71,10 @@ func (h *EventHandler) OnP2MessageReceiveV1(ctx context.Context, event *larkim.P
 	response, err := h.executeCommand(ctx, user, command)
 	if err != nil {
 		logrus.Errorf("Failed to execute command: %v", err)
-		return h.sendMessage(ctx, openID, fmt.Sprintf("❌ 执行命令失败: %v", err))
+		return h.replyMessage(ctx, messageID, fmt.Sprintf("❌ 执行命令失败: %v", err))
 	}
 
-	return h.sendMessage(ctx, openID, response)
+	return h.replyMessage(ctx, messageID, response)
 }
 
 // OnP2CardURLPreviewGet 处理链接预览事件
@@ -352,10 +353,8 @@ func (h *EventHandler) extractSharingKey(path string) string {
 
 // buildSharingURL 生成分享链接，使用配置中的DefaultTarget
 func (h *EventHandler) buildSharingURL(sharingKey string) string {
-	// Use the configured redirect target URL
-	url := h.config.Redirect.DefaultTarget
 	// Replace {SharingKey} placeholder with actual sharing key
-	return strings.ReplaceAll(url, "{SharingKey}", sharingKey)
+	return strings.ReplaceAll(h.config.Redirect.DefaultTarget, "{SharingKey}", sharingKey)
 }
 
 // renderTemplate 渲染模板
@@ -447,6 +446,35 @@ func (h *EventHandler) sendMessage(ctx context.Context, openID, content string) 
 		Build()
 
 	_, err := client.Im.Message.Create(ctx, req)
+	if err != nil {
+		logrus.Errorf("Failed to send message: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// replyMessage 回复消息
+func (h *EventHandler) replyMessage(ctx context.Context, messageID, content string) error {
+	client := h.larkClient
+	if client == nil {
+		return fmt.Errorf("lark client not initialized")
+	}
+
+	data, _ := json.Marshal(map[string]string{
+		"text": content,
+	})
+
+	req := larkim.NewReplyMessageReqBuilder().
+		MessageId(messageID).
+		Body(larkim.NewReplyMessageReqBodyBuilder().
+			MsgType("text").
+			Content(string(data)).
+			Uuid(fmt.Sprintf("%d", time.Now().UnixNano())).
+			Build()).
+		Build()
+
+	_, err := client.Im.Message.Reply(ctx, req)
 	if err != nil {
 		logrus.Errorf("Failed to send message: %v", err)
 		return err
