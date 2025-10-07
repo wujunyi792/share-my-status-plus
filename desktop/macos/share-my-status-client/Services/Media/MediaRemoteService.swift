@@ -9,7 +9,31 @@ import Foundation
 import AppKit
 
 /// Actor-based MediaRemote service for thread-safe music info extraction
-actor MediaRemoteService {
+actor MediaRemoteService: EventDrivenMonitoringService {
+    // MARK: - EventDrivenMonitoringService Conformance
+    typealias EventData = MusicSnapshot
+    
+    let monitoringType: MonitoringType = .eventDriven
+    
+    func isActive() -> Bool {
+        return isStreaming
+    }
+    
+    func start() async throws {
+        guard let callback = self.eventCallback else {
+            throw MediaRemoteError.executionFailed("No callback registered")
+        }
+        try await startStreaming(onUpdate: callback)
+    }
+    
+    func stop() async {
+        stopStreaming()
+    }
+    
+    func registerCallback(_ callback: @escaping (MusicSnapshot?) -> Void) async {
+        self.eventCallback = callback
+    }
+    
     // MARK: - Properties
     private let config: MediaRemoteAdapterConfig
     private let logger = AppLogger.media
@@ -18,6 +42,7 @@ actor MediaRemoteService {
     private var streamProcess: Process?
     private var currentMusic: MusicSnapshot?
     private var isStreaming = false
+    private var eventCallback: ((MusicSnapshot?) -> Void)?
     
     // Buffer for incomplete JSON lines
     private var lineBuffer = ""

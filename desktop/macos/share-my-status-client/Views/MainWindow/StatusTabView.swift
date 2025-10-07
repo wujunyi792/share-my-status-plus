@@ -57,14 +57,18 @@ struct StatusTabView: View {
                             }
                             .buttonStyle(.borderedProminent)
                             
-                            Button("立即上报") {
-                                Task {
-                                    await reporter.performReport()
-                                }
-                            }
-                            .disabled(!reporter.isReporting)
-                            
                             Spacer()
+                            
+                            // Info about automatic reporting
+                            if reporter.isReporting {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "info.circle")
+                                        .font(.caption)
+                                    Text("自动上报中")
+                                        .font(.caption)
+                                }
+                                .foregroundColor(.secondary)
+                            }
                         }
                     }
                     .padding(.vertical, 4)

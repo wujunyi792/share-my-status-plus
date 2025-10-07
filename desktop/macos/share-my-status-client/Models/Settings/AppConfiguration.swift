@@ -80,10 +80,25 @@ class AppConfiguration: ObservableObject {
         }
     }
     
-    // MARK: - Report Interval Settings
+    // MARK: - Report Interval Settings (deprecated, kept for backward compatibility)
     @Published var reportInterval: TimeInterval {
         didSet {
             UserDefaults.standard.set(reportInterval, forKey: "reportInterval")
+        }
+    }
+    
+    // MARK: - Polling Interval Settings
+    /// System monitoring polling interval (in seconds)
+    @Published var systemPollingInterval: TimeInterval {
+        didSet {
+            UserDefaults.standard.set(systemPollingInterval, forKey: "systemPollingInterval")
+        }
+    }
+    
+    /// Activity detection polling interval (in seconds)
+    @Published var activityPollingInterval: TimeInterval {
+        didSet {
+            UserDefaults.standard.set(activityPollingInterval, forKey: "activityPollingInterval")
         }
     }
     
@@ -127,8 +142,12 @@ class AppConfiguration: ObservableObject {
             self.activityRules = ActivityRule.defaultRules
         }
         
-        // Report interval (seconds)
+        // Report interval (seconds) - kept for backward compatibility
         self.reportInterval = UserDefaults.standard.object(forKey: "reportInterval") as? TimeInterval ?? 5.0
+        
+        // Polling intervals for each service (seconds)
+        self.systemPollingInterval = UserDefaults.standard.object(forKey: "systemPollingInterval") as? TimeInterval ?? 10.0
+        self.activityPollingInterval = UserDefaults.standard.object(forKey: "activityPollingInterval") as? TimeInterval ?? 5.0
     }
     
     // MARK: - Convenience Methods
@@ -142,7 +161,8 @@ class AppConfiguration: ObservableObject {
             "secretKey", "endpointURL", "isReportingEnabled",
             "musicReportingEnabled", "systemReportingEnabled", "activityReportingEnabled",
             "musicStatsAuthorized", "musicAppWhitelist", "activityAppBlacklist",
-            "activityRules", "reportInterval"
+            "activityRules", "reportInterval",
+            "systemPollingInterval", "activityPollingInterval"
         ]
         
         keys.forEach { defaults.removeObject(forKey: $0) }
@@ -160,6 +180,8 @@ class AppConfiguration: ObservableObject {
         self.activityAppBlacklist = newConfig.activityAppBlacklist
         self.activityRules = newConfig.activityRules
         self.reportInterval = newConfig.reportInterval
+        self.systemPollingInterval = newConfig.systemPollingInterval
+        self.activityPollingInterval = newConfig.activityPollingInterval
     }
 }
 

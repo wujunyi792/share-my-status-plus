@@ -46,7 +46,8 @@ export function formatRelativeTime(timestamp: number): string {
 
 // 格式化百分比
 export function formatPercentage(value: number): string {
-  return `${Math.round(value * 100)}%`;
+  // 保留两位小数的百分比格式化
+  return `${(value * 100).toFixed(2)}%`;
 }
 
 // 格式化电池状态

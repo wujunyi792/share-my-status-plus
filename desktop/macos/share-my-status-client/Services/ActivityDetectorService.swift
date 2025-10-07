@@ -10,7 +10,42 @@ import AppKit
 import ApplicationServices
 
 /// Actor-based activity detection service for thread-safe activity tracking
-actor ActivityDetectorService {
+actor ActivityDetectorService: PollingMonitoringService {
+    // MARK: - PollingMonitoringService Conformance
+    let monitoringType: MonitoringType = .polling
+    
+    private(set) var pollingInterval: TimeInterval = 5.0
+    
+    func isActive() -> Bool {
+        return isDetecting
+    }
+    
+    func start() async throws {
+        await startDetection(interval: pollingInterval)
+    }
+    
+    func stop() async {
+        stopDetection()
+    }
+    
+    func updatePollingInterval(_ interval: TimeInterval) async {
+        let wasDetecting = isDetecting
+        
+        // Stop current detection
+        if wasDetecting {
+            stopDetection()
+        }
+        
+        // Update interval
+        pollingInterval = interval
+        logger.info("Polling interval updated to \(interval)s")
+        
+        // Restart if it was running
+        if wasDetecting {
+            await startDetection(interval: interval)
+        }
+    }
+    
     // MARK: - Properties
     private let logger = AppLogger.activity
     private var currentActivity: ActivitySnapshot?
@@ -42,24 +77,27 @@ actor ActivityDetectorService {
     }
     
     // MARK: - Detection Control
-    func startDetection(interval: TimeInterval = 5) async {
+    private func startDetection(interval: TimeInterval) async {
         guard !isDetecting else {
             logger.warning("Already detecting")
             return
         }
         
-        logger.info("Starting activity detection...")
+        logger.info("Starting activity detection with interval \(interval)s...")
         isDetecting = true
+        pollingInterval = interval
         
         detectionTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.detectActivity()
-                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                if let interval = await self?.pollingInterval {
+                    try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                }
             }
         }
     }
     
-    func stopDetection() {
+    private func stopDetection() {
         guard isDetecting else { return }
         
         logger.info("Stopping activity detection...")

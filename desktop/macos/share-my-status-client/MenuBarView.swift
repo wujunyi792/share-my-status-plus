@@ -154,22 +154,6 @@ struct MenuBarView: View {
                 .padding(.vertical, 4)
                 
                 Button(action: {
-                    Task {
-                        await reporter.performReport()
-                    }
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.up.circle")
-                        Text("立即上报")
-                        Spacer()
-                    }
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-                .disabled(!reporter.isReporting)
-                
-                Button(action: {
                     openMainWindow()
                 }) {
                     HStack {

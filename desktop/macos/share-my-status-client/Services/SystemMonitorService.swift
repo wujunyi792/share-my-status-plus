@@ -10,7 +10,42 @@ import IOKit
 import IOKit.ps
 
 /// Actor-based system monitoring service for thread-safe system metrics collection
-actor SystemMonitorService {
+actor SystemMonitorService: PollingMonitoringService {
+    // MARK: - PollingMonitoringService Conformance
+    let monitoringType: MonitoringType = .polling
+    
+    private(set) var pollingInterval: TimeInterval = 10.0
+    
+    func isActive() -> Bool {
+        return isMonitoring
+    }
+    
+    func start() async throws {
+        await startMonitoring(interval: pollingInterval)
+    }
+    
+    func stop() async {
+        stopMonitoring()
+    }
+    
+    func updatePollingInterval(_ interval: TimeInterval) async {
+        let wasMonitoring = isMonitoring
+        
+        // Stop current monitoring
+        if wasMonitoring {
+            stopMonitoring()
+        }
+        
+        // Update interval
+        pollingInterval = interval
+        logger.info("Polling interval updated to \(interval)s")
+        
+        // Restart if it was running
+        if wasMonitoring {
+            await startMonitoring(interval: interval)
+        }
+    }
+    
     // MARK: - Properties
     private let logger = AppLogger.system
     private var currentSnapshot: SystemSnapshot?
@@ -23,24 +58,27 @@ actor SystemMonitorService {
     }
     
     // MARK: - Monitoring Control
-    func startMonitoring(interval: TimeInterval = 10) async {
+    private func startMonitoring(interval: TimeInterval) async {
         guard !isMonitoring else {
             logger.warning("Already monitoring")
             return
         }
         
-        logger.info("Starting system monitoring...")
+        logger.info("Starting system monitoring with interval \(interval)s...")
         isMonitoring = true
+        pollingInterval = interval
         
         monitorTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.collectMetrics()
-                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                if let interval = await self?.pollingInterval {
+                    try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                }
             }
         }
     }
     
-    func stopMonitoring() {
+    private func stopMonitoring() {
         guard isMonitoring else { return }
         
         logger.info("Stopping system monitoring...")
