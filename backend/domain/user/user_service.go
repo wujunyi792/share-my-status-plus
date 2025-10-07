@@ -113,6 +113,8 @@ func (s *UserService) GetUserBySharingKey(sharingKey string) (*model.User, error
 func (s *UserService) UpdateUserSettings(userID uint64, settings model.UserSettingsPayload) error {
 	var userSettings model.UserSettings
 	err := s.db.Where("user_id = ?", userID).First(&userSettings).Error
+
+	var oldAuthorizedMusicStats bool
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			// 创建新的用户设置
@@ -123,11 +125,39 @@ func (s *UserService) UpdateUserSettings(userID uint64, settings model.UserSetti
 			return s.db.Create(&userSettings).Error
 		}
 		return err
+	} else {
+		// 记录旧的授权状态
+		oldAuthorizedMusicStats = userSettings.Settings.Data().AuthorizedMusicStats
 	}
 
 	// 更新设置
 	userSettings.Settings = datatypes.NewJSONType(settings)
-	return s.db.Save(&userSettings).Error
+	err = s.db.Save(&userSettings).Error
+	if err != nil {
+		return err
+	}
+
+	// 如果用户将authorizedMusicStats从true改为false，清空历史记录
+	if oldAuthorizedMusicStats && !settings.AuthorizedMusicStats {
+		if err := s.clearUserHistory(userID); err != nil {
+			logrus.Errorf("Failed to clear user history for user %d: %v", userID, err)
+			// 不返回错误，因为设置已经更新成功
+		}
+	}
+
+	return nil
+}
+
+// clearUserHistory 清空用户的历史记录
+func (s *UserService) clearUserHistory(userID uint64) error {
+	// 删除用户的所有历史记录
+	err := s.db.Where("user_id = ?", userID).Delete(&model.StateHistory{}).Error
+	if err != nil {
+		return fmt.Errorf("failed to delete state history: %w", err)
+	}
+
+	logrus.Infof("Cleared history for user %d due to music stats authorization revocation", userID)
+	return nil
 }
 
 // GetUserSettings 获取用户设置

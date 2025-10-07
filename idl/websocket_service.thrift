@@ -16,8 +16,10 @@ struct WSMessage {
     1: required MessageType type;
     2: optional string id;  // 消息ID
     3: optional common.StatusSnapshot snapshot;
-    4: optional string error;
+    4: optional string error;  // 错误消息
     5: required i64 timestamp;
+    6: optional string errorCode;  // 错误代码
+    7: optional bool retryable;  // 是否可重试
 }
 
 // WebSocket连接请求

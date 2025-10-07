@@ -1,7 +1,7 @@
 # Share My Status - Makefile
 # Simplifies common development and deployment tasks
 
-.PHONY: help dev dev-start dev-stop dev-logs dev-clean prod prod-start prod-stop prod-status prod-logs prod-update build deploy backup restore test clean install
+.PHONY: help dev dev-start dev-stop dev-restart dev-logs dev-clean dev-backend hz-update prod prod-start prod-stop prod-restart prod-status prod-logs prod-monitor prod-update build deploy deploy-skip-backup deploy-skip-build backup backup-list backup-clean restore test lint format clean clean-all install wire health quick-start quick-deploy setup-dev setup-prod docs version debug
 
 # Default target
 help: ## Show this help message
@@ -44,6 +44,10 @@ dev-backend: ## Run backend locally with hot reload
 hz-update: ## Update backend code from IDL files
 	@echo "🔄 Updating backend code from IDL..."
 	@cd backend && hz update -idl ../idl/api.thrift
+
+wire: ## Generate dependency injection code
+	@echo "🔌 Generating dependency injection code..."
+	@cd backend && wire ./infra/
 
 # Production Commands
 prod: prod-start ## Start production services (alias for prod-start)

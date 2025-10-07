@@ -8,6 +8,9 @@ interface ActivityCardProps {
 }
 
 export function ActivityCard({ activity, className }: ActivityCardProps) {
+  // 检查是否为空状态
+  const isEmpty = !activity.ts || activity.ts === 0 || !activity.label;
+
   // 根据活动标签获取对应的图标和颜色
   const getActivityConfig = (label: string) => {
     const lowerLabel = label.toLowerCase();
@@ -33,7 +36,7 @@ export function ActivityCard({ activity, className }: ActivityCardProps) {
         bgColor: 'bg-purple-50',
         borderColor: 'border-purple-200',
       };
-    } else if (lowerLabel.includes('会议') || lowerLabel.includes('讨论')) {
+    } else if (lowerLabel.includes('会议') || lowerLabel.includes('讨论') || lowerLabel.includes('开会')) {
       return {
         icon: '👥',
         color: 'text-orange-600',
@@ -57,7 +60,15 @@ export function ActivityCard({ activity, className }: ActivityCardProps) {
     }
   };
 
-  const config = getActivityConfig(activity.label);
+  // 空状态配置
+  const emptyConfig = {
+    icon: '💤',
+    color: 'text-gray-400',
+    bgColor: 'bg-gray-50',
+    borderColor: 'border-gray-200',
+  };
+
+  const config = isEmpty ? emptyConfig : getActivityConfig(activity.label || '');
 
   return (
     <div className={cn(
@@ -85,7 +96,7 @@ export function ActivityCard({ activity, className }: ActivityCardProps) {
           </div>
           
           <p className={cn("text-2xl font-bold truncate", config.color)}>
-            {activity.label}
+            {isEmpty ? '暂无活动' : (activity.label || '-')}
           </p>
         </div>
       </div>

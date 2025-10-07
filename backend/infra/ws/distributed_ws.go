@@ -92,7 +92,7 @@ var distributedUpgrader = websocket.HertzUpgrader{
 
 // Connect 处理WebSocket连接
 func (ws *DistributedWebSocketService) Connect(ctx context.Context, c *app.RequestContext, subscribedUserID uint64) error {
-	logrus.Infof("WebSocket connection request for subscribed user: %s", subscribedUserID)
+	logrus.Infof("WebSocket connection request for subscribed user: %d", subscribedUserID)
 
 	err := distributedUpgrader.Upgrade(c, func(conn *websocket.Conn) {
 		// 创建客户端
@@ -131,6 +131,55 @@ func (ws *DistributedWebSocketService) Connect(ctx context.Context, c *app.Reque
 	}
 
 	return nil
+}
+
+// ConnectAndSendError 升级WebSocket连接并发送错误消息
+func (ws *DistributedWebSocketService) ConnectAndSendError(ctx context.Context, c *app.RequestContext, errorCode string, errorMsg string, retryable bool) {
+	logrus.Infof("WebSocket connection with error: code=%s, msg=%s, retryable=%v", errorCode, errorMsg, retryable)
+
+	err := distributedUpgrader.Upgrade(c, func(conn *websocket.Conn) {
+		// 发送错误消息
+		errMessage := &websocket_api.WSMessage{
+			Type:      websocket_api.MessageType_ERROR,
+			Error:     &errorMsg,
+			ErrorCode: &errorCode,
+			Retryable: &retryable,
+			Timestamp: time.Now().UnixMilli(),
+		}
+
+		messageBytes, err := json.Marshal(errMessage)
+		if err != nil {
+			logrus.Errorf("Failed to marshal error message: %v", err)
+			conn.Close()
+			return
+		}
+
+		// 发送错误消息
+		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		if err := conn.WriteMessage(websocket.TextMessage, messageBytes); err != nil {
+			logrus.Errorf("Failed to send error message: %v", err)
+		}
+
+		// 等待一小段时间确保消息发送
+		time.Sleep(100 * time.Millisecond)
+
+		// 根据是否可重试选择关闭码
+		closeCode := websocket.CloseNormalClosure
+		if !retryable {
+			// 不可重试的错误使用策略违规关闭码
+			closeCode = websocket.ClosePolicyViolation
+		}
+
+		// 关闭连接
+		conn.WriteControl(websocket.CloseMessage,
+			websocket.FormatCloseMessage(closeCode, errorMsg),
+			time.Now().Add(time.Second))
+		conn.Close()
+	})
+
+	if err != nil {
+		logrus.Errorf("Failed to upgrade WebSocket connection for error: %v", err)
+	}
 }
 
 // registerLocalClient 注册本地客户端

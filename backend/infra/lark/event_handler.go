@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"share-my-status/api/model/share_my_status/common"
 	"share-my-status/domain/user"
+	"share-my-status/infra/config"
 	"share-my-status/model"
 	"share-my-status/pkg/dbutil"
 	"strings"
@@ -24,11 +25,12 @@ type EventHandler struct {
 	userService *user.UserService
 	db          *gorm.DB
 	larkClient  *lark.Client
+	config      *config.Config
 }
 
 // NewEventHandler 创建事件处理器
-func NewEventHandler(userService *user.UserService, db *gorm.DB, larkClient *lark.Client) *EventHandler {
-	return &EventHandler{userService: userService, db: db, larkClient: larkClient}
+func NewEventHandler(userService *user.UserService, db *gorm.DB, larkClient *lark.Client, cfg *config.Config) *EventHandler {
+	return &EventHandler{userService: userService, db: db, larkClient: larkClient, config: cfg}
 }
 
 // OnP2MessageReceiveV1 处理飞书消息接收事件
@@ -159,18 +161,18 @@ type Command struct {
 // parseCommand 解析命令
 func (h *EventHandler) parseCommand(message string) *Command {
 	message = strings.TrimSpace(gjson.Get(message, "text").String())
-	if !strings.HasPrefix(message, "/status") {
-		return &Command{}
-	}
 
 	parts := strings.Fields(message)
-	if len(parts) < 2 {
-		return &Command{}
+	if len(parts) < 1 {
+		return nil
 	}
 
+	// 移除前缀斜杠
+	action := strings.TrimPrefix(parts[0], "/")
+
 	return &Command{
-		Action: parts[1],
-		Params: parts[2:],
+		Action: action,
+		Params: parts[1:],
 	}
 }
 
@@ -179,45 +181,23 @@ func (h *EventHandler) executeCommand(ctx context.Context, user *model.User, com
 	userService := h.userService
 
 	switch command.Action {
-	case "revoke":
-		return h.executeRevokeCommand(ctx, user, userService)
-	case "rotate":
-		return h.executeRotateCommand(ctx, user, userService)
-	case "publish":
-		return h.executePublishCommand(ctx, user, userService, command.Params)
+	case "public":
+		return h.executePublicCommand(ctx, user, userService, command.Params)
+	case "stat":
+		return h.executeStatCommand(ctx, user, userService, command.Params)
 	case "info":
 		return h.executeInfoCommand(ctx, user, userService)
+	case "rotate":
+		return h.executeRotateCommand(ctx, user, userService, command.Params)
 	default:
-		return "❓ 未知命令。支持的命令：\n• `/status revoke` - 撤销公开链接\n• `/status rotate` - 轮转密钥\n• `/status publish on|off` - 开启/关闭公开访问\n• `/status info` - 查看账户信息", nil
+		return "❓ 未知命令。支持的命令：\n• `/public on` - 开启公开访问\n• `/public off` - 关闭公开访问\n• `/stat on` - 开启音乐统计授权\n• `/stat off` - 关闭音乐统计授权\n• `/info` - 查看账户信息\n• `/rotate secret-key` - 轮转客户端密钥\n• `/rotate sharing-key` - 轮转分享链接密钥", nil
 	}
 }
 
-// executeRevokeCommand 执行撤销命令
-func (h *EventHandler) executeRevokeCommand(ctx context.Context, user *model.User, userService *user.UserService) (string, error) {
-	// 生成新的Sharing Key
-	newSharingKey, err := userService.RotateSharingKey(user.ID)
-	if err != nil {
-		return "", fmt.Errorf("failed to rotate sharing key: %w", err)
-	}
-
-	return fmt.Sprintf("✅ 公开链接已撤销并重新生成\n🔗 新链接: https://status.example.com/s/%s\n⚠️ 请更新您的分享链接", newSharingKey), nil
-}
-
-// executeRotateCommand 执行轮转命令
-func (h *EventHandler) executeRotateCommand(ctx context.Context, user *model.User, userService *user.UserService) (string, error) {
-	// 生成新的Secret Key
-	newSecretKey, err := userService.RotateSecretKey(user.ID)
-	if err != nil {
-		return "", fmt.Errorf("failed to rotate secret key: %w", err)
-	}
-
-	return fmt.Sprintf("✅ Secret Key已轮转\n🔑 新密钥: %s\n⚠️ 请更新客户端配置", newSecretKey), nil
-}
-
-// executePublishCommand 执行发布命令
-func (h *EventHandler) executePublishCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (string, error) {
+// executePublicCommand 执行公开访问命令
+func (h *EventHandler) executePublicCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (string, error) {
 	if len(params) != 1 {
-		return "❌ 用法: `/status publish on|off`", nil
+		return "❌ 用法错误，请使用：\n• `/public on` - 开启公开访问\n• `/public off` - 关闭公开访问", nil
 	}
 
 	enable := params[0] == "on"
@@ -240,12 +220,78 @@ func (h *EventHandler) executePublishCommand(ctx context.Context, user *model.Us
 		return "", fmt.Errorf("failed to update settings: %w", err)
 	}
 
+	status := "✅ 公开访问已关闭"
+	if enable {
+		sharingURL := h.buildSharingURL(user.SharingKey)
+		status = fmt.Sprintf("✅ 公开访问已开启\n🔗 分享链接: %s", sharingURL)
+	}
+
+	return status, nil
+}
+
+// executeStatCommand 执行音乐统计授权命令
+func (h *EventHandler) executeStatCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (string, error) {
+	if len(params) != 1 {
+		return "❌ 用法错误，请使用：\n• `/stat on` - 开启音乐统计授权\n• `/stat off` - 关闭音乐统计授权", nil
+	}
+
+	enable := params[0] == "on"
+
+	// 获取当前设置
+	settings, err := userService.GetUserSettings(user.ID)
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return "", fmt.Errorf("failed to get user settings: %w", err)
+	}
+
+	// 更新设置
+	var newSettings model.UserSettingsPayload
+	if settings != nil {
+		newSettings = settings.Settings.Data()
+	}
+	newSettings.AuthorizedMusicStats = enable
+
+	err = userService.UpdateUserSettings(user.ID, newSettings)
+	if err != nil {
+		return "", fmt.Errorf("failed to update settings: %w", err)
+	}
+
 	status := "关闭"
 	if enable {
 		status = "开启"
 	}
 
-	return fmt.Sprintf("✅ 公开访问已%s\n🔗 分享链接: https://status.example.com/s/%s", status, user.SharingKey), nil
+	return fmt.Sprintf("✅ 音乐统计授权已%s", status), nil
+}
+
+// executeRotateCommand 执行轮转命令
+func (h *EventHandler) executeRotateCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (string, error) {
+	if len(params) != 1 {
+		return "❌ 用法错误，请使用：\n• `/rotate secret-key` - 轮转客户端密钥\n• `/rotate sharing-key` - 轮转分享链接密钥", nil
+	}
+
+	keyType := params[0]
+
+	switch keyType {
+	case "secret-key":
+		// 生成新的Secret Key
+		newSecretKey, err := userService.RotateSecretKey(user.ID)
+		if err != nil {
+			return "", fmt.Errorf("failed to rotate secret key: %w", err)
+		}
+		return fmt.Sprintf("✅ Secret Key已轮转\n🔑 新密钥: %s\n⚠️ 请更新客户端配置", newSecretKey), nil
+
+	case "sharing-key":
+		// 生成新的Sharing Key
+		newSharingKey, err := userService.RotateSharingKey(user.ID)
+		if err != nil {
+			return "", fmt.Errorf("failed to rotate sharing key: %w", err)
+		}
+		sharingURL := h.buildSharingURL(newSharingKey)
+		return fmt.Sprintf("✅ Sharing Key已轮转\n🔗 新链接: %s\n⚠️ 请更新您的分享链接", sharingURL), nil
+
+	default:
+		return "❌ 无效的密钥类型，请使用：\n• `/rotate secret-key` - 轮转客户端密钥\n• `/rotate sharing-key` - 轮转分享链接密钥", nil
+	}
 }
 
 // executeInfoCommand 执行信息命令
@@ -276,15 +322,20 @@ func (h *EventHandler) executeInfoCommand(ctx context.Context, user *model.User,
 		}
 	}
 
+	sharingURL := h.buildSharingURL(user.SharingKey)
 	info := fmt.Sprintf("📊 账户信息\n"+
 		"🎵 当前状态: %s\n"+
+		"🔑 Secret Key: %s\n"+
+		"🔗 Sharing Key: %s\n"+
 		"🌐 公开访问: %s\n"+
 		"📈 音乐统计: %s\n"+
-		"🔗 分享链接: https://status.example.com/s/%s",
+		"🔗 分享链接: %s",
 		status,
+		"[已加密存储]", // Secret Key 不直接显示
+		user.SharingKey,
 		map[bool]string{true: "开启", false: "关闭"}[publicEnabled],
 		map[bool]string{true: "已授权", false: "未授权"}[musicStatsAuthorized],
-		user.SharingKey)
+		sharingURL)
 
 	return info, nil
 }
@@ -297,6 +348,14 @@ func (h *EventHandler) extractSharingKey(path string) string {
 		return parts[1]
 	}
 	return ""
+}
+
+// buildSharingURL 生成分享链接，使用配置中的DefaultTarget
+func (h *EventHandler) buildSharingURL(sharingKey string) string {
+	// Use the configured redirect target URL
+	url := h.config.Redirect.DefaultTarget
+	// Replace {SharingKey} placeholder with actual sharing key
+	return strings.ReplaceAll(url, "{SharingKey}", sharingKey)
 }
 
 // renderTemplate 渲染模板

@@ -72,10 +72,15 @@ func (p *MessageType) Value() (driver.Value, error) {
 type WSMessage struct {
 	Type MessageType `thrift:"type,1,required" form:"type,required" json:"type,required" query:"type,required"`
 	// 消息ID
-	ID        *string                `thrift:"id,2,optional" form:"id" json:"id,omitempty" query:"id"`
-	Snapshot  *common.StatusSnapshot `thrift:"snapshot,3,optional" form:"snapshot" json:"snapshot,omitempty" query:"snapshot"`
-	Error     *string                `thrift:"error,4,optional" form:"error" json:"error,omitempty" query:"error"`
-	Timestamp int64                  `thrift:"timestamp,5,required" form:"timestamp,required" json:"timestamp,required" query:"timestamp,required"`
+	ID       *string                `thrift:"id,2,optional" form:"id" json:"id,omitempty" query:"id"`
+	Snapshot *common.StatusSnapshot `thrift:"snapshot,3,optional" form:"snapshot" json:"snapshot,omitempty" query:"snapshot"`
+	// 错误消息
+	Error     *string `thrift:"error,4,optional" form:"error" json:"error,omitempty" query:"error"`
+	Timestamp int64   `thrift:"timestamp,5,required" form:"timestamp,required" json:"timestamp,required" query:"timestamp,required"`
+	// 错误代码
+	ErrorCode *string `thrift:"errorCode,6,optional" form:"errorCode" json:"errorCode,omitempty" query:"errorCode"`
+	// 是否可重试
+	Retryable *bool `thrift:"retryable,7,optional" form:"retryable" json:"retryable,omitempty" query:"retryable"`
 }
 
 func NewWSMessage() *WSMessage {
@@ -120,12 +125,32 @@ func (p *WSMessage) GetTimestamp() (v int64) {
 	return p.Timestamp
 }
 
+var WSMessage_ErrorCode_DEFAULT string
+
+func (p *WSMessage) GetErrorCode() (v string) {
+	if !p.IsSetErrorCode() {
+		return WSMessage_ErrorCode_DEFAULT
+	}
+	return *p.ErrorCode
+}
+
+var WSMessage_Retryable_DEFAULT bool
+
+func (p *WSMessage) GetRetryable() (v bool) {
+	if !p.IsSetRetryable() {
+		return WSMessage_Retryable_DEFAULT
+	}
+	return *p.Retryable
+}
+
 var fieldIDToName_WSMessage = map[int16]string{
 	1: "type",
 	2: "id",
 	3: "snapshot",
 	4: "error",
 	5: "timestamp",
+	6: "errorCode",
+	7: "retryable",
 }
 
 func (p *WSMessage) IsSetID() bool {
@@ -138,6 +163,14 @@ func (p *WSMessage) IsSetSnapshot() bool {
 
 func (p *WSMessage) IsSetError() bool {
 	return p.Error != nil
+}
+
+func (p *WSMessage) IsSetErrorCode() bool {
+	return p.ErrorCode != nil
+}
+
+func (p *WSMessage) IsSetRetryable() bool {
+	return p.Retryable != nil
 }
 
 func (p *WSMessage) Read(iprot thrift.TProtocol) (err error) {
@@ -199,6 +232,22 @@ func (p *WSMessage) Read(iprot thrift.TProtocol) (err error) {
 					goto ReadFieldError
 				}
 				issetTimestamp = true
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		case 6:
+			if fieldTypeId == thrift.STRING {
+				if err = p.ReadField6(iprot); err != nil {
+					goto ReadFieldError
+				}
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		case 7:
+			if fieldTypeId == thrift.BOOL {
+				if err = p.ReadField7(iprot); err != nil {
+					goto ReadFieldError
+				}
 			} else if err = iprot.Skip(fieldTypeId); err != nil {
 				goto SkipFieldError
 			}
@@ -294,6 +343,28 @@ func (p *WSMessage) ReadField5(iprot thrift.TProtocol) error {
 	p.Timestamp = _field
 	return nil
 }
+func (p *WSMessage) ReadField6(iprot thrift.TProtocol) error {
+
+	var _field *string
+	if v, err := iprot.ReadString(); err != nil {
+		return err
+	} else {
+		_field = &v
+	}
+	p.ErrorCode = _field
+	return nil
+}
+func (p *WSMessage) ReadField7(iprot thrift.TProtocol) error {
+
+	var _field *bool
+	if v, err := iprot.ReadBool(); err != nil {
+		return err
+	} else {
+		_field = &v
+	}
+	p.Retryable = _field
+	return nil
+}
 
 func (p *WSMessage) Write(oprot thrift.TProtocol) (err error) {
 	var fieldId int16
@@ -319,6 +390,14 @@ func (p *WSMessage) Write(oprot thrift.TProtocol) (err error) {
 		}
 		if err = p.writeField5(oprot); err != nil {
 			fieldId = 5
+			goto WriteFieldError
+		}
+		if err = p.writeField6(oprot); err != nil {
+			fieldId = 6
+			goto WriteFieldError
+		}
+		if err = p.writeField7(oprot); err != nil {
+			fieldId = 7
 			goto WriteFieldError
 		}
 	}
@@ -424,6 +503,42 @@ WriteFieldBeginError:
 	return thrift.PrependError(fmt.Sprintf("%T write field 5 begin error: ", p), err)
 WriteFieldEndError:
 	return thrift.PrependError(fmt.Sprintf("%T write field 5 end error: ", p), err)
+}
+func (p *WSMessage) writeField6(oprot thrift.TProtocol) (err error) {
+	if p.IsSetErrorCode() {
+		if err = oprot.WriteFieldBegin("errorCode", thrift.STRING, 6); err != nil {
+			goto WriteFieldBeginError
+		}
+		if err := oprot.WriteString(*p.ErrorCode); err != nil {
+			return err
+		}
+		if err = oprot.WriteFieldEnd(); err != nil {
+			goto WriteFieldEndError
+		}
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 6 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 6 end error: ", p), err)
+}
+func (p *WSMessage) writeField7(oprot thrift.TProtocol) (err error) {
+	if p.IsSetRetryable() {
+		if err = oprot.WriteFieldBegin("retryable", thrift.BOOL, 7); err != nil {
+			goto WriteFieldBeginError
+		}
+		if err := oprot.WriteBool(*p.Retryable); err != nil {
+			return err
+		}
+		if err = oprot.WriteFieldEnd(); err != nil {
+			goto WriteFieldEndError
+		}
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 7 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 7 end error: ", p), err)
 }
 
 func (p *WSMessage) String() string {

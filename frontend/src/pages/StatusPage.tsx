@@ -137,7 +137,7 @@ export function StatusPage() {
             </div>
 
             {/* 状态信息 */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 transition-all duration-200 hover:shadow-md">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">状态信息</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

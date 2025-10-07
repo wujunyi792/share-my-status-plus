@@ -9,17 +9,17 @@ export interface SystemState {
 
 // 音乐状态类型
 export interface MusicState {
-  title: string;
-  artist: string;
-  album: string;
+  title?: string;
+  artist?: string;
+  album?: string;
   coverHash?: string;
-  ts: number; // 毫秒时间戳
+  ts: number; // 毫秒时间戳，0表示无数据
 }
 
 // 活动状态类型
 export interface ActivityState {
-  label: string;
-  ts: number; // 毫秒时间戳
+  label?: string;
+  ts: number; // 毫秒时间戳，0表示无数据
 }
 
 // 状态快照类型
@@ -36,6 +36,8 @@ export interface WSMessage {
   id?: string;
   snapshot?: StateSnapshot;
   error?: string;
+  errorCode?: string; // 错误代码
+  retryable?: boolean; // 是否可重试
   timestamp: number;
 }
 

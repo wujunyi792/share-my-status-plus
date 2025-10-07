@@ -14,16 +14,19 @@ export function MusicCard({ music, className }: MusicCardProps) {
   const [coverLoading, setCoverLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
+  // 检查是否为空状态
+  const isEmpty = !music.ts || music.ts === 0 || !music.title;
+
   // 加载封面
   useEffect(() => {
-    if (music.coverHash && music.coverHash !== 'demo-cover-hash') {
+    if (music.coverHash && music.coverHash !== 'demo-cover-hash' && !isEmpty) {
       loadCover(music.coverHash);
     } else if (music.coverHash === 'demo-cover-hash') {
       // 演示模式使用占位图
       setCoverUrl(null);
       setCoverLoading(false);
     }
-  }, [music.coverHash]);
+  }, [music.coverHash, isEmpty]);
 
   const loadCover = (hash: string) => {
     try {
@@ -55,7 +58,10 @@ export function MusicCard({ music, className }: MusicCardProps) {
         {/* 黑胶唱片外圈 */}
         <div className="relative w-40 h-40">
           {/* 旋转的黑胶唱片 */}
-          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-gray-900 via-black to-gray-900 shadow-2xl animate-spin-slow">
+          <div className={cn(
+            "absolute inset-0 rounded-full bg-gradient-to-br from-gray-900 via-black to-gray-900 shadow-2xl",
+            isEmpty ? "" : "animate-spin-slow"
+          )}>
             {/* 唱片纹路 */}
             {[...Array(8)].map((_, i) => (
               <div
@@ -70,12 +76,15 @@ export function MusicCard({ music, className }: MusicCardProps) {
             {/* 中心封面（跟随旋转） */}
             <div className="absolute inset-0 flex items-center justify-center">
               <div 
-                className="relative w-16 h-16 rounded-full overflow-hidden shadow-lg cursor-pointer hover:scale-105 transition-transform"
-                onClick={handleCoverClick}
+                className={cn(
+                  "relative w-16 h-16 rounded-full overflow-hidden shadow-lg transition-transform",
+                  isEmpty ? "cursor-default" : "cursor-pointer hover:scale-105"
+                )}
+                onClick={isEmpty ? undefined : handleCoverClick}
               >
                 {coverLoading ? (
                   <div className="w-full h-full bg-gray-200 animate-pulse" />
-                ) : coverUrl ? (
+                ) : coverUrl && !isEmpty ? (
                   <img
                     src={coverUrl}
                     alt="音乐封面"
@@ -83,8 +92,11 @@ export function MusicCard({ music, className }: MusicCardProps) {
                     onError={() => setCoverUrl(null)}
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-200">
-                    <Music className="w-5 h-5 text-gray-400" />
+                  <div className={cn(
+                    "w-full h-full flex items-center justify-center",
+                    isEmpty ? "bg-gray-300" : "bg-gray-200"
+                  )}>
+                    <Music className={cn("w-5 h-5", isEmpty ? "text-gray-500" : "text-gray-400")} />
                   </div>
                 )}
               </div>
@@ -94,15 +106,30 @@ export function MusicCard({ music, className }: MusicCardProps) {
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-2 h-2 rounded-full bg-gray-600 shadow-inner" />
             </div>
+
+            {/* 禁止标志（空状态时显示） */}
+            {isEmpty && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-32 h-32 border-4 border-red-500 rounded-full opacity-60" />
+                <div className="absolute w-32 h-1 bg-red-500 rotate-45 opacity-60" />
+              </div>
+            )}
           </div>
         </div>
 
         {/* 播放指示器 */}
         <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-          <div className="flex items-center space-x-2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-xs text-white font-medium">Playing</span>
-          </div>
+          {isEmpty ? (
+            <div className="flex items-center space-x-2 bg-gray-500/50 backdrop-blur-sm rounded-full px-3 py-1">
+              <div className="w-2 h-2 bg-gray-400 rounded-full" />
+              <span className="text-xs text-white font-medium">Not Playing</span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-xs text-white font-medium">Playing</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -111,23 +138,23 @@ export function MusicCard({ music, className }: MusicCardProps) {
         {/* 音乐标题 */}
         <div className="mb-4">
           <div className="flex items-center space-x-2 mb-2">
-            <Volume2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-            <h3 className="text-lg font-semibold text-gray-900 truncate">
-              {music.title || '未知曲目'}
+            <Volume2 className={cn("w-5 h-5 flex-shrink-0", isEmpty ? "text-gray-400" : "text-green-500")} />
+            <h3 className={cn("text-lg font-semibold truncate", isEmpty ? "text-gray-500" : "text-gray-900")}>
+              {isEmpty ? '未在听歌' : (music.title || '未知曲目')}
             </h3>
           </div>
           
           {/* 艺术家 */}
-          {music.artist && (
+          {!isEmpty && (
             <p className="text-base text-gray-600 truncate ml-7">
-              {music.artist}
+              {music.artist || '-'}
             </p>
           )}
           
           {/* 专辑 */}
-          {music.album && (
+          {!isEmpty && (
             <p className="text-sm text-gray-500 truncate ml-7 mt-1">
-              专辑：{music.album}
+              专辑：{music.album || '-'}
             </p>
           )}
         </div>

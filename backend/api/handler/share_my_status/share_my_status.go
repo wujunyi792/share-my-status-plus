@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"share-my-status/api/model/share_my_status/redirect"
+	"share-my-status/model"
 	"strings"
 
 	cover "share-my-status/api/model/share_my_status/cover"
@@ -16,6 +17,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 // BatchReport 批量上报状态
@@ -248,33 +250,96 @@ func Get(ctx context.Context, c *app.RequestContext) {
 // Connect WebSocket连接
 // @router /api/v1/ws [GET]
 func Connect(ctx context.Context, c *app.RequestContext) {
-	responseHelper := NewResponseHelper()
-
-	var req websocket.WSConnectRequest
-	if err := c.BindAndValidate(&req); err != nil {
-		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 400, "Invalid request: "+err.Error())
-		return
-	}
-
-	// 获取用户ID
-	userID, exists := c.Get("user_id")
-	if !exists {
-		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 401, "Unauthorized")
-		return
-	}
-
 	// 获取WebSocket服务实例
 	wsService := infra.GetGlobalAppDependencies().WSClient
 	if wsService == nil {
-		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 500, "WebSocket service not available")
+		// 服务不可用，只能回退到HTTP响应
+		logrus.Error("WebSocket service not available")
+		responseHelper := NewResponseHelper()
+		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 503, "WebSocket service not available")
 		return
 	}
 
-	// 建立WebSocket连接
-	err := wsService.Connect(ctx, c, userID.(uint64))
+	// 1. 验证请求参数
+	var req websocket.WSConnectRequest
+	if err := c.BindAndValidate(&req); err != nil {
+		// 参数验证失败，通过WebSocket发送错误
+		wsService.ConnectAndSendError(ctx, c,
+			"INVALID_REQUEST",
+			"Invalid request: "+err.Error(),
+			false) // 不可重试
+		return
+	}
+
+	// 2. 验证 sharingKey
+	sharingKey := req.SharingKey
+	if sharingKey == "" {
+		wsService.ConnectAndSendError(ctx, c,
+			"INVALID_REQUEST",
+			"Missing sharingKey parameter",
+			false) // 不可重试
+		return
+	}
+
+	// 3. 查询用户
+	db := infra.GetGlobalAppDependencies().DB
+	var user model.User
+	err := db.Where("sharing_key = ?", sharingKey).First(&user).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			wsService.ConnectAndSendError(ctx, c,
+				"UNAUTHORIZED",
+				"Sharing key not found",
+				false) // 不可重试
+		} else {
+			logrus.Errorf("Failed to query user by sharing key: %v", err)
+			wsService.ConnectAndSendError(ctx, c,
+				"SERVER_ERROR",
+				"Internal server error",
+				true) // 可重试
+		}
+		return
+	}
+
+	// 4. 检查用户状态
+	if user.Status != 1 {
+		wsService.ConnectAndSendError(ctx, c,
+			"UNAUTHORIZED",
+			"User account is disabled",
+			false) // 不可重试
+		return
+	}
+
+	// 5. 检查用户设置中的公开授权
+	var settings model.UserSettings
+	err = db.Where("user_id = ?", user.ID).First(&settings).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		logrus.Errorf("Failed to query user settings: %v", err)
+		wsService.ConnectAndSendError(ctx, c,
+			"SERVER_ERROR",
+			"Internal server error",
+			true) // 可重试
+		return
+	}
+
+	// 6. 检查公开授权状态
+	if !settings.Settings.Data().PublicEnabled {
+		wsService.ConnectAndSendError(ctx, c,
+			"UNAUTHORIZED",
+			"Public access is disabled",
+			false) // 不可重试
+		return
+	}
+
+	// 7. 建立WebSocket连接
+	err = wsService.Connect(ctx, c, user.ID)
 	if err != nil {
 		logrus.Errorf("Failed to establish WebSocket connection: %v", err)
-		responseHelper.SendErrorResponse(c, &websocket.WSConnectResponse{}, 500, "Failed to establish WebSocket connection")
+		// 连接建立失败，尝试通过WebSocket发送错误
+		wsService.ConnectAndSendError(ctx, c,
+			"CONNECTION_FAILED",
+			"Failed to establish WebSocket connection: "+err.Error(),
+			true) // 可重试
 		return
 	}
 }

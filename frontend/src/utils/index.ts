@@ -21,6 +21,11 @@ export function formatTime(timestamp: number): string {
 
 // 格式化相对时间
 export function formatRelativeTime(timestamp: number): string {
+  // 处理ts为0的情况
+  if (!timestamp || timestamp === 0) {
+    return '暂无数据';
+  }
+
   const now = Date.now();
   const diff = now - timestamp;
   const seconds = Math.floor(diff / 1000);
@@ -99,7 +104,7 @@ export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
 ): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout;
+  let timeout: ReturnType<typeof setTimeout>;
   return (...args: Parameters<T>) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);

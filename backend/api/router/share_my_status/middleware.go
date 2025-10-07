@@ -15,10 +15,9 @@ func _v1Mw() []app.HandlerFunc {
 }
 
 func _connectMw() []app.HandlerFunc {
-	// WebSocket连接需要Sharing Key认证
-	return []app.HandlerFunc{
-		middleware.SharingKeyAuth(),
-	}
+	// WebSocket连接不在中间件层进行认证
+	// 认证逻辑在handler中处理，以便通过WebSocket返回错误
+	return nil
 }
 
 func _coverMw() []app.HandlerFunc {

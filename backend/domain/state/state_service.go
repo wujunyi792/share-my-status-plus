@@ -133,10 +133,17 @@ func (s *StateService) processEvent(ctx context.Context, userID uint64, event *c
 		return fmt.Errorf("failed to update current state: %w", err)
 	}
 
-	// 保存历史记录（保存原始上报的快照）
-	if err := s.saveHistory(ctx, userID, newSnapshot); err != nil {
-		logrus.Errorf("Failed to save history: %v", err)
-		// 不返回错误，因为当前状态已经更新
+	// 检查用户是否授权音乐统计，只有授权时才保存历史记录
+	authorized, err := s.userService.IsMusicStatsAuthorized(userID)
+	if err != nil {
+		logrus.Errorf("Failed to check music stats authorization: %v", err)
+		// 不返回错误，继续执行其他逻辑
+	} else if authorized {
+		// 保存历史记录（保存原始上报的快照）
+		if err := s.saveHistory(ctx, userID, newSnapshot); err != nil {
+			logrus.Errorf("Failed to save history: %v", err)
+			// 不返回错误，因为当前状态已经更新
+		}
 	}
 
 	// 广播状态更新到WebSocket客户端（使用合并后的完整状态）

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '@/store/useAppStore';
-import type { StateSnapshot, WSMessage } from '@/types';
+import type { WSMessage } from '@/types';
 import { WSMessageType } from '@/types';
 import { getWebSocketURL } from '@/utils';
 
@@ -11,6 +11,10 @@ interface UseWebSocketOptions {
   reconnectInterval?: number; // 初始重连间隔
   maxReconnectAttempts?: number;
 }
+
+// 全局 Map 存储每个 sharingKey 的停止重连状态
+// 这样即使组件重新挂载（React Strict Mode），状态也不会丢失
+const stopReconnectMap = new Map<string, boolean>();
 
 export function useWebSocket({
   sharingKey,
@@ -28,8 +32,25 @@ export function useWebSocket({
 
   const { setCurrentState, setConnectionStatus, setError } = useAppStore();
 
+  // 检查是否应该停止重连（从全局 Map 读取）
+  const shouldStopReconnect = useCallback(() => {
+    return stopReconnectMap.get(sharingKey) || false;
+  }, [sharingKey]);
+
+  const setShouldStopReconnect = useCallback((value: boolean) => {
+    if (sharingKey) {
+      stopReconnectMap.set(sharingKey, value);
+    }
+  }, [sharingKey]);
+
   const connect = useCallback(() => {
     if (!sharingKey) return;
+
+    // 检查是否应该停止重连（不可重试的错误）
+    if (shouldStopReconnect()) {
+      console.log('Connection blocked due to non-retryable error');
+      return;
+    }
 
     // 如果已有连接处于 OPEN 或 CONNECTING，直接跳过，防止重复连接
     const readyState = wsRef.current?.readyState;
@@ -44,6 +65,11 @@ export function useWebSocket({
 
     const scheduleReconnect = () => {
       if (isManualCloseRef.current) return;
+      if (shouldStopReconnect()) {
+        // 不可重试的错误，停止重连
+        console.log('Reconnection stopped due to non-retryable error');
+        return;
+      }
       if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
         setError({ message: '连接失败，请检查网络或稍后重试', code: 'CONNECTION_FAILED' });
         setConnectionStatus('error');
@@ -113,8 +139,22 @@ export function useWebSocket({
               console.log('Received pong message');
               break;
             case WSMessageType.ERROR:
-              console.error('WebSocket error from server:', message.error);
-              setError({ message: message.error || '服务器错误', code: 'SERVER_ERROR' });
+              console.error('WebSocket error from server:', message.error, 'errorCode:', message.errorCode, 'retryable:', message.retryable);
+              
+              // 检查是否可重试
+              if (message.retryable === false) {
+                // 不可重试的错误，停止重连
+                setShouldStopReconnect(true);
+                console.log('Non-retryable error received, will stop reconnection');
+              }
+              
+              // 设置错误信息
+              setError({ 
+                message: message.error || '服务器错误', 
+                code: message.errorCode || 'SERVER_ERROR',
+                details: { retryable: message.retryable }
+              });
+              setConnectionStatus('error');
               break;
             default:
               console.log('Unknown message type:', message.type);
@@ -140,10 +180,12 @@ export function useWebSocket({
         const shouldStop = [1008, 1013, 4401, 4403].includes(event.code);
         if (shouldStop) {
           console.log('Stopping reconnection due to close code:', event.code);
+          setShouldStopReconnect(true); // 设置停止重连标志
           setError({
             message: event.reason || '服务器拒绝连接或资源不足',
             code: `WS_CLOSE_${event.code}`,
           });
+          setConnectionStatus('error'); // 设置为错误状态，而不是断开连接
           return; // 停止重连
         }
 
@@ -153,7 +195,7 @@ export function useWebSocket({
           return;
         }
 
-        if (!isManualCloseRef.current) {
+        if (!isManualCloseRef.current && !shouldStopReconnect()) {
           console.log('Scheduling reconnection...');
           scheduleReconnect();
         }
@@ -170,13 +212,13 @@ export function useWebSocket({
       setError({ message: '无法建立WebSocket连接', code: 'CONNECTION_ERROR', details: error });
       // 在构造失败时也尝试重连
       const isHMR = typeof import.meta !== 'undefined' && !!(import.meta as any).hot;
-      if (!isHMR) {
-        // 避免在HMR期间无意义重连
+      if (!isHMR && !shouldStopReconnect()) {
+        // 避免在HMR期间无意义重连，也避免在不可重试错误后重连
         const jitter = Math.random() * 200;
         window.setTimeout(connect, Math.min(backoffDelayRef.current + jitter, 5000));
       }
     }
-  }, [sharingKey, onMessage, onError, reconnectInterval, maxReconnectAttempts, setCurrentState, setConnectionStatus, setError]);
+  }, [sharingKey, onMessage, onError, reconnectInterval, maxReconnectAttempts, setCurrentState, setConnectionStatus, setError, shouldStopReconnect, setShouldStopReconnect]);
 
   const disconnect = useCallback(() => {
     isManualCloseRef.current = true;
@@ -213,6 +255,12 @@ export function useWebSocket({
   // 可见性变化时，恢复/暂停重连
   useEffect(() => {
     const onVisibility = () => {
+      // 如果有不可重试的错误，不尝试重连
+      if (shouldStopReconnect()) {
+        console.log('Page visibility changed, but reconnection is blocked due to non-retryable error');
+        return;
+      }
+      
       const readyState = wsRef.current?.readyState;
       if (
         document.visibilityState === 'visible' &&
@@ -225,11 +273,20 @@ export function useWebSocket({
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [connect, reconnectInterval]);
+  }, [connect, reconnectInterval, shouldStopReconnect]);
+
+  // 当 sharingKey 变化时，清除旧的错误状态（允许新的连接尝试）
+  useEffect(() => {
+    if (sharingKey) {
+      setShouldStopReconnect(false);
+    }
+  }, [sharingKey, setShouldStopReconnect]);
 
   // 组件挂载时连接
   useEffect(() => {
     isManualCloseRef.current = false;
+    // 注意：不在这里重置 shouldStopReconnect，避免 React Strict Mode 重新挂载时清除错误状态
+    // 只在 sharingKey 变化时清除（见上面的 effect）
     backoffDelayRef.current = reconnectInterval;
 
     // 初次挂载时，如已有有效连接则跳过

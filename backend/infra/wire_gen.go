@@ -45,7 +45,7 @@ func InitializeApp() (*AppDependencies, error) {
 		return nil, err
 	}
 	userService := user.NewUserService(db, client)
-	eventHandler := lark.NewEventHandler(userService, db, larkClient)
+	eventHandler := lark.NewEventHandler(userService, db, larkClient, configConfig)
 	eventDispatcher, err := lark.InitEventDispatcher(configConfig, eventHandler)
 	if err != nil {
 		return nil, err
