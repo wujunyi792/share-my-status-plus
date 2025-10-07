@@ -103,34 +103,52 @@ func (s *StateService) processEvent(ctx context.Context, userID uint64, event *c
 		lastUpdateTs = time.Now().UnixMilli()
 	}
 
-	// 构建状态快照
-	snapshot := &common.StatusSnapshot{
+	// 构建新的状态快照
+	newSnapshot := &common.StatusSnapshot{
 		LastUpdateTs: lastUpdateTs,
 		System:       event.System,
 		Music:        event.Music,
 		Activity:     event.Activity,
 	}
 
-	// 更新当前状态
-	if err := s.updateCurrentState(ctx, userID, snapshot); err != nil {
+	// 获取现有状态并进行合并
+	var currentState model.CurrentState
+	err := s.db.Where("user_id = ?", userID).First(&currentState).Error
+
+	var mergedSnapshot *common.StatusSnapshot
+	isNotFound, err := dbutil.HandleRecordNotFoundError(err)
+	if isNotFound {
+		// 如果是首次创建，直接使用新快照
+		mergedSnapshot = newSnapshot
+	} else if err != nil {
+		return fmt.Errorf("failed to get current state: %w", err)
+	} else {
+		// 合并现有状态和新快照
+		existingSnapshot := currentState.Snapshot.Data()
+		mergedSnapshot = s.mergeSnapshots(&existingSnapshot, newSnapshot)
+	}
+
+	// 更新当前状态（保存合并后的完整状态）
+	if err := s.updateCurrentState(ctx, userID, mergedSnapshot); err != nil {
 		return fmt.Errorf("failed to update current state: %w", err)
 	}
 
-	// 保存历史记录
-	if err := s.saveHistory(ctx, userID, snapshot); err != nil {
+	// 保存历史记录（保存原始上报的快照）
+	if err := s.saveHistory(ctx, userID, newSnapshot); err != nil {
 		logrus.Errorf("Failed to save history: %v", err)
 		// 不返回错误，因为当前状态已经更新
 	}
 
-	// 广播状态更新到WebSocket客户端
+	// 广播状态更新到WebSocket客户端（使用合并后的完整状态）
 	if s.wsService != nil {
-		go s.broadcastStatusUpdate(userID, snapshot)
+		go s.broadcastStatusUpdate(userID, mergedSnapshot)
 	}
 
 	return nil
 }
 
-// updateCurrentState 更新当前状态，支持部分信息合并
+// updateCurrentState 更新当前状态
+// 直接保存传入的完整快照，不做合并处理（合并逻辑在调用方完成）
 func (s *StateService) updateCurrentState(ctx context.Context, userID uint64, snapshot *common.StatusSnapshot) error {
 	var currentState model.CurrentState
 	err := s.db.Where("user_id = ?", userID).First(&currentState).Error
@@ -147,12 +165,8 @@ func (s *StateService) updateCurrentState(ctx context.Context, userID uint64, sn
 		return err
 	}
 
-	// 合并现有记录和新快照
-	existingSnapshot := currentState.Snapshot.Data()
-	mergedSnapshot := s.mergeSnapshots(&existingSnapshot, snapshot)
-
 	// 更新现有记录
-	currentState.Snapshot = datatypes.NewJSONType(*mergedSnapshot)
+	currentState.Snapshot = datatypes.NewJSONType(*snapshot)
 	return s.db.Save(&currentState).Error
 }
 
