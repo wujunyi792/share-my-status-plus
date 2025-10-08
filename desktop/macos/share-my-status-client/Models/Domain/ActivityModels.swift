@@ -29,7 +29,46 @@ struct ActivitySnapshot {
     }
 }
 
-/// Activity rule for pattern matching
+/// Activity group for organizing applications by activity type
+struct ActivityGroup: Codable, Identifiable, Hashable {
+    var id: UUID = UUID()
+    var name: String
+    var bundleIds: [String]
+    var isEnabled: Bool
+    
+    enum CodingKeys: String, CodingKey {
+        case name, bundleIds, isEnabled
+    }
+    
+    init(id: UUID = UUID(), name: String, bundleIds: [String] = [], isEnabled: Bool = true) {
+        self.id = id
+        self.name = name
+        self.bundleIds = bundleIds
+        self.isEnabled = isEnabled
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = UUID()
+        self.name = try container.decode(String.self, forKey: .name)
+        self.bundleIds = try container.decode([String].self, forKey: .bundleIds)
+        self.isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(bundleIds, forKey: .bundleIds)
+        try container.encode(isEnabled, forKey: .isEnabled)
+    }
+    
+    /// Default activity groups (centralized in DefaultSettings)
+    static var defaultGroups: [ActivityGroup] {
+        return DefaultSettings.activityGroups
+    }
+}
+
+/// Activity rule for pattern matching (deprecated, use ActivityGroup instead)
 struct ActivityRule: Codable, Identifiable, Hashable {
     var id: UUID = UUID()
     var pattern: String
@@ -62,21 +101,17 @@ struct ActivityRule: Codable, Identifiable, Hashable {
         try container.encode(isEnabled, forKey: .isEnabled)
     }
     
-    static let defaultRules = [
-        ActivityRule(pattern: "Feishu|飞书", label: "在工作", isEnabled: true),
-        ActivityRule(pattern: "Xcode|Visual Studio Code|IntelliJ", label: "在写代码", isEnabled: true),
-        ActivityRule(pattern: "Photoshop|Sketch|Figma", label: "在设计", isEnabled: true),
-        ActivityRule(pattern: "Zoom|Teams|腾讯会议", label: "在开会", isEnabled: true),
-        ActivityRule(pattern: "Safari|Chrome|Firefox", label: "在浏览", isEnabled: false),
-        ActivityRule(pattern: "Terminal|iTerm", label: "在终端", isEnabled: true)
-    ]
+    /// Default activity rules (deprecated, centralized in DefaultSettings)
+    static var defaultRules: [ActivityRule] {
+        return DefaultSettings.activityRules
+    }
 }
 
 // MARK: - Formatting Extensions
 
 extension ActivitySnapshot {
     var isIdle: Bool {
-        return idleTimeSeconds > 300 // 5 minutes idle
+        return idleTimeSeconds > DefaultSettings.idleTimeThreshold
     }
     
     var formattedIdleTime: String {

@@ -71,11 +71,10 @@ class AppConfiguration: ObservableObject {
         }
     }
     
-    // MARK: - Activity Tag Mapping Rules
-    @Published var activityRules: [ActivityRule] {
+    @Published var activityGroups: [ActivityGroup] {
         didSet {
-            if let encoded = try? JSONEncoder().encode(activityRules) {
-                UserDefaults.standard.set(encoded, forKey: "activityRules")
+            if let encoded = try? JSONEncoder().encode(activityGroups) {
+                UserDefaults.standard.set(encoded, forKey: "activityGroups")
             }
         }
     }
@@ -105,49 +104,36 @@ class AppConfiguration: ObservableObject {
     // MARK: - Initialization
     init() {
         // Network configuration
-        self.secretKey = UserDefaults.standard.string(forKey: "secretKey") ?? ""
-        self.endpointURL = UserDefaults.standard.string(forKey: "endpointURL") ?? "https://api.example.com/v1/state/report"
+        self.secretKey = UserDefaults.standard.string(forKey: "secretKey") ?? DefaultSettings.secretKey
+        self.endpointURL = UserDefaults.standard.string(forKey: "endpointURL") ?? DefaultSettings.endpointURL
         
         // Feature toggles
-        self.isReportingEnabled = UserDefaults.standard.object(forKey: "isReportingEnabled") as? Bool ?? true
-        self.musicReportingEnabled = UserDefaults.standard.object(forKey: "musicReportingEnabled") as? Bool ?? true
-        self.systemReportingEnabled = UserDefaults.standard.object(forKey: "systemReportingEnabled") as? Bool ?? true
-        self.activityReportingEnabled = UserDefaults.standard.object(forKey: "activityReportingEnabled") as? Bool ?? true
+        self.isReportingEnabled = UserDefaults.standard.object(forKey: "isReportingEnabled") as? Bool ?? DefaultSettings.isReportingEnabled
+        self.musicReportingEnabled = UserDefaults.standard.object(forKey: "musicReportingEnabled") as? Bool ?? DefaultSettings.musicReportingEnabled
+        self.systemReportingEnabled = UserDefaults.standard.object(forKey: "systemReportingEnabled") as? Bool ?? DefaultSettings.systemReportingEnabled
+        self.activityReportingEnabled = UserDefaults.standard.object(forKey: "activityReportingEnabled") as? Bool ?? DefaultSettings.activityReportingEnabled
         
         // Statistics authorization
-        self.musicStatsAuthorized = UserDefaults.standard.object(forKey: "musicStatsAuthorized") as? Bool ?? false
+        self.musicStatsAuthorized = UserDefaults.standard.object(forKey: "musicStatsAuthorized") as? Bool ?? DefaultSettings.musicStatsAuthorized
         
         // App lists
-        self.musicAppWhitelist = UserDefaults.standard.stringArray(forKey: "musicAppWhitelist") ?? [
-            "com.apple.Music",
-            "com.spotify.client",
-            "com.netease.163music",
-            "com.tencent.QQMusicMac"
-        ]
+        self.musicAppWhitelist = UserDefaults.standard.stringArray(forKey: "musicAppWhitelist") ?? DefaultSettings.musicAppWhitelist
+        self.activityAppBlacklist = UserDefaults.standard.stringArray(forKey: "activityAppBlacklist") ?? DefaultSettings.activityAppBlacklist
         
-        self.activityAppBlacklist = UserDefaults.standard.stringArray(forKey: "activityAppBlacklist") ?? [
-            "com.apple.Safari",
-            "com.google.Chrome",
-            "com.mozilla.firefox",
-            "com.microsoft.Edge",
-            "com.operasoftware.Opera",
-            "com.brave.Browser"
-        ]
-        
-        // Activity rules
-        if let data = UserDefaults.standard.data(forKey: "activityRules"),
-           let rules = try? JSONDecoder().decode([ActivityRule].self, from: data) {
-            self.activityRules = rules
+        // Activity groups
+        if let data = UserDefaults.standard.data(forKey: "activityGroups"),
+           let groups = try? JSONDecoder().decode([ActivityGroup].self, from: data) {
+            self.activityGroups = groups
         } else {
-            self.activityRules = ActivityRule.defaultRules
+            self.activityGroups = DefaultSettings.activityGroups
         }
         
         // Report interval (seconds) - kept for backward compatibility
-        self.reportInterval = UserDefaults.standard.object(forKey: "reportInterval") as? TimeInterval ?? 5.0
+        self.reportInterval = UserDefaults.standard.object(forKey: "reportInterval") as? TimeInterval ?? DefaultSettings.reportInterval
         
         // Polling intervals for each service (seconds)
-        self.systemPollingInterval = UserDefaults.standard.object(forKey: "systemPollingInterval") as? TimeInterval ?? 10.0
-        self.activityPollingInterval = UserDefaults.standard.object(forKey: "activityPollingInterval") as? TimeInterval ?? 5.0
+        self.systemPollingInterval = UserDefaults.standard.object(forKey: "systemPollingInterval") as? TimeInterval ?? DefaultSettings.systemPollingInterval
+        self.activityPollingInterval = UserDefaults.standard.object(forKey: "activityPollingInterval") as? TimeInterval ?? DefaultSettings.activityPollingInterval
     }
     
     // MARK: - Convenience Methods
@@ -161,27 +147,26 @@ class AppConfiguration: ObservableObject {
             "secretKey", "endpointURL", "isReportingEnabled",
             "musicReportingEnabled", "systemReportingEnabled", "activityReportingEnabled",
             "musicStatsAuthorized", "musicAppWhitelist", "activityAppBlacklist",
-            "activityRules", "reportInterval",
+            "activityGroups", "reportInterval",
             "systemPollingInterval", "activityPollingInterval"
         ]
         
         keys.forEach { defaults.removeObject(forKey: $0) }
         
-        // Reinitialize
-        let newConfig = AppConfiguration()
-        self.secretKey = newConfig.secretKey
-        self.endpointURL = newConfig.endpointURL
-        self.isReportingEnabled = newConfig.isReportingEnabled
-        self.musicReportingEnabled = newConfig.musicReportingEnabled
-        self.systemReportingEnabled = newConfig.systemReportingEnabled
-        self.activityReportingEnabled = newConfig.activityReportingEnabled
-        self.musicStatsAuthorized = newConfig.musicStatsAuthorized
-        self.musicAppWhitelist = newConfig.musicAppWhitelist
-        self.activityAppBlacklist = newConfig.activityAppBlacklist
-        self.activityRules = newConfig.activityRules
-        self.reportInterval = newConfig.reportInterval
-        self.systemPollingInterval = newConfig.systemPollingInterval
-        self.activityPollingInterval = newConfig.activityPollingInterval
+        // Reset to default values
+        self.secretKey = DefaultSettings.secretKey
+        self.endpointURL = DefaultSettings.endpointURL
+        self.isReportingEnabled = DefaultSettings.isReportingEnabled
+        self.musicReportingEnabled = DefaultSettings.musicReportingEnabled
+        self.systemReportingEnabled = DefaultSettings.systemReportingEnabled
+        self.activityReportingEnabled = DefaultSettings.activityReportingEnabled
+        self.musicStatsAuthorized = DefaultSettings.musicStatsAuthorized
+        self.musicAppWhitelist = DefaultSettings.musicAppWhitelist
+        self.activityAppBlacklist = DefaultSettings.activityAppBlacklist
+        self.activityGroups = DefaultSettings.activityGroups
+        self.reportInterval = DefaultSettings.reportInterval
+        self.systemPollingInterval = DefaultSettings.systemPollingInterval
+        self.activityPollingInterval = DefaultSettings.activityPollingInterval
     }
 }
 

@@ -9,7 +9,7 @@ import Foundation
 import AppKit
 
 /// Actor-based MediaRemote service for thread-safe music info extraction
-actor MediaRemoteService: EventDrivenMonitoringService {
+actor MediaRemoteService {
     // MARK: - EventDrivenMonitoringService Conformance
     typealias EventData = MusicSnapshot
     
@@ -27,7 +27,9 @@ actor MediaRemoteService: EventDrivenMonitoringService {
     }
     
     func stop() async {
+        logger.info("MediaRemoteService.stop() called")
         stopStreaming()
+        logger.info("MediaRemoteService.stop() completed")
     }
     
     func registerCallback(_ callback: @escaping (MusicSnapshot?) -> Void) async {
@@ -44,8 +46,22 @@ actor MediaRemoteService: EventDrivenMonitoringService {
     private var isStreaming = false
     private var eventCallback: ((MusicSnapshot?) -> Void)?
     
+    // Store pipes to clean up handlers
+    private var outputPipe: Pipe?
+    private var errorPipe: Pipe?
+    
+    // Serial queue for chunk processing to maintain order
+    private var processingQueue: DispatchQueue?
+    
     // Buffer for incomplete JSON lines
     private var lineBuffer = ""
+    
+    // State tracking for song change + artwork update sequence
+    private enum SongChangeState {
+        case idle                           // No pending changes
+        case waitingForArtwork(MusicSnapshot)  // Song changed, waiting for artwork update
+    }
+    private var songChangeState: SongChangeState = .idle
     
     // MARK: - Initialization
     init(config: MediaRemoteAdapterConfig = .default) {
@@ -138,8 +154,14 @@ actor MediaRemoteService: EventDrivenMonitoringService {
     // MARK: - Stream Music Info (Real-time)
     func startStreaming(onUpdate: @escaping (MusicSnapshot?) -> Void) async throws {
         guard !isStreaming else {
-            logger.warning("Already streaming")
+            logger.warning("Already streaming - ignoring duplicate start request")
             return
+        }
+        
+        // Stop any existing stream first
+        if streamProcess != nil {
+            logger.warning("Existing stream process found, stopping it first")
+            stopStreaming()
         }
         
         guard config.validate() else {
@@ -164,6 +186,9 @@ actor MediaRemoteService: EventDrivenMonitoringService {
         
         let outputPipe = Pipe()
         let errorPipe = Pipe()
+        self.outputPipe = outputPipe
+        self.errorPipe = errorPipe
+        
         process.standardOutput = outputPipe
         process.standardError = errorPipe
         
@@ -181,16 +206,35 @@ actor MediaRemoteService: EventDrivenMonitoringService {
         
         self.streamProcess = process
         
+        // Generate unique ID for this stream session
+        let streamID = UUID().uuidString.prefix(8)
+        logger.info("Stream session ID: \(streamID)")
+        
+        // Create serial queue for this stream session to maintain chunk order
+        let queue = DispatchQueue(label: "com.sharemystatus.mediaremote.stream.\(streamID)", qos: .userInitiated)
+        self.processingQueue = queue
+        
         // Handle output line by line
         outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             if data.isEmpty { return }
             
-            // Convert data to string and append to buffer
-            if let chunk = String(data: data, encoding: .utf8) {
+            // Convert data to string
+            guard let chunk = String(data: data, encoding: .utf8) else { return }
+            
+            // Process on serial queue to maintain chunk order
+            // Use sync to ensure chunks are processed sequentially
+            queue.async {
+                // Create a semaphore to wait for async processing to complete
+                let semaphore = DispatchSemaphore(value: 0)
+                
                 Task { [weak self] in
+                    defer { semaphore.signal() }
+                    await self?.logger.debug("[\(streamID)] Received chunk: \(chunk.count) bytes")
                     await self?.processStreamChunk(chunk, onUpdate: onUpdate)
                 }
+                
+                semaphore.wait()
             }
         }
         
@@ -205,14 +249,35 @@ actor MediaRemoteService: EventDrivenMonitoringService {
     }
     
     func stopStreaming() {
-        guard isStreaming else { return }
+        guard isStreaming else { 
+            logger.info("Not streaming, nothing to stop")
+            return 
+        }
         
         logger.info("Stopping music streaming...")
-        streamProcess?.terminate()
+        
+        // Clear pipe handlers FIRST to prevent further data processing
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        errorPipe?.fileHandleForReading.readabilityHandler = nil
+        
+        // Terminate process
+        if let process = streamProcess {
+            logger.info("Terminating stream process PID: \(process.processIdentifier)")
+            process.terminate()
+        }
+        
+        // Clean up
+        songChangeState = .idle
+        
         streamProcess = nil
+        outputPipe = nil
+        errorPipe = nil
+        processingQueue = nil
         isStreaming = false
         currentMusic = nil
-        lineBuffer = ""  // Clear buffer
+        lineBuffer = ""
+        
+        logger.info("Music streaming stopped")
     }
     
     // MARK: - Current State
@@ -244,23 +309,40 @@ actor MediaRemoteService: EventDrivenMonitoringService {
     
     // MARK: - Private Helpers
     
-    /// Process incoming stream chunk, handling multiple or incomplete JSON lines
+    /// Process incoming stream chunk, handling multiple or incomplete JSON objects
+    /// MediaRemote outputs Newline-Delimited JSON (NDJSON): one JSON per line
     private func processStreamChunk(_ chunk: String, onUpdate: @escaping (MusicSnapshot?) -> Void) {
         // Append chunk to buffer
         lineBuffer.append(chunk)
+        logger.debug("Buffer size after append: \(lineBuffer.count) bytes")
         
-        // Split buffer by newlines
-        let lines = lineBuffer.components(separatedBy: .newlines)
-        
-        // Keep the last incomplete line in buffer
-        lineBuffer = lines.last ?? ""
-        
-        // Process all complete lines (all except the last)
-        for line in lines.dropLast() {
+        // Process all complete lines (ending with \n)
+        // MediaRemote outputs compact JSON (no internal newlines), so \n is safe delimiter
+        while let newlineRange = lineBuffer.range(of: "\n") {
+            // Extract the complete line (without newline)
+            let line = String(lineBuffer[..<newlineRange.lowerBound])
+            
+            // Remove this line from buffer (including the newline)
+            lineBuffer.removeSubrange(..<newlineRange.upperBound)
+            
+            // Process non-empty lines
             let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedLine.isEmpty {
+                logger.debug("Processing complete line: \(trimmedLine.count) chars")
                 processStreamLine(trimmedLine, onUpdate: onUpdate)
             }
+        }
+        
+        // Log if there's remaining incomplete data
+        if !lineBuffer.isEmpty {
+            logger.debug("Incomplete line in buffer: \(lineBuffer.count) bytes (waiting for newline)")
+        }
+        
+        // Safety: prevent buffer overflow (10MB limit for large artwork)
+        if lineBuffer.count > 10_000_000 {
+            logger.error("Buffer exceeded 10MB! This indicates a problem. Clearing buffer.")
+            logger.error("Buffer starts with: \(lineBuffer.prefix(100))")
+            lineBuffer = ""
         }
     }
     
@@ -289,45 +371,26 @@ actor MediaRemoteService: EventDrivenMonitoringService {
         // Convert to flat structure
         let mediaInfo = streamOutput.toMediaRemoteOutput()
         
-        logger.info("Stream update - type: \(streamOutput.type), diff: \(streamOutput.diff), title: \(mediaInfo.title ?? "nil"), artist: \(mediaInfo.artist ?? "nil"), bundle: \(mediaInfo.bundleIdentifier ?? "nil"), playing: \(mediaInfo.playing ?? false)")
+        logger.info("Stream update - type: \(streamOutput.type), diff: \(streamOutput.diff), title: \(mediaInfo.title ?? "nil"), artist: \(mediaInfo.artist ?? "nil"), playing: \(mediaInfo.playing ?? false)")
         
         // Handle differential updates
         if streamOutput.diff {
-            // This is a diff update - only changed fields are present
-            // If we don't have title/artist, it means they haven't changed
-            if !mediaInfo.isValid {
-                logger.info("Diff update without title/artist - merging with current music")
-                
-                // Merge artwork data with current music if present
-                if let current = currentMusic, let artworkBase64 = mediaInfo.artworkData {
-                    logger.info("Updating artwork for current music (size: \(artworkBase64.count) chars)")
-                    let artworkData = Data(base64Encoded: artworkBase64)
-                    
-                    // Create updated snapshot with new artwork
-                    let updatedSnapshot = MusicSnapshot(
-                        title: current.title,
-                        artist: current.artist,
-                        album: current.album,
-                        isPlaying: current.isPlaying,
-                        bundleIdentifier: current.bundleIdentifier,
-                        artworkData: artworkData,
-                        timestamp: Date()
-                    )
-                    
-                    currentMusic = updatedSnapshot
-                    onUpdate(updatedSnapshot)
-                    logger.info("Artwork updated for: \(current.artist) - \(current.title)")
-                } else {
-                    logger.info("No current music or no artwork data in diff update")
-                }
-                return
-            }
+            // Diff update - only changed fields are present
+            handleDiffUpdate(mediaInfo, onUpdate: onUpdate)
+            return
         }
         
-        // Check if valid and in whitelist (full update or complete diff)
-        if !mediaInfo.isValid {
-            logger.info("Stream music invalid (missing title or artist)")
+        // Full update (diff: false) - this is a new song or initial state
+        handleFullUpdate(mediaInfo, onUpdate: onUpdate)
+    }
+    
+    /// Handle full update (diff: false) - new song or initial state
+    private func handleFullUpdate(_ mediaInfo: MediaRemoteOutput, onUpdate: @escaping (MusicSnapshot?) -> Void) {
+        // Validate and check whitelist
+        guard mediaInfo.isValid else {
+            logger.info("Full update invalid (missing title or artist)")
             currentMusic = nil
+            songChangeState = .idle
             onUpdate(nil)
             return
         }
@@ -335,26 +398,238 @@ actor MediaRemoteService: EventDrivenMonitoringService {
         if let bundleId = mediaInfo.bundleIdentifier,
            !whitelistedBundleIds.isEmpty,
            !whitelistedBundleIds.contains(bundleId) {
-            logger.info("Stream music from \(bundleId) not in whitelist")
+            logger.info("Music from \(bundleId) not in whitelist")
             currentMusic = nil
+            songChangeState = .idle
             onUpdate(nil)
             return
         }
         
         // Convert to snapshot
-        if let snapshot = convertToSnapshot(mediaInfo) {
-            logger.info("Music snapshot created: \(snapshot.artist) - \(snapshot.title)")
-            currentMusic = snapshot
-            onUpdate(snapshot)
-        } else {
+        guard let snapshot = convertToSnapshot(mediaInfo) else {
             logger.warning("Failed to convert media info to snapshot")
             currentMusic = nil
+            songChangeState = .idle
             onUpdate(nil)
+            return
+        }
+        
+        logger.info("Full update: \(snapshot.artist) - \(snapshot.title), has artwork: \(snapshot.artworkData != nil), artwork size: \(snapshot.artworkData?.count ?? 0)")
+        
+        // Check if this is a song change
+        let isSongChange = currentMusic == nil || 
+                          currentMusic!.title != snapshot.title || 
+                          currentMusic!.artist != snapshot.artist
+        
+        if isSongChange {
+            logger.info("Song changed detected")
+            
+            // If this is the first song (no previous music), trust the artwork
+            if currentMusic == nil {
+                logger.info("First song, using provided artwork")
+                currentMusic = snapshot
+                songChangeState = .idle
+                onUpdate(snapshot)
+                return
+            }
+            
+            // Compare artwork with previous song
+            let previousArtwork = currentMusic!.artworkData
+            let newArtwork = snapshot.artworkData
+            
+            // Check if artwork is the same as previous song (old artwork)
+            let isSameArtwork = (previousArtwork != nil && newArtwork != nil && previousArtwork == newArtwork)
+            
+            if isSameArtwork {
+                // Artwork is same as previous song - it's old artwork!
+                logger.info("Artwork is same as previous song (old artwork), waiting for update...")
+                songChangeState = .waitingForArtwork(snapshot)
+                // Don't report yet, wait for artwork diff update
+            } else if newArtwork != nil && !newArtwork!.isEmpty {
+                // Different artwork - this is already the correct artwork!
+                logger.info("Artwork is different from previous song (already updated), reporting now")
+                currentMusic = snapshot
+                songChangeState = .idle
+                onUpdate(snapshot)
+            } else {
+                // No artwork - wait for diff update to confirm (might get empty string or actual artwork)
+                logger.info("No artwork in full update, waiting for diff update...")
+                songChangeState = .waitingForArtwork(snapshot)
+            }
+        } else {
+            // Same song, state update
+            logger.info("Same song, state update")
+            currentMusic = snapshot
+            songChangeState = .idle
+            onUpdate(snapshot)
+        }
+    }
+    
+    /// Handle differential update (diff: true) - only changed fields
+    private func handleDiffUpdate(_ mediaInfo: MediaRemoteOutput, onUpdate: @escaping (MusicSnapshot?) -> Void) {
+        // Check what fields changed
+        let hasArtwork = mediaInfo.artworkData != nil
+        let hasPlaying = mediaInfo.playing != nil
+        let hasElapsedTime = mediaInfo.elapsedTime != nil
+        
+        logger.info("Diff update - artwork: \(hasArtwork), playing: \(hasPlaying), elapsedTime: \(hasElapsedTime)")
+        
+        // Case 1: Progress update only - ignore completely
+        if hasElapsedTime && !hasArtwork && !hasPlaying {
+            logger.debug("Progress update only, ignoring")
+            return
+        }
+        
+        // Case 2: Artwork update
+        if hasArtwork {
+            handleArtworkDiffUpdate(mediaInfo, onUpdate: onUpdate)
+            return
+        }
+        
+        // Case 3: Playing status update
+        if hasPlaying {
+            handlePlayingDiffUpdate(mediaInfo, onUpdate: onUpdate)
+            return
+        }
+        
+        // Other diff updates - ignore
+        logger.debug("Other diff update, ignoring")
+    }
+    
+    /// Handle artwork diff update
+    private func handleArtworkDiffUpdate(_ mediaInfo: MediaRemoteOutput, onUpdate: @escaping (MusicSnapshot?) -> Void) {
+        let artworkBase64 = mediaInfo.artworkData!
+        
+        // Check for empty artwork (clearing signal after song change)
+        if artworkBase64.isEmpty {
+            logger.info("Artwork cleared (empty string)")
+            
+            // If waiting for artwork, this means the new song has no artwork
+            if case .waitingForArtwork(let pending) = songChangeState {
+                logger.info("New song has no artwork, reporting without artwork")
+                currentMusic = pending
+                songChangeState = .idle
+                onUpdate(pending)
+            }
+            return
+        }
+        
+        // Decode artwork
+        logger.info("Artwork update (size: \(artworkBase64.count) chars)")
+        guard let artworkData = Data(base64Encoded: artworkBase64) else {
+            logger.warning("Failed to decode base64 artwork")
+            
+            // If waiting, give up and report without artwork
+            if case .waitingForArtwork(let pending) = songChangeState {
+                logger.info("Artwork decode failed, reporting without artwork")
+                currentMusic = pending
+                songChangeState = .idle
+                onUpdate(pending)
+            }
+            return
+        }
+        
+        logger.info("Artwork decoded (size: \(artworkData.count) bytes)")
+        
+        // Check state
+        switch songChangeState {
+        case .waitingForArtwork(let pending):
+            // This is the artwork for the new song!
+            logger.info("Received artwork for new song: \(pending.artist) - \(pending.title)")
+            
+            let updatedSnapshot = MusicSnapshot(
+                title: pending.title,
+                artist: pending.artist,
+                album: pending.album,
+                isPlaying: pending.isPlaying,
+                bundleIdentifier: pending.bundleIdentifier,
+                artworkData: artworkData,
+                timestamp: Date()
+            )
+            
+            currentMusic = updatedSnapshot
+            songChangeState = .idle
+            onUpdate(updatedSnapshot)
+            logger.info("Reported song change with correct artwork")
+            
+        case .idle:
+            // Artwork update for current song (shouldn't happen often)
+            guard let current = currentMusic else {
+                logger.warning("Artwork update in idle state but no current music")
+                return
+            }
+            
+            logger.info("Artwork update for current song (updating locally only)")
+            
+            let updatedSnapshot = MusicSnapshot(
+                title: current.title,
+                artist: current.artist,
+                album: current.album,
+                isPlaying: current.isPlaying,
+                bundleIdentifier: current.bundleIdentifier,
+                artworkData: artworkData,
+                timestamp: Date()
+            )
+            
+            currentMusic = updatedSnapshot
+            // Don't trigger callback - will be included in next real update
+        }
+    }
+    
+    /// Handle playing status diff update
+    private func handlePlayingDiffUpdate(_ mediaInfo: MediaRemoteOutput, onUpdate: @escaping (MusicSnapshot?) -> Void) {
+        let newPlayingStatus = mediaInfo.playing!
+        logger.info("Playing status changed: \(newPlayingStatus)")
+        
+        // Check state
+        switch songChangeState {
+        case .waitingForArtwork(let pending):
+            // Playing status changed while waiting for artwork
+            // Give up waiting and report with current artwork
+            logger.info("Playing changed while waiting for artwork, reporting now")
+            
+            let updatedSnapshot = MusicSnapshot(
+                title: pending.title,
+                artist: pending.artist,
+                album: pending.album,
+                isPlaying: newPlayingStatus,
+                bundleIdentifier: pending.bundleIdentifier,
+                artworkData: pending.artworkData, // Use whatever we have
+                timestamp: Date()
+            )
+            
+            currentMusic = updatedSnapshot
+            songChangeState = .idle
+            onUpdate(updatedSnapshot)
+            
+        case .idle:
+            // Normal playing status update
+            guard let current = currentMusic else {
+                logger.warning("Playing update but no current music")
+                return
+            }
+            
+            let updatedSnapshot = MusicSnapshot(
+                title: current.title,
+                artist: current.artist,
+                album: current.album,
+                isPlaying: newPlayingStatus,
+                bundleIdentifier: current.bundleIdentifier,
+                artworkData: current.artworkData,
+                timestamp: Date()
+            )
+            
+            currentMusic = updatedSnapshot
+            onUpdate(updatedSnapshot)
         }
     }
     
     private func handleStreamTermination(exitCode: Int32) {
         logger.info("MediaRemote stream terminated with code \(exitCode)")
+        
+        // Reset state
+        songChangeState = .idle
+        
         isStreaming = false
         streamProcess = nil
         currentMusic = nil
@@ -375,7 +650,19 @@ actor MediaRemoteService: EventDrivenMonitoringService {
         
         var artwork: Data? = nil
         if let artworkBase64 = mediaInfo.artworkData {
+            logger.info("Converting artwork from base64 (length: \(artworkBase64.count) chars)")
+            logger.info("Artwork base64 prefix: \(artworkBase64.prefix(50))")
+            logger.info("Artwork base64 suffix: \(artworkBase64.suffix(50))")
+            
             artwork = Data(base64Encoded: artworkBase64)
+            if let artworkData = artwork {
+                logger.info("Artwork decoded successfully (size: \(artworkData.count) bytes)")
+            } else {
+                logger.warning("Failed to decode base64 artwork data")
+                logger.warning("Base64 string may be incomplete or corrupted")
+            }
+        } else {
+            logger.info("No artworkData in media info")
         }
         
         return MusicSnapshot(

@@ -52,8 +52,7 @@ actor ActivityDetectorService: PollingMonitoringService {
     private var isDetecting = false
     private var detectionTask: Task<Void, Never>?
     
-    private var blacklistedBundleIds: [String] = []
-    private var activityRules: [ActivityRule] = []
+    private var activityGroups: [ActivityGroup] = []
     
     // MARK: - Lifecycle
     init() {
@@ -68,12 +67,8 @@ actor ActivityDetectorService: PollingMonitoringService {
     }
     
     // MARK: - Configuration
-    func updateBlacklist(_ bundleIds: [String]) {
-        self.blacklistedBundleIds = bundleIds
-    }
-    
-    func updateRules(_ rules: [ActivityRule]) {
-        self.activityRules = rules
+    func updateActivityGroups(_ groups: [ActivityGroup]) {
+        self.activityGroups = groups
     }
     
     // MARK: - Detection Control
@@ -124,12 +119,6 @@ actor ActivityDetectorService: PollingMonitoringService {
         }
         
         guard let frontmostApp = NSWorkspace.shared.frontmostApplication else {
-            return
-        }
-        
-        // Check blacklist
-        if let bundleId = frontmostApp.bundleIdentifier,
-           blacklistedBundleIds.contains(bundleId) {
             return
         }
         
@@ -195,12 +184,10 @@ actor ActivityDetectorService: PollingMonitoringService {
     
     // MARK: - Activity Tag Mapping
     private func mapActivityTag(bundleId: String, appName: String, windowTitle: String) -> String {
-        // Check custom rules first
-        for rule in activityRules where rule.isEnabled {
-            if appName.localizedCaseInsensitiveContains(rule.pattern) ||
-               bundleId.localizedCaseInsensitiveContains(rule.pattern) ||
-               windowTitle.localizedCaseInsensitiveContains(rule.pattern) {
-                return rule.label
+        // Check activity groups first
+        for group in activityGroups where group.isEnabled {
+            if group.bundleIds.contains(bundleId) {
+                return group.name
             }
         }
         

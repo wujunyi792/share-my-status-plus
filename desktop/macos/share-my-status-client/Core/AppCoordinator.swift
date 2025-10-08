@@ -20,6 +20,7 @@ class AppCoordinator: ObservableObject {
     @Published var reporter: StatusReporter
     
     private let logger = AppLogger.app
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
     private init() {
@@ -28,35 +29,40 @@ class AppCoordinator: ObservableObject {
         
         logger.info("AppCoordinator initialized")
         
-        // Setup configuration observer
+        // Setup configuration observer for future changes
         setupConfigurationObserver()
         
-        // Initial configuration sync
-        reporter.updateConfiguration(configuration)
+        // Note: Initial configuration sync will happen in applicationDidFinishLaunching
+        // to avoid race conditions during startup
     }
     
     // MARK: - Configuration Observer
     private func setupConfigurationObserver() {
         // Observe configuration changes and update reporter
         // Using Combine to observe @Published properties
-        configuration.objectWillChange.sink { [weak self] _ in
-            guard let self = self else { return }
-            Task { @MainActor in
-                // Delay slightly to ensure all changes are applied
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
-                self.reporter.updateConfiguration(self.configuration)
+        logger.info("Setting up configuration observer")
+        
+        configuration.objectWillChange
+            .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                logger.info("Configuration changed, updating reporter")
+                Task { @MainActor in
+                    self.reporter.updateConfiguration(self.configuration)
+                }
             }
-        }
+            .store(in: &cancellables)
     }
     
     // MARK: - Lifecycle
     func applicationDidFinishLaunching() {
         logger.info("Application did finish launching")
+        logger.info("Configuration: isReportingEnabled=\(configuration.isReportingEnabled), isValid=\(configuration.isValidConfiguration())")
         
-        // Auto-start reporting if configured
-        if configuration.isReportingEnabled && configuration.isValidConfiguration() {
-            reporter.startReporting()
-        }
+        // Perform initial configuration sync
+        // This will auto-start services if enabled in configuration
+        logger.info("Performing initial configuration sync...")
+        reporter.updateConfiguration(configuration)
     }
     
     func applicationWillTerminate() {

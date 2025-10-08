@@ -135,7 +135,7 @@ struct MenuBarView: View {
             Divider()
             
             // Action Buttons
-            VStack(spacing: 4) {
+            VStack(spacing: 0) {
                 Button(action: {
                     if reporter.isReporting {
                         reporter.stopReporting()
@@ -148,10 +148,9 @@ struct MenuBarView: View {
                         Text(reporter.isReporting ? "停止上报" : "开始上报")
                         Spacer()
                     }
+                    .contentShape(Rectangle())  // Make entire area clickable
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
+                .buttonStyle(MenuBarButtonStyle())
                 
                 Button(action: {
                     openMainWindow()
@@ -161,10 +160,9 @@ struct MenuBarView: View {
                         Text("设置")
                         Spacer()
                     }
+                    .contentShape(Rectangle())  // Make entire area clickable
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
+                .buttonStyle(MenuBarButtonStyle())
                 
                 Divider()
                 
@@ -176,10 +174,9 @@ struct MenuBarView: View {
                         Text("退出")
                         Spacer()
                     }
+                    .contentShape(Rectangle())  // Make entire area clickable
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
+                .buttonStyle(MenuBarButtonStyle())
             }
         }
         .frame(width: 280)
@@ -187,20 +184,103 @@ struct MenuBarView: View {
     
     // MARK: - Helper Methods
     private func openMainWindow() {
-        // Check if main window already exists
-        if let existingWindow = NSApplication.shared.windows.first(where: { $0.identifier?.rawValue == "main" }) {
+        // Find existing main window (exclude status bar and panels)
+        let existingWindow = NSApplication.shared.windows.first { window in
+            // Exclude NSPanel (status bar popup)
+            guard !window.isKind(of: NSPanel.self) else { return false }
+            
+            // Exclude NSStatusBarWindow explicitly
+            let className = NSStringFromClass(type(of: window))
+            guard !className.contains("StatusBar") else { return false }
+            
+            // Must have content and be regular window
+            return window.contentView != nil && window.canBecomeKey
+        }
+        
+        if let window = existingWindow {
+            // Found existing window, bring it to front
             NSApplication.shared.setActivationPolicy(.regular)
             NSApplication.shared.activate(ignoringOtherApps: true)
-            existingWindow.makeKeyAndOrderFront(nil)
-            existingWindow.orderFrontRegardless()
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
         } else {
-            // Create new window
+            // No existing window, create new one
             NSApplication.shared.setActivationPolicy(.regular)
             NSApplication.shared.activate(ignoringOtherApps: true)
+            
             if #available(macOS 14.0, *) {
                 openWindow(id: "main")
+            } else {
+                // Fallback for macOS 13.x
+                createMainWindowManually()
             }
         }
+    }
+    
+    /// Manually create main window for macOS 13.x
+    private func createMainWindowManually() {
+        let contentView = ContentView()
+            .environmentObject(configuration)
+            .environmentObject(reporter)
+        
+        let hostingController = NSHostingController(rootView: contentView)
+        
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Share My Status"
+        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.setContentSize(NSSize(width: 600, height: 500))
+        window.center()
+        
+        // Setup window close handler to hide from Dock
+        setupWindowCloseHandler(window)
+        
+        window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+    
+    /// Setup window close handler to switch back to accessory mode
+    private func setupWindowCloseHandler(_ window: NSWindow) {
+        // Use NSWindowDelegate to handle window close
+        let delegate = WindowCloseDelegate()
+        window.delegate = delegate
+        
+        // Store delegate to prevent deallocation
+        objc_setAssociatedObject(window, "closeDelegate", delegate, .OBJC_ASSOCIATION_RETAIN)
+    }
+}
+
+// MARK: - Window Close Delegate
+
+/// Delegate to handle window close events
+class WindowCloseDelegate: NSObject, NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        // When window closes, switch back to accessory mode (hide from Dock)
+        DispatchQueue.main.async {
+            NSApplication.shared.setActivationPolicy(.accessory)
+        }
+    }
+}
+
+// MARK: - Custom Button Style
+
+/// Custom button style for menu bar items with hover effect
+struct MenuBarButtonStyle: ButtonStyle {
+    @State private var isHovered = false
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(maxWidth: .infinity, alignment: .leading)  // Full width clickable
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                configuration.isPressed ? Color.accentColor.opacity(0.2) :
+                (isHovered ? Color.gray.opacity(0.15) : Color.clear)
+            )
+            .cornerRadius(4)
+            .contentShape(Rectangle())  // Ensure entire area is interactive
+            .onHover { hovering in
+                isHovered = hovering
+            }
     }
 }
 

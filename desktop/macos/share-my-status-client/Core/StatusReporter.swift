@@ -33,6 +33,24 @@ class StatusReporter: ObservableObject {
     // MARK: - Configuration
     private var configuration: AppConfiguration?
     
+    // Store previous config state as values (not reference)
+    private struct ConfigSnapshot {
+        let musicReportingEnabled: Bool
+        let systemReportingEnabled: Bool
+        let activityReportingEnabled: Bool
+        let systemPollingInterval: TimeInterval
+        let activityPollingInterval: TimeInterval
+        
+        init(from config: AppConfiguration) {
+            self.musicReportingEnabled = config.musicReportingEnabled
+            self.systemReportingEnabled = config.systemReportingEnabled
+            self.activityReportingEnabled = config.activityReportingEnabled
+            self.systemPollingInterval = config.systemPollingInterval
+            self.activityPollingInterval = config.activityPollingInterval
+        }
+    }
+    private var previousConfigSnapshot: ConfigSnapshot?
+    
     // MARK: - Report Timers (for polling services)
     private var systemReportTimer: Timer?
     private var activityReportTimer: Timer?
@@ -57,15 +75,40 @@ class StatusReporter: ObservableObject {
         // Services will clean up themselves via their own deinit
     }
     
+    // Track if configuration update is in progress
+    private var isUpdatingConfiguration = false
+    
     // MARK: - Configuration Update
     func updateConfiguration(_ config: AppConfiguration) {
+        // Prevent concurrent configuration updates
+        guard !isUpdatingConfiguration else {
+            logger.warning("Configuration update already in progress, skipping")
+            return
+        }
+        
+        isUpdatingConfiguration = true
+        
+        // Capture previous config snapshot (values, not reference)
+        let previousSnapshot = previousConfigSnapshot
+        
+        // Update configuration reference
         self.configuration = config
         
+        // Save new snapshot for next update
+        previousConfigSnapshot = ConfigSnapshot(from: config)
+        
         Task {
+            defer { 
+                Task { @MainActor in
+                    self.isUpdatingConfiguration = false
+                }
+            }
+            
+            logger.info("Updating configuration...")
+            
             // Update all services
             await mediaService.updateWhitelist(config.musicAppWhitelist)
-            await activityService.updateBlacklist(config.activityAppBlacklist)
-            await activityService.updateRules(config.activityRules)
+            await activityService.updateActivityGroups(config.activityGroups)
             await networkService.updateConfiguration(
                 endpointURL: config.endpointURL,
                 secretKey: config.secretKey
@@ -79,17 +122,89 @@ class StatusReporter: ObservableObject {
             await systemService.updatePollingInterval(config.systemPollingInterval)
             await activityService.updatePollingInterval(config.activityPollingInterval)
             
-            // Start/stop based on config
-            if config.isReportingEnabled && !isReporting {
-                startReporting()
-            } else if !config.isReportingEnabled && isReporting {
+            // Handle reporting state changes
+            if !config.isReportingEnabled && isReporting {
+                // User disabled reporting entirely
+                logger.info("Reporting disabled, stopping all services")
                 stopReporting()
+            } else if config.isReportingEnabled && !isReporting {
+                // User enabled reporting
+                logger.info("Reporting enabled, starting services")
+                startReporting()
             } else if config.isReportingEnabled && isReporting {
-                // Restart to apply new intervals
-                stopReporting()
-                startReporting()
+                // Reporting is active, check individual service toggles
+                logger.info("Reporting active, checking service toggles")
+                await handleServiceToggles(previous: previousSnapshot, current: config)
+            }
+            
+            logger.info("Configuration update completed")
+        }
+    }
+    
+    // MARK: - Handle Individual Service Toggles
+    private func handleServiceToggles(previous: ConfigSnapshot?, current: AppConfiguration) async {
+        guard let prev = previous else {
+            // No previous config - this is initial startup
+            // Services should already be started by the initial startReporting() call
+            logger.info("No previous configuration, services should already be running")
+            return
+        }
+        
+        logger.info("Checking service toggles...")
+        logger.info("Music: prev=\(prev.musicReportingEnabled), current=\(current.musicReportingEnabled)")
+        logger.info("System: prev=\(prev.systemReportingEnabled), current=\(current.systemReportingEnabled)")
+        logger.info("Activity: prev=\(prev.activityReportingEnabled), current=\(current.activityReportingEnabled)")
+        
+        // Check music service toggle
+        if prev.musicReportingEnabled != current.musicReportingEnabled {
+            if current.musicReportingEnabled {
+                logger.info("Starting music service (user enabled)...")
+                await startMusicService()
+            } else {
+                logger.info("Stopping music service (user disabled)...")
+                await stopMusicService()
+            }
+        } else {
+            logger.debug("Music service toggle unchanged")
+        }
+        
+        // Check system service toggle
+        if prev.systemReportingEnabled != current.systemReportingEnabled {
+            if current.systemReportingEnabled {
+                logger.info("Starting system service (user enabled)...")
+                await startSystemService()
+            } else {
+                logger.info("Stopping system service (user disabled)...")
+                await stopSystemService()
             }
         }
+        
+        // Check activity service toggle
+        if prev.activityReportingEnabled != current.activityReportingEnabled {
+            if current.activityReportingEnabled {
+                logger.info("Starting activity service (user enabled)...")
+                await startActivityService()
+            } else {
+                logger.info("Stopping activity service (user disabled)...")
+                await stopActivityService()
+            }
+        }
+        
+        // Check if polling intervals changed (restart if running)
+        if prev.systemPollingInterval != current.systemPollingInterval && current.systemReportingEnabled {
+            logger.info("System polling interval changed, restarting...")
+            await stopSystemService()
+            await startSystemService()
+        }
+        
+        if prev.activityPollingInterval != current.activityPollingInterval && current.activityReportingEnabled {
+            logger.info("Activity polling interval changed, restarting...")
+            await stopActivityService()
+            await startActivityService()
+        }
+        
+        logger.info("Service toggles handling completed")
+        await updateReportingStatus()
     }
     
     // MARK: - Start Reporting
@@ -111,64 +226,21 @@ class StatusReporter: ObservableObject {
         lastError = nil
         
         Task {
-            // Start music service (event-driven) - reports immediately on change
+            // Start each enabled service using dedicated methods
             if config.musicReportingEnabled {
-                logger.info("Starting music reporting service (event-driven)...")
-                do {
-                    // Register callback for music changes
-                    await mediaService.registerCallback { [weak self] music in
-                        Task { @MainActor [weak self] in
-                            guard let self = self else { return }
-                            
-                            if let music = music {
-                                self.logger.info("Music change event: \(music.artist) - \(music.title)")
-                            } else {
-                                self.logger.info("Music change event: no music playing")
-                            }
-                            
-                            self.currentMusic = music
-                            
-                            // Immediately report music change
-                            await self.reportMusicChange(music)
-                        }
-                    }
-                    
-                    // Start streaming
-                    try await mediaService.start()
-                    logger.info("Music streaming service started (event-driven)")
-                } catch {
-                    logger.error("Failed to start music streaming: \(error)")
-                }
+                await startMusicService()
             } else {
                 logger.info("Music reporting disabled in config")
             }
             
-            // Start system monitoring (polling) - reports at intervals
             if config.systemReportingEnabled {
-                logger.info("Starting system monitoring (polling, interval: \(config.systemPollingInterval)s)...")
-                do {
-                    await systemService.updatePollingInterval(config.systemPollingInterval)
-                    try await systemService.start()
-                    await setupSystemReportTimer(interval: config.systemPollingInterval)
-                    logger.info("System monitoring started")
-                } catch {
-                    logger.error("Failed to start system monitoring: \(error)")
-                }
+                await startSystemService()
             } else {
                 logger.info("System reporting disabled in config")
             }
             
-            // Start activity detection (polling) - reports at intervals
             if config.activityReportingEnabled {
-                logger.info("Starting activity detection (polling, interval: \(config.activityPollingInterval)s)...")
-                do {
-                    await activityService.updatePollingInterval(config.activityPollingInterval)
-                    try await activityService.start()
-                    await setupActivityReportTimer(interval: config.activityPollingInterval)
-                    logger.info("Activity detection started")
-                } catch {
-                    logger.error("Failed to start activity detection: \(error)")
-                }
+                await startActivityService()
             } else {
                 logger.info("Activity reporting disabled in config")
             }
@@ -183,25 +255,138 @@ class StatusReporter: ObservableObject {
         isReporting = false
         
         Task {
-            // Stop all monitoring services
-            await mediaService.stop()
-            await systemService.stop()
-            await activityService.stop()
-            
-            // Invalidate all report timers
-            systemReportTimer?.invalidate()
-            systemReportTimer = nil
-            
-            activityReportTimer?.invalidate()
-            activityReportTimer = nil
-            
-            // Clear current state
-            currentMusic = nil
-            currentSystem = nil
-            currentActivity = nil
+            // Stop all services using dedicated methods
+            await stopMusicService()
+            await stopSystemService()
+            await stopActivityService()
             
             await updateReportingStatus()
         }
+    }
+    
+    // MARK: - Individual Service Control
+    
+    /// Start music service only
+    private func startMusicService() async {
+        guard let config = configuration, config.musicReportingEnabled else { 
+            logger.info("Music reporting disabled, skipping start")
+            return 
+        }
+        
+        // Check if already running
+        let isAlreadyStreaming = await mediaService.getIsStreaming()
+        if isAlreadyStreaming {
+            logger.warning("Music service already streaming, skipping start")
+            return
+        }
+        
+        logger.info("Starting music service...")
+        do {
+            // Register callback for music changes
+            await mediaService.registerCallback { [weak self] music in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    
+                    // Check if this is only an artwork update (same song)
+                    let isArtworkOnlyUpdate = music != nil && 
+                                             self.currentMusic != nil &&
+                                             music!.title == self.currentMusic!.title &&
+                                             music!.artist == self.currentMusic!.artist
+                    
+                    if let music = music {
+                        if isArtworkOnlyUpdate {
+                            self.logger.info("Artwork update for: \(music.artist) - \(music.title)")
+                        } else {
+                            self.logger.info("Music change event: \(music.artist) - \(music.title)")
+                        }
+                    } else {
+                        self.logger.info("Music change event: no music playing")
+                    }
+                    
+                    // Always update current music state
+                    self.currentMusic = music
+                    
+                    // Only report if it's not just an artwork update
+                    if !isArtworkOnlyUpdate {
+                        await self.reportMusicChange(music)
+                    } else {
+                        self.logger.info("Skipping report for artwork-only update (will be included in next report)")
+                    }
+                }
+            }
+            
+            // Start streaming
+            try await mediaService.start()
+            logger.info("Music service started successfully")
+        } catch {
+            logger.error("Failed to start music service: \(error)")
+        }
+    }
+    
+    /// Stop music service only
+    private func stopMusicService() async {
+        logger.info("Stopping music service...")
+        
+        // Check if music service is actually running
+        let isStreaming = await mediaService.getIsStreaming()
+        logger.info("Music service streaming status before stop: \(isStreaming)")
+        
+        await mediaService.stop()
+        
+        // Verify it stopped
+        let isStillStreaming = await mediaService.getIsStreaming()
+        logger.info("Music service streaming status after stop: \(isStillStreaming)")
+        
+        currentMusic = nil
+        logger.info("Music service stopped")
+    }
+    
+    /// Start system monitoring service only
+    private func startSystemService() async {
+        guard let config = configuration, config.systemReportingEnabled else { return }
+        
+        logger.info("Starting system service...")
+        do {
+            await systemService.updatePollingInterval(config.systemPollingInterval)
+            try await systemService.start()
+            await setupSystemReportTimer(interval: config.systemPollingInterval)
+            logger.info("System service started")
+        } catch {
+            logger.error("Failed to start system service: \(error)")
+        }
+    }
+    
+    /// Stop system monitoring service only
+    private func stopSystemService() async {
+        logger.info("Stopping system service...")
+        await systemService.stop()
+        systemReportTimer?.invalidate()
+        systemReportTimer = nil
+        currentSystem = nil
+    }
+    
+    /// Start activity detection service only
+    private func startActivityService() async {
+        guard let config = configuration, config.activityReportingEnabled else { return }
+        
+        logger.info("Starting activity service...")
+        do {
+            await activityService.updatePollingInterval(config.activityPollingInterval)
+            try await activityService.start()
+            await setupActivityReportTimer(interval: config.activityPollingInterval)
+            logger.info("Activity service started")
+        } catch {
+            logger.error("Failed to start activity service: \(error)")
+        }
+    }
+    
+    /// Stop activity detection service only
+    private func stopActivityService() async {
+        logger.info("Stopping activity service...")
+        await activityService.stop()
+        activityReportTimer?.invalidate()
+        activityReportTimer = nil
+        currentActivity = nil
     }
     
     // MARK: - Report Timers
@@ -242,9 +427,17 @@ class StatusReporter: ObservableObject {
         
         logger.debug("Reporting music change...")
         
+        // If no music is playing and we don't have previous music, skip reporting
+        // This avoids reporting empty state on app startup
+        if music == nil && currentMusic == nil {
+            logger.info("No music playing and no previous music, skipping report")
+            return
+        }
+        
         var musicInfo: MusicInfo? = nil
         
-        if let music = music {
+        // Use currentMusic which may have been updated with artwork via diff updates
+        if let music = currentMusic {
             logger.info("Music changed: \(music.artist) - \(music.title), playing: \(music.isPlaying)")
             var coverHash: String? = nil
             
@@ -257,11 +450,13 @@ class StatusReporter: ObservableObject {
                 } catch {
                     logger.error("Failed to upload cover: \(error)")
                 }
+            } else {
+                logger.info("No artwork data available for current music")
             }
             
             musicInfo = music.toMusicInfo(coverHash: coverHash)
         } else {
-            logger.info("Music stopped or no music playing")
+            logger.info("Music stopped (was playing: \(music?.title ?? "unknown"))")
         }
         
         // Create report event with only music info

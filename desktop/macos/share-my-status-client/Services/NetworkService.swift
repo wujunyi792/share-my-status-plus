@@ -106,7 +106,7 @@ actor NetworkService {
             lastReportTime = Date()
             reportCount += request.events.count
             
-            logger.info("Report successful: accepted=\(batchResponse.accepted ?? 0), deduped=\(batchResponse.deduped ?? 0)")
+            logger.debug("Report successful: accepted=\(batchResponse.accepted ?? 0), deduped=\(batchResponse.deduped ?? 0)")
             return batchResponse
             
         case 401:
