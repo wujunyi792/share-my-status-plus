@@ -32,10 +32,28 @@ struct SettingsTabView: View {
     @State private var showLinkCustomizer = false
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Permissions Status
-                GroupBox("权限状态") {
+        VStack(spacing: 0) {
+            // Fixed Title Bar with background
+            HStack {
+                Image(systemName: "gear")
+                    .foregroundColor(.blue)
+                    .imageScale(.large)
+                Text("设置")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 12)
+            .background(Color(NSColor.controlBackgroundColor))
+            
+            Divider()
+            
+            // Scrollable Content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Permissions Status
+                    GroupBox("权限状态") {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
@@ -70,7 +88,7 @@ struct SettingsTabView: View {
                         }
                         
                         if !accessibilityGranted {
-                            HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 8) {
                                 Button(action: {
                                     AccessibilityPermissionChecker.openAccessibilitySettings()
                                 }) {
@@ -84,9 +102,17 @@ struct SettingsTabView: View {
                                 .buttonStyle(.borderedProminent)
                                 .controlSize(.small)
                                 
-                                Text("授权后点击右上角刷新")
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("点击按钮后会显示详细的设置步骤")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text("需要手动添加应用到辅助功能列表")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                    Text("授权后点击右上角刷新图标验证")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                             .padding(.top, 4)
                         }
@@ -429,9 +455,51 @@ struct SettingsTabView: View {
                     }
                 }
                 
-                Spacer()
+                // App Information
+                GroupBox("应用信息") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("应用版本")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "未知")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("构建版本")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "未知")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("应用标识符")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text(Bundle.main.bundleIdentifier ?? "未知")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                }
+                
+                    Spacer()
+                }
+                .padding()
             }
-            .padding()
         }
     }
     

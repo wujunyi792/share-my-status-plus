@@ -29,17 +29,32 @@ struct MenuBarView: View {
             
             // Permission Warning
             if configuration.activityReportingEnabled && !AccessibilityPermissionChecker.isAccessibilityGranted() {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                        .frame(width: 12)
-                    Text("需要辅助功能权限")
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                    Spacer()
+                Button(action: {
+                    AccessibilityPermissionChecker.openAccessibilitySettings()
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                            .frame(width: 12)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("需要辅助功能权限")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.orange)
+                            Text("点击查看详细设置步骤")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 4)
+                .padding(.vertical, 6)
                 .background(Color.orange.opacity(0.1))
             }
             
@@ -95,32 +110,32 @@ struct MenuBarView: View {
                 
                 // System Status
                 if let system = reporter.currentSystem {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 10) {
                         if let battery = system.batteryPercentage {
-                            HStack(spacing: 2) {
+                            HStack(spacing: 4) {
                                 Image(systemName: system.isCharging == true ? "battery.100.bolt" : "battery.100")
                                     .foregroundColor(system.isCharging == true ? .green : .primary)
-                                    .frame(width: 12)
+                                    .frame(width: 14)
                                 Text("\(battery)%")
                                     .font(.caption2)
                             }
                         }
                         
                         if let cpu = system.cpuPercentage {
-                            HStack(spacing: 2) {
+                            HStack(spacing: 4) {
                                 Image(systemName: "cpu")
                                     .foregroundColor(.blue)
-                                    .frame(width: 12)
+                                    .frame(width: 14)
                                 Text("\(cpu)%")
                                     .font(.caption2)
                             }
                         }
                         
                         if let memory = system.memoryPercentage {
-                            HStack(spacing: 2) {
+                            HStack(spacing: 4) {
                                 Image(systemName: "memorychip")
                                     .foregroundColor(.orange)
-                                    .frame(width: 12)
+                                    .frame(width: 14)
                                 Text("\(memory)%")
                                     .font(.caption2)
                             }

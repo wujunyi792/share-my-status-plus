@@ -15,11 +15,16 @@ struct ActivityGroupEditor: View {
     @State private var selectedGroupIndex: Int?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("活动分组配置")
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("活动分组配置")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    Text("配置不同的活动分组，每个分组可以包含多个应用")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
                 
                 Spacer()
                 
@@ -27,17 +32,12 @@ struct ActivityGroupEditor: View {
                     editingGroup = ActivityGroup(name: "", bundleIds: [], isEnabled: true)
                     showingGroupEditor = true
                 }) {
-                    HStack {
-                        Image(systemName: "plus.circle")
-                        Text("添加分组")
-                    }
+                    Label("添加", systemImage: "plus.circle")
+                        .font(.caption)
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
             }
-            
-            Text("配置不同的活动分组，每个分组可以包含多个应用的 Bundle ID")
-                .font(.caption)
-                .foregroundColor(.secondary)
             
             if groups.isEmpty {
                 VStack(spacing: 10) {
@@ -54,7 +54,7 @@ struct ActivityGroupEditor: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 30)
             } else {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: 4) {
                     ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                         ActivityGroupRow(
                             group: group,
@@ -77,14 +77,12 @@ struct ActivityGroupEditor: View {
                 }
             }
             
-            HStack {
-                Button("恢复默认分组") {
-                    groups = ActivityGroup.defaultGroups
-                }
-                .buttonStyle(.bordered)
-                
-                Spacer()
+            Button("恢复默认分组") {
+                groups = ActivityGroup.defaultGroups
             }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .font(.caption)
         }
         .sheet(isPresented: $showingGroupEditor) {
             if let group = editingGroup {
@@ -121,7 +119,7 @@ struct ActivityGroupEditor: View {
     }
 }
 
-/// Row view for displaying an activity group
+/// Row view for displaying an activity group (compact version)
 struct ActivityGroupRow: View {
     let group: ActivityGroup
     let onToggle: (Bool) -> Void
@@ -129,23 +127,61 @@ struct ActivityGroupRow: View {
     let onDelete: () -> Void
     let onAddBundleId: () -> Void
     
+    @State private var isExpanded = false
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        VStack(alignment: .leading, spacing: 6) {
+            // Main row - compact layout
+            HStack(spacing: 8) {
+                // Toggle with name
                 Toggle(isOn: Binding(
                     get: { group.isEnabled },
                     set: onToggle
                 )) {
-                    Text(group.name)
-                        .font(.headline)
-                        .foregroundColor(group.isEnabled ? .primary : .secondary)
+                    HStack(spacing: 6) {
+                        Text(group.name)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(group.isEnabled ? .primary : .secondary)
+                        
+                        // App count badge
+                        if !group.bundleIds.isEmpty {
+                            Text("\(group.bundleIds.count)")
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(group.isEnabled ? Color.blue : Color.secondary)
+                                .cornerRadius(10)
+                        }
+                    }
                 }
+                .toggleStyle(.checkbox)
+                .controlSize(.small)
                 
                 Spacer()
                 
-                HStack(spacing: 8) {
+                // Compact action buttons
+                HStack(spacing: 6) {
+                    // Expand/collapse button
+                    if !group.bundleIds.isEmpty {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isExpanded.toggle()
+                            }
+                        }) {
+                            Image(systemName: isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle")
+                                .imageScale(.small)
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundColor(.secondary)
+                        .help(isExpanded ? "收起" : "展开查看应用")
+                    }
+                    
                     Button(action: onAddBundleId) {
                         Image(systemName: "plus.app")
+                            .imageScale(.small)
                     }
                     .buttonStyle(.borderless)
                     .foregroundColor(.blue)
@@ -153,51 +189,102 @@ struct ActivityGroupRow: View {
                     
                     Button(action: onEdit) {
                         Image(systemName: "pencil")
+                            .imageScale(.small)
                     }
                     .buttonStyle(.borderless)
                     .foregroundColor(.orange)
-                    .help("编辑分组")
+                    .help("编辑")
                     
                     Button(action: onDelete) {
                         Image(systemName: "trash")
+                            .imageScale(.small)
                     }
                     .buttonStyle(.borderless)
                     .foregroundColor(.red)
-                    .help("删除分组")
+                    .help("删除")
                 }
             }
             
-            if !group.bundleIds.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("包含的应用 (\(group.bundleIds.count)):")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    LazyVGrid(columns: [
-                        GridItem(.adaptive(minimum: 200))
-                    ], spacing: 4) {
+            // Expandable bundle IDs section
+            if isExpanded && !group.bundleIds.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    // Compact grid with wrapping
+                    FlowLayout(spacing: 4) {
                         ForEach(group.bundleIds, id: \.self) { bundleId in
                             Text(bundleId)
-                                .font(.caption)
-                                .padding(.horizontal, 8)
+                                .font(.caption2)
+                                .lineLimit(1)
+                                .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.secondary.opacity(0.1))
+                                .background(Color.blue.opacity(0.1))
+                                .foregroundColor(.primary)
                                 .cornerRadius(4)
                         }
                     }
                 }
                 .padding(.leading, 20)
-            } else {
-                Text("暂无应用")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.leading, 20)
+                .padding(.top, 2)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(Color.secondary.opacity(0.05))
-        .cornerRadius(8)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(group.isEnabled ? Color.blue.opacity(0.05) : Color.secondary.opacity(0.03))
+        .cornerRadius(6)
+    }
+}
+
+/// Flow layout for wrapping views
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+    
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = FlowResult(
+            in: proposal.replacingUnspecifiedDimensions().width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        return result.size
+    }
+    
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = FlowResult(
+            in: bounds.width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x,
+                                     y: bounds.minY + result.positions[index].y),
+                         proposal: .unspecified)
+        }
+    }
+    
+    struct FlowResult {
+        var size: CGSize = .zero
+        var positions: [CGPoint] = []
+        
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+            var x: CGFloat = 0
+            var y: CGFloat = 0
+            var lineHeight: CGFloat = 0
+            
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+                
+                if x + size.width > maxWidth && x > 0 {
+                    x = 0
+                    y += lineHeight + spacing
+                    lineHeight = 0
+                }
+                
+                positions.append(CGPoint(x: x, y: y))
+                x += size.width + spacing
+                lineHeight = max(lineHeight, size.height)
+            }
+            
+            self.size = CGSize(width: maxWidth, height: y + lineHeight)
+        }
     }
 }
 

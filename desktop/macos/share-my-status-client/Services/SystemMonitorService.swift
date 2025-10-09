@@ -184,6 +184,15 @@ actor SystemMonitorService: PollingMonitoringService {
     
     // Memory Usage
     private func getMemoryUsage() -> Double? {
+        // Get physical memory size
+        var size: UInt64 = 0
+        var sizeLen = MemoryLayout<UInt64>.size
+        guard sysctlbyname("hw.memsize", &size, &sizeLen, nil, 0) == 0 else {
+            return nil
+        }
+        let totalPhysicalMemory = Double(size)
+        
+        // Get VM statistics
         var vmStats = vm_statistics64()
         var infoCount = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.stride / MemoryLayout<integer_t>.stride)
         
@@ -195,10 +204,29 @@ actor SystemMonitorService: PollingMonitoringService {
         
         guard result == KERN_SUCCESS else { return nil }
         
-        let totalPages = vmStats.free_count + vmStats.active_count + vmStats.inactive_count + vmStats.wire_count
-        let usedPages = vmStats.active_count + vmStats.inactive_count + vmStats.wire_count
+        // Get page size
+        let pageSize = UInt64(vm_kernel_page_size)
         
-        return totalPages > 0 ? Double(usedPages) / Double(totalPages) : nil
+        // Calculate used memory (similar to Activity Monitor)
+        // App Memory = active + wired + compressed
+        // File Cache = file-backed pages
+        // Used = App Memory + File Cache (but don't count purgeable as truly used)
+        let wiredPages = vmStats.wire_count
+        let activePages = vmStats.active_count
+        let inactivePages = vmStats.inactive_count
+        let compressedPages = vmStats.compressor_page_count
+        let purgeablePages = vmStats.purgeable_count
+        
+        // Calculate used memory: wired + active + inactive + compressed - purgeable
+        // This gives us the actual memory being used (excluding truly free memory)
+        let usedPages = wiredPages + activePages + inactivePages + compressedPages - purgeablePages
+        let usedMemory = Double(usedPages) * Double(pageSize)
+        
+        // Calculate percentage
+        let memoryUsage = usedMemory / totalPhysicalMemory
+        
+        // Clamp between 0 and 1 to handle edge cases
+        return max(0.0, min(1.0, memoryUsage))
     }
 }
 
