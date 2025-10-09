@@ -2,12 +2,11 @@
 //  CoverModels.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 
-// MARK: - Cover Service API Models (from cover_service.thrift)
+// Cover Service API Models (from cover_service.thrift)
 
 /// Cover exists request
 struct CoverExistsRequest: Codable {

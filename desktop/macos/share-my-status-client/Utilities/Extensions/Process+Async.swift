@@ -2,8 +2,7 @@
 //  Process+Async.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 

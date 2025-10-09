@@ -2,15 +2,14 @@
 //  Logger.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 import os.log
 
 /// Application logger
 struct AppLogger {
-    private let subsystem = "com.wujunyi792.share-my-status-client"
+    private let subsystem = "com.share-my-status.client"
     
     enum Category: String {
         case app = "App"
@@ -74,7 +73,7 @@ struct AppLogger {
     }
 }
 
-// MARK: - Global Logger Instances
+// Global Logger Instances
 
 extension AppLogger {
     static let app = AppLogger(category: .app)

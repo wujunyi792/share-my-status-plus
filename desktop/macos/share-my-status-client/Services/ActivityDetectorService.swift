@@ -2,8 +2,7 @@
 //  ActivityDetectorService.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 import AppKit
@@ -11,7 +10,7 @@ import ApplicationServices
 
 /// Actor-based activity detection service for thread-safe activity tracking
 actor ActivityDetectorService: PollingMonitoringService {
-    // MARK: - PollingMonitoringService Conformance
+    // PollingMonitoringService Conformance
     let monitoringType: MonitoringType = .polling
     
     private(set) var pollingInterval: TimeInterval = 5.0
@@ -46,7 +45,7 @@ actor ActivityDetectorService: PollingMonitoringService {
         }
     }
     
-    // MARK: - Properties
+    // Properties
     private let logger = AppLogger.activity
     private var currentActivity: ActivitySnapshot?
     private var isDetecting = false
@@ -54,7 +53,7 @@ actor ActivityDetectorService: PollingMonitoringService {
     
     private var activityGroups: [ActivityGroup] = []
     
-    // MARK: - Lifecycle
+    // Lifecycle
     init() {
         // Check permissions on init but don't block
         if !AccessibilityPermissionChecker.isAccessibilityGranted() {
@@ -66,12 +65,12 @@ actor ActivityDetectorService: PollingMonitoringService {
         detectionTask?.cancel()
     }
     
-    // MARK: - Configuration
+    // Configuration
     func updateActivityGroups(_ groups: [ActivityGroup]) {
         self.activityGroups = groups
     }
     
-    // MARK: - Detection Control
+    // Detection Control
     private func startDetection(interval: TimeInterval) async {
         guard !isDetecting else {
             logger.warning("Already detecting")
@@ -102,7 +101,7 @@ actor ActivityDetectorService: PollingMonitoringService {
         currentActivity = nil
     }
     
-    // MARK: - Get Current State
+    // Get Current State
     func getCurrentActivity() -> ActivitySnapshot? {
         return currentActivity
     }
@@ -111,7 +110,7 @@ actor ActivityDetectorService: PollingMonitoringService {
         return isDetecting
     }
     
-    // MARK: - Activity Detection
+    // Activity Detection
     private func detectActivity() async {
         guard AccessibilityPermissionChecker.isAccessibilityGranted() else {
             logger.warning("Accessibility permissions not granted. Please grant permissions in System Settings.")
@@ -144,7 +143,7 @@ actor ActivityDetectorService: PollingMonitoringService {
         logger.debug("Activity detected: \(activityTag) - \(snapshot.activeApplication)")
     }
     
-    // MARK: - Window Title Detection
+    // Window Title Detection
     private func getActiveWindowTitle() -> String? {
         guard AccessibilityPermissionChecker.isAccessibilityGranted() else { return nil }
         
@@ -177,78 +176,23 @@ actor ActivityDetectorService: PollingMonitoringService {
         return title
     }
     
-    // MARK: - Idle Time Detection
+    // Idle Time Detection
     private func getIdleTime() -> TimeInterval {
         return CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: .mouseMoved)
     }
     
-    // MARK: - Activity Tag Mapping
+    // Activity Tag Mapping
     private func mapActivityTag(bundleId: String, appName: String, windowTitle: String) -> String {
-        // Check activity groups first
+        // Check enabled activity groups only
         for group in activityGroups where group.isEnabled {
             if group.bundleIds.contains(bundleId) {
                 return group.name
             }
         }
         
-        // Default categorization
-        return getDefaultActivityTag(bundleId: bundleId)
-    }
-    
-    private func getDefaultActivityTag(bundleId: String) -> String {
-        let developmentApps = [
-            "com.apple.dt.Xcode",
-            "com.microsoft.VSCode",
-            "com.jetbrains.intellij",
-            "com.jetbrains.pycharm",
-            "com.github.atom",
-            "com.sublimetext.3"
-        ]
-        
-        let browserApps = [
-            "com.apple.Safari",
-            "com.google.Chrome",
-            "org.mozilla.firefox",
-            "com.microsoft.edgemac"
-        ]
-        
-        let officeApps = [
-            "com.microsoft.Word",
-            "com.microsoft.Excel",
-            "com.microsoft.PowerPoint",
-            "com.apple.iWork.Pages",
-            "com.apple.iWork.Numbers",
-            "com.apple.iWork.Keynote"
-        ]
-        
-        let communicationApps = [
-            "com.tencent.xinWeChat",
-            "com.tencent.qq",
-            "com.microsoft.teams",
-            "us.zoom.xos",
-            "com.skype.skype"
-        ]
-        
-        let entertainmentApps = [
-            "com.apple.TV",
-            "com.netflix.Netflix",
-            "com.spotify.client",
-            "com.apple.Music"
-        ]
-        
-        if developmentApps.contains(bundleId) {
-            return "开发"
-        } else if browserApps.contains(bundleId) {
-            return "浏览"
-        } else if officeApps.contains(bundleId) {
-            return "办公"
-        } else if communicationApps.contains(bundleId) {
-            return "沟通"
-        } else if entertainmentApps.contains(bundleId) {
-            return "娱乐"
-        } else {
-            return "其他"
-        }
+        // If no enabled rule matches, return default tag
+        // Note: Disabled rules will not match, so apps will fall through to "其他"
+        return "其他"
     }
 }
 

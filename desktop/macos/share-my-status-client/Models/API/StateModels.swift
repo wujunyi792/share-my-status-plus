@@ -2,12 +2,11 @@
 //  StateModels.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 
-// MARK: - State Service API Models (from state_service.thrift)
+// State Service API Models (from state_service.thrift)
 
 /// Batch report request
 struct BatchReportRequest: Codable {

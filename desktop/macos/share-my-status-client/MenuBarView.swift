@@ -2,8 +2,6 @@
 //  MenuBarView.swift
 //  share-my-status-client
 //
-//  Refactored on 2025-01-07.
-//
 
 import SwiftUI
 
@@ -55,15 +53,37 @@ struct MenuBarView: View {
                 
                 // Current Music
                 if let music = reporter.currentMusic {
-                    HStack(spacing: 6) {
-                        Image(systemName: "music.note")
-                            .foregroundColor(.purple)
-                            .frame(width: 12)
+                    HStack(spacing: 8) {
+                        // Album artwork or default icon
+                        Group {
+                            if let artworkData = music.artworkData,
+                               let nsImage = NSImage(data: artworkData) {
+                                Image(nsImage: nsImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 28, height: 28)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            } else {
+                                Image(systemName: "music.note")
+                                    .font(.caption)
+                                    .foregroundColor(.purple)
+                                    .frame(width: 28, height: 28)
+                                    .background(Color.purple.opacity(0.15))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
+                        }
+                        
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(music.title)
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .lineLimit(1)
+                            HStack(spacing: 4) {
+                                Text(music.title)
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .lineLimit(1)
+                                
+                                Circle()
+                                    .fill(music.isPlaying ? Color.green : Color.orange)
+                                    .frame(width: 4, height: 4)
+                            }
                             Text(music.artist)
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -182,7 +202,7 @@ struct MenuBarView: View {
         .frame(width: 280)
     }
     
-    // MARK: - Helper Methods
+    // Helper Methods
     private func openMainWindow() {
         // Find existing main window (exclude status bar and panels)
         let existingWindow = NSApplication.shared.windows.first { window in
@@ -249,7 +269,7 @@ struct MenuBarView: View {
     }
 }
 
-// MARK: - Window Close Delegate
+// Window Close Delegate
 
 /// Delegate to handle window close events
 class WindowCloseDelegate: NSObject, NSWindowDelegate {
@@ -261,7 +281,7 @@ class WindowCloseDelegate: NSObject, NSWindowDelegate {
     }
 }
 
-// MARK: - Custom Button Style
+// Custom Button Style
 
 /// Custom button style for menu bar items with hover effect
 struct MenuBarButtonStyle: ButtonStyle {

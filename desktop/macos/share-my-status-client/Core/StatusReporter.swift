@@ -2,8 +2,7 @@
 //  StatusReporter.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 import SwiftUI
@@ -12,7 +11,7 @@ import Combine
 /// Main status reporter that coordinates all services
 @MainActor
 class StatusReporter: ObservableObject {
-    // MARK: - Published State
+    // Published State
     @Published var isReporting = false
     @Published var lastError: Error?
     @Published var reportingStatus = "未启动"
@@ -21,7 +20,7 @@ class StatusReporter: ObservableObject {
     @Published var currentSystem: SystemSnapshot?
     @Published var currentActivity: ActivitySnapshot?
     
-    // MARK: - Services
+    // Services
     private let mediaService: MediaRemoteService
     private let systemService: SystemMonitorService
     private let activityService: ActivityDetectorService
@@ -30,7 +29,7 @@ class StatusReporter: ObservableObject {
     
     private let logger = AppLogger.reporter
     
-    // MARK: - Configuration
+    // Configuration
     private var configuration: AppConfiguration?
     
     // Store previous config state as values (not reference)
@@ -51,11 +50,11 @@ class StatusReporter: ObservableObject {
     }
     private var previousConfigSnapshot: ConfigSnapshot?
     
-    // MARK: - Report Timers (for polling services)
+    // Report Timers (for polling services)
     private var systemReportTimer: Timer?
     private var activityReportTimer: Timer?
     
-    // MARK: - Initialization
+    // Initialization
     init() {
         self.mediaService = MediaRemoteService()
         self.systemService = SystemMonitorService()
@@ -78,7 +77,10 @@ class StatusReporter: ObservableObject {
     // Track if configuration update is in progress
     private var isUpdatingConfiguration = false
     
-    // MARK: - Configuration Update
+    // Cache for deduplication
+    private var lastReportedActivityLabel: String?
+
+    // Configuration Update
     func updateConfiguration(_ config: AppConfiguration) {
         // Prevent concurrent configuration updates
         guard !isUpdatingConfiguration else {
@@ -141,7 +143,7 @@ class StatusReporter: ObservableObject {
         }
     }
     
-    // MARK: - Handle Individual Service Toggles
+    // Handle Individual Service Toggles
     private func handleServiceToggles(previous: ConfigSnapshot?, current: AppConfiguration) async {
         guard let prev = previous else {
             // No previous config - this is initial startup
@@ -207,7 +209,7 @@ class StatusReporter: ObservableObject {
         await updateReportingStatus()
     }
     
-    // MARK: - Start Reporting
+    // Start Reporting
     func startReporting() {
         guard let config = configuration else {
             logger.error("No configuration available")
@@ -249,7 +251,7 @@ class StatusReporter: ObservableObject {
         }
     }
     
-    // MARK: - Stop Reporting
+    // Stop Reporting
     func stopReporting() {
         logger.info("Stopping status reporting...")
         isReporting = false
@@ -264,7 +266,7 @@ class StatusReporter: ObservableObject {
         }
     }
     
-    // MARK: - Individual Service Control
+    // Individual Service Control
     
     /// Start music service only
     private func startMusicService() async {
@@ -387,9 +389,12 @@ class StatusReporter: ObservableObject {
         activityReportTimer?.invalidate()
         activityReportTimer = nil
         currentActivity = nil
+        
+        // Clear cached label when stopping service
+        lastReportedActivityLabel = nil
     }
     
-    // MARK: - Report Timers
+    // Report Timers
     
     /// Setup system monitoring report timer (polling-based)
     private func setupSystemReportTimer(interval: TimeInterval) async {
@@ -417,7 +422,7 @@ class StatusReporter: ObservableObject {
         logger.info("Activity report timer set to \(interval) seconds")
     }
     
-    // MARK: - Report Methods
+    // Report Methods
     
     /// Report music change immediately (event-driven)
     private func reportMusicChange(_ music: MusicSnapshot?) async {
@@ -511,7 +516,16 @@ class StatusReporter: ObservableObject {
             return
         }
         
+        // Check if label has changed (deduplication)
+        if let lastLabel = lastReportedActivityLabel, lastLabel == activityInfo.label {
+            logger.debug("Activity label unchanged (\(activityInfo.label)), skipping report")
+            return
+        }
+        
         logger.info("Activity status collected: \(activityInfo.label)")
+        
+        // Update last reported label
+        lastReportedActivityLabel = activityInfo.label
         
         // Create report event with only activity info
         let event = ReportEvent(
@@ -541,7 +555,7 @@ class StatusReporter: ObservableObject {
         }
     }
     
-    // MARK: - Update Status
+    // Update Status
     private func updateReportingStatus() async {
         guard let config = configuration else {
             reportingStatus = "未配置"
@@ -572,15 +586,15 @@ class StatusReporter: ObservableObject {
         var activeModules: [String] = []
         
         if config.musicReportingEnabled, await mediaService.isActive() {
-            activeModules.append("音乐(事件)")
+            activeModules.append("音乐")
         }
         
         if config.systemReportingEnabled, await systemService.isActive() {
-            activeModules.append("系统(轮询)")
+            activeModules.append("系统")
         }
         
         if config.activityReportingEnabled, await activityService.isActive() {
-            activeModules.append("活动(轮询)")
+            activeModules.append("活动")
         }
         
         if activeModules.isEmpty {
@@ -590,7 +604,7 @@ class StatusReporter: ObservableObject {
         }
     }
     
-    // MARK: - Status Summary
+    // Status Summary
     func getStatusSummary() -> String {
         var summary: [String] = []
         
@@ -623,7 +637,7 @@ class StatusReporter: ObservableObject {
         return summary.isEmpty ? "无状态数据" : summary.joined(separator: "\n")
     }
     
-    // MARK: - Network Statistics
+    // Network Statistics
     func getNetworkStatistics() async -> (lastReportTime: Date?, reportCount: Int, isConnected: Bool) {
         return await networkService.getStatistics()
     }

@@ -2,12 +2,11 @@
 //  ActivityModels.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 
-// MARK: - Domain Activity Models
+// Domain Activity Models
 
 /// Activity snapshot from activity detection
 struct ActivitySnapshot {
@@ -68,46 +67,7 @@ struct ActivityGroup: Codable, Identifiable, Hashable {
     }
 }
 
-/// Activity rule for pattern matching (deprecated, use ActivityGroup instead)
-struct ActivityRule: Codable, Identifiable, Hashable {
-    var id: UUID = UUID()
-    var pattern: String
-    var label: String
-    var isEnabled: Bool
-    
-    enum CodingKeys: String, CodingKey {
-        case pattern, label, isEnabled
-    }
-    
-    init(id: UUID = UUID(), pattern: String, label: String, isEnabled: Bool = true) {
-        self.id = id
-        self.pattern = pattern
-        self.label = label
-        self.isEnabled = isEnabled
-    }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = UUID()  // Generate new UUID when decoding
-        self.pattern = try container.decode(String.self, forKey: .pattern)
-        self.label = try container.decode(String.self, forKey: .label)
-        self.isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
-    }
-    
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(pattern, forKey: .pattern)
-        try container.encode(label, forKey: .label)
-        try container.encode(isEnabled, forKey: .isEnabled)
-    }
-    
-    /// Default activity rules (deprecated, centralized in DefaultSettings)
-    static var defaultRules: [ActivityRule] {
-        return DefaultSettings.activityRules
-    }
-}
-
-// MARK: - Formatting Extensions
+// Formatting Extensions
 
 extension ActivitySnapshot {
     var isIdle: Bool {

@@ -30,7 +30,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		2B1995072E959754005C2FE1 /* share-my-status-client.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "share-my-status-client.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2B1995072E959754005C2FE1 /* Share My Status.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Share My Status.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -101,7 +101,7 @@
 		2B1995082E959754005C2FE1 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				2B1995072E959754005C2FE1 /* share-my-status-client.app */,
+				2B1995072E959754005C2FE1 /* Share My Status.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -130,7 +130,7 @@
 			packageProductDependencies = (
 			);
 			productName = "share-my-status-client";
-			productReference = 2B1995072E959754005C2FE1 /* share-my-status-client.app */;
+			productReference = 2B1995072E959754005C2FE1 /* Share My Status.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -336,8 +336,8 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.wujunyi792.share-my-status-client";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.share-my-status.client";
+				PRODUCT_NAME = "Share My Status";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
 				REGISTER_APP_GROUPS = YES;
@@ -378,8 +378,8 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.wujunyi792.share-my-status-client";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.share-my-status.client";
+				PRODUCT_NAME = "Share My Status";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
 				REGISTER_APP_GROUPS = YES;

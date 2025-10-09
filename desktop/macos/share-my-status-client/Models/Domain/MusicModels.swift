@@ -2,12 +2,11 @@
 //  MusicModels.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 
-// MARK: - Domain Music Models
+// Domain Music Models
 
 /// Music snapshot from MediaRemote
 struct MusicSnapshot {

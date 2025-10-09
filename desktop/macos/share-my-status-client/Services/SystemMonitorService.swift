@@ -2,8 +2,7 @@
 //  SystemMonitorService.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 import IOKit
@@ -11,7 +10,7 @@ import IOKit.ps
 
 /// Actor-based system monitoring service for thread-safe system metrics collection
 actor SystemMonitorService: PollingMonitoringService {
-    // MARK: - PollingMonitoringService Conformance
+    // PollingMonitoringService Conformance
     let monitoringType: MonitoringType = .polling
     
     private(set) var pollingInterval: TimeInterval = 10.0
@@ -46,18 +45,18 @@ actor SystemMonitorService: PollingMonitoringService {
         }
     }
     
-    // MARK: - Properties
+    // Properties
     private let logger = AppLogger.system
     private var currentSnapshot: SystemSnapshot?
     private var isMonitoring = false
     private var monitorTask: Task<Void, Never>?
     
-    // MARK: - Lifecycle
+    // Lifecycle
     deinit {
         monitorTask?.cancel()
     }
     
-    // MARK: - Monitoring Control
+    // Monitoring Control
     private func startMonitoring(interval: TimeInterval) async {
         guard !isMonitoring else {
             logger.warning("Already monitoring")
@@ -88,7 +87,7 @@ actor SystemMonitorService: PollingMonitoringService {
         currentSnapshot = nil
     }
     
-    // MARK: - Get Current State
+    // Get Current State
     func getCurrentSnapshot() -> SystemSnapshot? {
         return currentSnapshot
     }
@@ -97,7 +96,7 @@ actor SystemMonitorService: PollingMonitoringService {
         return isMonitoring
     }
     
-    // MARK: - Collect Metrics
+    // Collect Metrics
     func collectMetrics() async {
         let batteryInfo = getBatteryInfo()
         let cpuUsage = getCPUUsage()
@@ -115,7 +114,7 @@ actor SystemMonitorService: PollingMonitoringService {
         logger.debug("System metrics collected: CPU=\(cpuUsage ?? 0), Memory=\(memoryUsage ?? 0)")
     }
     
-    // MARK: - Battery Info
+    // Battery Info
     private func getBatteryInfo() -> (level: Double?, isCharging: Bool?) {
         let powerSources = IOPSCopyPowerSourcesInfo()?.takeRetainedValue()
         guard let powerSourcesList = IOPSCopyPowerSourcesList(powerSources)?.takeRetainedValue() as? [CFTypeRef] else {
@@ -144,7 +143,7 @@ actor SystemMonitorService: PollingMonitoringService {
         return (nil, nil)
     }
     
-    // MARK: - CPU Usage
+    // CPU Usage
     private func getCPUUsage() -> Double? {
         var cpuInfo: processor_info_array_t!
         var numCpuInfo: mach_msg_type_number_t = 0
@@ -183,7 +182,7 @@ actor SystemMonitorService: PollingMonitoringService {
         return totalTicks > 0 ? Double(usedTicks) / Double(totalTicks) : nil
     }
     
-    // MARK: - Memory Usage
+    // Memory Usage
     private func getMemoryUsage() -> Double? {
         var vmStats = vm_statistics64()
         var infoCount = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.stride / MemoryLayout<integer_t>.stride)

@@ -2,8 +2,6 @@
 //  share_my_status_clientApp.swift
 //  share-my-status-client
 //
-//  Refactored on 2025-01-07.
-//
 
 import SwiftUI
 
@@ -24,7 +22,8 @@ struct share_my_status_clientApp: App {
                 .handlesExternalEvents(preferring: Set(arrayLiteral: "main"), allowing: Set(arrayLiteral: "*"))
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)  // Allow user to resize window
+        .defaultSize(width: 750, height: 600)  // Larger default size
         .defaultPosition(.center)
         .handlesExternalEvents(matching: Set(arrayLiteral: "main"))
         .commands {
@@ -33,23 +32,21 @@ struct share_my_status_clientApp: App {
         }
         
         // MenuBarExtra requires macOS 13.0+
-        if #available(macOS 13.0, *) {
-            MenuBarExtra("Share My Status", systemImage: "antenna.radiowaves.left.and.right") {
-                MenuBarView()
-                    .environmentObject(coordinator.configuration)
-                    .environmentObject(coordinator.reporter)
-            }
-            .menuBarExtraStyle(.window)
+        MenuBarExtra("Share My Status", systemImage: "antenna.radiowaves.left.and.right") {
+            MenuBarView()
+                .environmentObject(coordinator.configuration)
+                .environmentObject(coordinator.reporter)
         }
+        .menuBarExtraStyle(.window)
     }
 }
 
-// MARK: - App Delegate
+// App Delegate
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Hide Dock icon, show only in status bar
-        NSApp.setActivationPolicy(.accessory)
+        // Start as regular app (show in Dock)
+        NSApp.setActivationPolicy(.regular)
         
         // Setup window close monitoring
         setupWindowCloseMonitoring()

@@ -2,12 +2,11 @@
 //  APIModels.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 
-// MARK: - Base Response (from common.thrift)
+// Base Response (from common.thrift)
 
 /// Base response structure for all API responses
 struct BaseResponse: Codable {
@@ -16,7 +15,7 @@ struct BaseResponse: Codable {
     let warnings: [String]?
 }
 
-// MARK: - Common Domain Models
+// Common Domain Models
 
 /// System information structure (from common.thrift)
 struct SystemInfo: Codable {

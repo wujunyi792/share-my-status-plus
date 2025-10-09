@@ -2,14 +2,13 @@
 //  CoverService.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 
 /// Actor-based cover service for thread-safe cover management
 actor CoverService {
-    // MARK: - Properties
+    // Properties
     private let logger = AppLogger.cover
     private let session: URLSession
     
@@ -19,7 +18,7 @@ actor CoverService {
     // Cache for uploaded covers (MD5 -> coverHash)
     private var uploadedCovers: [String: String] = [:]
     
-    // MARK: - Initialization
+    // Initialization
     init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -29,7 +28,7 @@ actor CoverService {
         logger.info("CoverService initialized")
     }
     
-    // MARK: - Configuration
+    // Configuration
     func updateConfiguration(baseURL: String, secretKey: String) {
         // Extract base URL from endpoint (remove /v1/state/report if present)
         if let url = URL(string: baseURL) {
@@ -43,7 +42,7 @@ actor CoverService {
         logger.info("Cover service configuration updated")
     }
     
-    // MARK: - Check and Upload Cover
+    // Check and Upload Cover
     func checkAndUploadCover(artworkData: Data) async throws -> String? {
         // Compute MD5 hash
         let md5 = artworkData.md5Hash
@@ -70,7 +69,7 @@ actor CoverService {
         return coverHash
     }
     
-    // MARK: - Check Cover Exists
+    // Check Cover Exists
     private func checkCoverExists(md5: String) async throws -> Bool {
         guard let url = URL(string: "\(baseURL)/api/v1/cover/exists?md5=\(md5)") else {
             throw CoverError.invalidURL
@@ -98,7 +97,7 @@ actor CoverService {
         return existsResponse.exists ?? false
     }
     
-    // MARK: - Upload Cover
+    // Upload Cover
     private func uploadCover(artworkData: Data) async throws -> String {
         guard let url = URL(string: "\(baseURL)/api/v1/cover/upload") else {
             throw CoverError.invalidURL
@@ -139,14 +138,14 @@ actor CoverService {
         return coverHash
     }
     
-    // MARK: - Clear Cache
+    // Clear Cache
     func clearCache() {
         uploadedCovers.removeAll()
         logger.info("Cover cache cleared")
     }
 }
 
-// MARK: - Cover Errors
+// Cover Errors
 
 enum CoverError: LocalizedError {
     case invalidURL

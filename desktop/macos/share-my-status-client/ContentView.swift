@@ -2,8 +2,6 @@
 //  ContentView.swift
 //  share-my-status-client
 //
-//  Refactored on 2025-01-07.
-//
 
 import SwiftUI
 
@@ -28,7 +26,8 @@ struct ContentView: View {
                 }
                 .tag(1)
         }
-        .frame(width: 600, height: 500)
+        .frame(minWidth: 650, idealWidth: 750, maxWidth: .infinity,
+               minHeight: 550, idealHeight: 600, maxHeight: .infinity)
     }
 }
 

@@ -2,8 +2,7 @@
 //  AppCoordinator.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 import SwiftUI
@@ -12,17 +11,17 @@ import Combine
 /// Application coordinator for managing app lifecycle and service coordination
 @MainActor
 class AppCoordinator: ObservableObject {
-    // MARK: - Shared Instance
+    // Shared Instance
     static let shared = AppCoordinator()
     
-    // MARK: - Properties
+    // Properties
     @Published var configuration: AppConfiguration
     @Published var reporter: StatusReporter
     
     private let logger = AppLogger.app
     private var cancellables = Set<AnyCancellable>()
     
-    // MARK: - Initialization
+    // Initialization
     private init() {
         self.configuration = AppConfiguration()
         self.reporter = StatusReporter()
@@ -36,7 +35,7 @@ class AppCoordinator: ObservableObject {
         // to avoid race conditions during startup
     }
     
-    // MARK: - Configuration Observer
+    // Configuration Observer
     private func setupConfigurationObserver() {
         // Observe configuration changes and update reporter
         // Using Combine to observe @Published properties
@@ -54,7 +53,7 @@ class AppCoordinator: ObservableObject {
             .store(in: &cancellables)
     }
     
-    // MARK: - Lifecycle
+    // Lifecycle
     func applicationDidFinishLaunching() {
         logger.info("Application did finish launching")
         logger.info("Configuration: isReportingEnabled=\(configuration.isReportingEnabled), isValid=\(configuration.isValidConfiguration())")

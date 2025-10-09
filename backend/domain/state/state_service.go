@@ -65,7 +65,7 @@ func (s *StateService) BatchReport(ctx context.Context, userID uint64, events []
 		// 设置幂等键
 		if event.IdempotencyKey != nil && *event.IdempotencyKey != "" {
 			dedupKey := fmt.Sprintf("dedup:%d:%s", userID, *event.IdempotencyKey)
-			s.cache.Set(ctx, dedupKey, "1", 24*time.Hour)
+			s.cache.Set(ctx, dedupKey, "1", 30*time.Second)
 		}
 
 		accepted++

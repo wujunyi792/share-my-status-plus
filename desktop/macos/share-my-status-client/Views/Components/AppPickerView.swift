@@ -2,8 +2,7 @@
 //  AppPickerView.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import SwiftUI
 import AppKit
@@ -78,13 +77,6 @@ struct AppPickerView: View {
             case .blacklist: return "移除"
             }
         }
-        
-        var clearAllButtonText: String {
-            switch self {
-            case .whitelist: return "全部移除"
-            case .blacklist: return "全部移除"
-            }
-        }
     }
 
     var filteredApps: [AppInfo] {
@@ -130,16 +122,15 @@ struct AppPickerView: View {
             }
 
             HStack {
-                Button(mode.clearAllButtonText) {
-                    selectedApps.removeAll()
+                Button("取消") {
+                    presentationMode.wrappedValue.dismiss()
                 }
                 .buttonStyle(.bordered)
-                .tint(.red)
                 .controlSize(.large)
 
                 Spacer()
 
-                Button("完成") {
+                Button("确定") {
                     presentationMode.wrappedValue.dismiss()
                 }
                 .buttonStyle(.borderedProminent)

@@ -2,15 +2,14 @@
 //  MediaRemoteService.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 import AppKit
 
 /// Actor-based MediaRemote service for thread-safe music info extraction
 actor MediaRemoteService {
-    // MARK: - EventDrivenMonitoringService Conformance
+    // EventDrivenMonitoringService Conformance
     typealias EventData = MusicSnapshot
     
     let monitoringType: MonitoringType = .eventDriven
@@ -36,7 +35,7 @@ actor MediaRemoteService {
         self.eventCallback = callback
     }
     
-    // MARK: - Properties
+    // Properties
     private let config: MediaRemoteAdapterConfig
     private let logger = AppLogger.media
     private var whitelistedBundleIds: [String] = []
@@ -63,7 +62,7 @@ actor MediaRemoteService {
     }
     private var songChangeState: SongChangeState = .idle
     
-    // MARK: - Initialization
+    // Initialization
     init(config: MediaRemoteAdapterConfig = .default) {
         self.config = config
     }
@@ -74,12 +73,12 @@ actor MediaRemoteService {
         }
     }
     
-    // MARK: - Configuration
+    // Configuration
     func updateWhitelist(_ bundleIds: [String]) {
         self.whitelistedBundleIds = bundleIds
     }
     
-    // MARK: - Get Music Info (One-time)
+    // Get Music Info (One-time)
     func getMusicInfo() async throws -> MusicSnapshot? {
         logger.info("Getting current music info...")
         
@@ -151,7 +150,7 @@ actor MediaRemoteService {
         }
     }
     
-    // MARK: - Stream Music Info (Real-time)
+    // Stream Music Info (Real-time)
     func startStreaming(onUpdate: @escaping (MusicSnapshot?) -> Void) async throws {
         guard !isStreaming else {
             logger.warning("Already streaming - ignoring duplicate start request")
@@ -280,7 +279,7 @@ actor MediaRemoteService {
         logger.info("Music streaming stopped")
     }
     
-    // MARK: - Current State
+    // Current State
     func getCurrentMusic() -> MusicSnapshot? {
         return currentMusic
     }
@@ -289,7 +288,7 @@ actor MediaRemoteService {
         return isStreaming
     }
     
-    // MARK: - Test Adapter
+    // Test Adapter
     func testAdapter() async throws -> Bool {
         guard config.validate() else {
             throw MediaRemoteError.adapterNotFound
@@ -307,7 +306,7 @@ actor MediaRemoteService {
         }
     }
     
-    // MARK: - Private Helpers
+    // Private Helpers
     
     /// Process incoming stream chunk, handling multiple or incomplete JSON objects
     /// MediaRemote outputs Newline-Delimited JSON (NDJSON): one JSON per line

@@ -2,12 +2,11 @@
 //  SystemModels.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 
-// MARK: - Domain System Models
+// Domain System Models
 
 /// System snapshot from system monitoring
 struct SystemSnapshot {
@@ -31,7 +30,7 @@ struct SystemSnapshot {
     }
 }
 
-// MARK: - Formatting Extensions
+// Formatting Extensions
 
 extension SystemSnapshot {
     var batteryPercentage: Int? {

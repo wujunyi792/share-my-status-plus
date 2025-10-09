@@ -2,12 +2,11 @@
 //  MediaRemoteTypes.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 
-// MARK: - MediaRemote Adapter Command Types
+// MediaRemote Adapter Command Types
 
 /// MediaRemote adapter command
 enum MediaRemoteCommand {
@@ -60,7 +59,7 @@ struct MediaRemoteStreamOutput: Codable {
     }
 }
 
-// MARK: - MediaRemote Adapter Configuration
+// MediaRemote Adapter Configuration
 
 struct MediaRemoteAdapterConfig {
     let perlPath: String
@@ -88,7 +87,7 @@ struct MediaRemoteAdapterConfig {
     }
 }
 
-// MARK: - MediaRemote Errors
+// MediaRemote Errors
 
 enum MediaRemoteError: LocalizedError {
     case adapterNotFound

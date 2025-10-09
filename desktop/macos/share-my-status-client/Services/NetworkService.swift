@@ -2,15 +2,14 @@
 //  NetworkService.swift
 //  share-my-status-client
 //
-//  Created by Refactor on 2025-01-07.
-//
+
 
 import Foundation
 import Network
 
 /// Actor-based network service for thread-safe API communication
 actor NetworkService {
-    // MARK: - Properties
+    // Properties
     private let logger = AppLogger.network
     private let session: URLSession
     private let monitor: NWPathMonitor
@@ -20,11 +19,11 @@ actor NetworkService {
     private var endpointURL: String = ""
     private var secretKey: String = ""
     
-    // MARK: - Statistics
+    // Statistics
     private var lastReportTime: Date?
     private var reportCount = 0
     
-    // MARK: - Initialization
+    // Initialization
     init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
@@ -48,7 +47,7 @@ actor NetworkService {
         monitor.cancel()
     }
     
-    // MARK: - Configuration
+    // Configuration
     func updateConfiguration(endpointURL: String, secretKey: String) {
         self.endpointURL = endpointURL
         self.secretKey = secretKey
@@ -60,7 +59,7 @@ actor NetworkService {
         logger.info("Network status: \(connected ? "Connected" : "Disconnected")")
     }
     
-    // MARK: - Report Status
+    // Report Status
     func reportStatus(_ request: BatchReportRequest) async throws -> BatchReportResponse {
         guard isConnected else {
             throw NetworkError.notConnected
@@ -118,7 +117,7 @@ actor NetworkService {
         }
     }
     
-    // MARK: - Statistics
+    // Statistics
     func getStatistics() -> (lastReportTime: Date?, reportCount: Int, isConnected: Bool) {
         return (lastReportTime, reportCount, isConnected)
     }
@@ -128,7 +127,7 @@ actor NetworkService {
     }
 }
 
-// MARK: - Network Errors
+// Network Errors
 
 enum NetworkError: LocalizedError {
     case notConnected
