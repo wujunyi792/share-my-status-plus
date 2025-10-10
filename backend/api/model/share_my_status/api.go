@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/apache/thrift/lib/go/thrift"
 	"share-my-status/api/model/share_my_status/cover"
+	"share-my-status/api/model/share_my_status/legacy"
 	"share-my-status/api/model/share_my_status/redirect"
 	"share-my-status/api/model/share_my_status/state"
 	"share-my-status/api/model/share_my_status/stats"
@@ -31,6 +32,10 @@ type ShareMyStatus interface {
 	Connect(ctx context.Context, req *websocket.WSConnectRequest) (r *websocket.WSConnectResponse, err error)
 	// 连接跳转
 	Redirect(ctx context.Context, req *redirect.RedirectRequest) (r *redirect.RedirectResponse, err error)
+	// 上报活动状态（兼容旧版 POST /api/status/v1）
+	UploadStatus(ctx context.Context, req *legacy.LegacyActivityRequest) (r *legacy.LegacyActivityResponse, err error)
+	// 链接跳转（兼容旧版 GET /link）
+	HandleLink(ctx context.Context, req *legacy.LinkRedirectRequest) (r *legacy.LinkRedirectResponse, err error)
 }
 
 type ShareMyStatusClient struct {
@@ -131,6 +136,24 @@ func (p *ShareMyStatusClient) Redirect(ctx context.Context, req *redirect.Redire
 	}
 	return _result.GetSuccess(), nil
 }
+func (p *ShareMyStatusClient) UploadStatus(ctx context.Context, req *legacy.LegacyActivityRequest) (r *legacy.LegacyActivityResponse, err error) {
+	var _args ShareMyStatusUploadStatusArgs
+	_args.Req = req
+	var _result ShareMyStatusUploadStatusResult
+	if err = p.Client_().Call(ctx, "UploadStatus", &_args, &_result); err != nil {
+		return
+	}
+	return _result.GetSuccess(), nil
+}
+func (p *ShareMyStatusClient) HandleLink(ctx context.Context, req *legacy.LinkRedirectRequest) (r *legacy.LinkRedirectResponse, err error) {
+	var _args ShareMyStatusHandleLinkArgs
+	_args.Req = req
+	var _result ShareMyStatusHandleLinkResult
+	if err = p.Client_().Call(ctx, "HandleLink", &_args, &_result); err != nil {
+		return
+	}
+	return _result.GetSuccess(), nil
+}
 
 type ShareMyStatusProcessor struct {
 	processorMap map[string]thrift.TProcessorFunction
@@ -160,6 +183,8 @@ func NewShareMyStatusProcessor(handler ShareMyStatus) *ShareMyStatusProcessor {
 	self.AddToProcessorMap("QueryStats", &shareMyStatusProcessorQueryStats{handler: handler})
 	self.AddToProcessorMap("Connect", &shareMyStatusProcessorConnect{handler: handler})
 	self.AddToProcessorMap("Redirect", &shareMyStatusProcessorRedirect{handler: handler})
+	self.AddToProcessorMap("UploadStatus", &shareMyStatusProcessorUploadStatus{handler: handler})
+	self.AddToProcessorMap("HandleLink", &shareMyStatusProcessorHandleLink{handler: handler})
 	return self
 }
 func (p *ShareMyStatusProcessor) Process(ctx context.Context, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
@@ -547,6 +572,102 @@ func (p *shareMyStatusProcessorRedirect) Process(ctx context.Context, seqId int3
 		result.Success = retval
 	}
 	if err2 = oprot.WriteMessageBegin("Redirect", thrift.REPLY, seqId); err2 != nil {
+		err = err2
+	}
+	if err2 = result.Write(oprot); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.WriteMessageEnd(); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.Flush(ctx); err == nil && err2 != nil {
+		err = err2
+	}
+	if err != nil {
+		return
+	}
+	return true, err
+}
+
+type shareMyStatusProcessorUploadStatus struct {
+	handler ShareMyStatus
+}
+
+func (p *shareMyStatusProcessorUploadStatus) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
+	args := ShareMyStatusUploadStatusArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		x := thrift.NewTApplicationException(thrift.PROTOCOL_ERROR, err.Error())
+		oprot.WriteMessageBegin("UploadStatus", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return false, err
+	}
+
+	iprot.ReadMessageEnd()
+	var err2 error
+	result := ShareMyStatusUploadStatusResult{}
+	var retval *legacy.LegacyActivityResponse
+	if retval, err2 = p.handler.UploadStatus(ctx, args.Req); err2 != nil {
+		x := thrift.NewTApplicationException(thrift.INTERNAL_ERROR, "Internal error processing UploadStatus: "+err2.Error())
+		oprot.WriteMessageBegin("UploadStatus", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return true, err2
+	} else {
+		result.Success = retval
+	}
+	if err2 = oprot.WriteMessageBegin("UploadStatus", thrift.REPLY, seqId); err2 != nil {
+		err = err2
+	}
+	if err2 = result.Write(oprot); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.WriteMessageEnd(); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.Flush(ctx); err == nil && err2 != nil {
+		err = err2
+	}
+	if err != nil {
+		return
+	}
+	return true, err
+}
+
+type shareMyStatusProcessorHandleLink struct {
+	handler ShareMyStatus
+}
+
+func (p *shareMyStatusProcessorHandleLink) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
+	args := ShareMyStatusHandleLinkArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		x := thrift.NewTApplicationException(thrift.PROTOCOL_ERROR, err.Error())
+		oprot.WriteMessageBegin("HandleLink", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return false, err
+	}
+
+	iprot.ReadMessageEnd()
+	var err2 error
+	result := ShareMyStatusHandleLinkResult{}
+	var retval *legacy.LinkRedirectResponse
+	if retval, err2 = p.handler.HandleLink(ctx, args.Req); err2 != nil {
+		x := thrift.NewTApplicationException(thrift.INTERNAL_ERROR, "Internal error processing HandleLink: "+err2.Error())
+		oprot.WriteMessageBegin("HandleLink", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return true, err2
+	} else {
+		result.Success = retval
+	}
+	if err2 = oprot.WriteMessageBegin("HandleLink", thrift.REPLY, seqId); err2 != nil {
 		err = err2
 	}
 	if err2 = result.Write(oprot); err == nil && err2 != nil {
@@ -2897,5 +3018,589 @@ func (p *ShareMyStatusRedirectResult) String() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("ShareMyStatusRedirectResult(%+v)", *p)
+
+}
+
+type ShareMyStatusUploadStatusArgs struct {
+	Req *legacy.LegacyActivityRequest `thrift:"req,1"`
+}
+
+func NewShareMyStatusUploadStatusArgs() *ShareMyStatusUploadStatusArgs {
+	return &ShareMyStatusUploadStatusArgs{}
+}
+
+func (p *ShareMyStatusUploadStatusArgs) InitDefault() {
+}
+
+var ShareMyStatusUploadStatusArgs_Req_DEFAULT *legacy.LegacyActivityRequest
+
+func (p *ShareMyStatusUploadStatusArgs) GetReq() (v *legacy.LegacyActivityRequest) {
+	if !p.IsSetReq() {
+		return ShareMyStatusUploadStatusArgs_Req_DEFAULT
+	}
+	return p.Req
+}
+
+var fieldIDToName_ShareMyStatusUploadStatusArgs = map[int16]string{
+	1: "req",
+}
+
+func (p *ShareMyStatusUploadStatusArgs) IsSetReq() bool {
+	return p.Req != nil
+}
+
+func (p *ShareMyStatusUploadStatusArgs) Read(iprot thrift.TProtocol) (err error) {
+	var fieldTypeId thrift.TType
+	var fieldId int16
+
+	if _, err = iprot.ReadStructBegin(); err != nil {
+		goto ReadStructBeginError
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err = iprot.ReadFieldBegin()
+		if err != nil {
+			goto ReadFieldBeginError
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRUCT {
+				if err = p.ReadField1(iprot); err != nil {
+					goto ReadFieldError
+				}
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		default:
+			if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		}
+		if err = iprot.ReadFieldEnd(); err != nil {
+			goto ReadFieldEndError
+		}
+	}
+	if err = iprot.ReadStructEnd(); err != nil {
+		goto ReadStructEndError
+	}
+
+	return nil
+ReadStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct begin error: ", p), err)
+ReadFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d begin error: ", p, fieldId), err)
+ReadFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d '%s' error: ", p, fieldId, fieldIDToName_ShareMyStatusUploadStatusArgs[fieldId]), err)
+SkipFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T field %d skip type %d error: ", p, fieldId, fieldTypeId), err)
+
+ReadFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read field end error", p), err)
+ReadStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusUploadStatusArgs) ReadField1(iprot thrift.TProtocol) error {
+	_field := legacy.NewLegacyActivityRequest()
+	if err := _field.Read(iprot); err != nil {
+		return err
+	}
+	p.Req = _field
+	return nil
+}
+
+func (p *ShareMyStatusUploadStatusArgs) Write(oprot thrift.TProtocol) (err error) {
+	var fieldId int16
+	if err = oprot.WriteStructBegin("UploadStatus_args"); err != nil {
+		goto WriteStructBeginError
+	}
+	if p != nil {
+		if err = p.writeField1(oprot); err != nil {
+			fieldId = 1
+			goto WriteFieldError
+		}
+	}
+	if err = oprot.WriteFieldStop(); err != nil {
+		goto WriteFieldStopError
+	}
+	if err = oprot.WriteStructEnd(); err != nil {
+		goto WriteStructEndError
+	}
+	return nil
+WriteStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+WriteFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T write field %d error: ", p, fieldId), err)
+WriteFieldStopError:
+	return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", p), err)
+WriteStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusUploadStatusArgs) writeField1(oprot thrift.TProtocol) (err error) {
+	if err = oprot.WriteFieldBegin("req", thrift.STRUCT, 1); err != nil {
+		goto WriteFieldBeginError
+	}
+	if err := p.Req.Write(oprot); err != nil {
+		return err
+	}
+	if err = oprot.WriteFieldEnd(); err != nil {
+		goto WriteFieldEndError
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 1 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 1 end error: ", p), err)
+}
+
+func (p *ShareMyStatusUploadStatusArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("ShareMyStatusUploadStatusArgs(%+v)", *p)
+
+}
+
+type ShareMyStatusUploadStatusResult struct {
+	Success *legacy.LegacyActivityResponse `thrift:"success,0,optional"`
+}
+
+func NewShareMyStatusUploadStatusResult() *ShareMyStatusUploadStatusResult {
+	return &ShareMyStatusUploadStatusResult{}
+}
+
+func (p *ShareMyStatusUploadStatusResult) InitDefault() {
+}
+
+var ShareMyStatusUploadStatusResult_Success_DEFAULT *legacy.LegacyActivityResponse
+
+func (p *ShareMyStatusUploadStatusResult) GetSuccess() (v *legacy.LegacyActivityResponse) {
+	if !p.IsSetSuccess() {
+		return ShareMyStatusUploadStatusResult_Success_DEFAULT
+	}
+	return p.Success
+}
+
+var fieldIDToName_ShareMyStatusUploadStatusResult = map[int16]string{
+	0: "success",
+}
+
+func (p *ShareMyStatusUploadStatusResult) IsSetSuccess() bool {
+	return p.Success != nil
+}
+
+func (p *ShareMyStatusUploadStatusResult) Read(iprot thrift.TProtocol) (err error) {
+	var fieldTypeId thrift.TType
+	var fieldId int16
+
+	if _, err = iprot.ReadStructBegin(); err != nil {
+		goto ReadStructBeginError
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err = iprot.ReadFieldBegin()
+		if err != nil {
+			goto ReadFieldBeginError
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+
+		switch fieldId {
+		case 0:
+			if fieldTypeId == thrift.STRUCT {
+				if err = p.ReadField0(iprot); err != nil {
+					goto ReadFieldError
+				}
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		default:
+			if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		}
+		if err = iprot.ReadFieldEnd(); err != nil {
+			goto ReadFieldEndError
+		}
+	}
+	if err = iprot.ReadStructEnd(); err != nil {
+		goto ReadStructEndError
+	}
+
+	return nil
+ReadStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct begin error: ", p), err)
+ReadFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d begin error: ", p, fieldId), err)
+ReadFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d '%s' error: ", p, fieldId, fieldIDToName_ShareMyStatusUploadStatusResult[fieldId]), err)
+SkipFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T field %d skip type %d error: ", p, fieldId, fieldTypeId), err)
+
+ReadFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read field end error", p), err)
+ReadStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusUploadStatusResult) ReadField0(iprot thrift.TProtocol) error {
+	_field := legacy.NewLegacyActivityResponse()
+	if err := _field.Read(iprot); err != nil {
+		return err
+	}
+	p.Success = _field
+	return nil
+}
+
+func (p *ShareMyStatusUploadStatusResult) Write(oprot thrift.TProtocol) (err error) {
+	var fieldId int16
+	if err = oprot.WriteStructBegin("UploadStatus_result"); err != nil {
+		goto WriteStructBeginError
+	}
+	if p != nil {
+		if err = p.writeField0(oprot); err != nil {
+			fieldId = 0
+			goto WriteFieldError
+		}
+	}
+	if err = oprot.WriteFieldStop(); err != nil {
+		goto WriteFieldStopError
+	}
+	if err = oprot.WriteStructEnd(); err != nil {
+		goto WriteStructEndError
+	}
+	return nil
+WriteStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+WriteFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T write field %d error: ", p, fieldId), err)
+WriteFieldStopError:
+	return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", p), err)
+WriteStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusUploadStatusResult) writeField0(oprot thrift.TProtocol) (err error) {
+	if p.IsSetSuccess() {
+		if err = oprot.WriteFieldBegin("success", thrift.STRUCT, 0); err != nil {
+			goto WriteFieldBeginError
+		}
+		if err := p.Success.Write(oprot); err != nil {
+			return err
+		}
+		if err = oprot.WriteFieldEnd(); err != nil {
+			goto WriteFieldEndError
+		}
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 0 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 0 end error: ", p), err)
+}
+
+func (p *ShareMyStatusUploadStatusResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("ShareMyStatusUploadStatusResult(%+v)", *p)
+
+}
+
+type ShareMyStatusHandleLinkArgs struct {
+	Req *legacy.LinkRedirectRequest `thrift:"req,1"`
+}
+
+func NewShareMyStatusHandleLinkArgs() *ShareMyStatusHandleLinkArgs {
+	return &ShareMyStatusHandleLinkArgs{}
+}
+
+func (p *ShareMyStatusHandleLinkArgs) InitDefault() {
+}
+
+var ShareMyStatusHandleLinkArgs_Req_DEFAULT *legacy.LinkRedirectRequest
+
+func (p *ShareMyStatusHandleLinkArgs) GetReq() (v *legacy.LinkRedirectRequest) {
+	if !p.IsSetReq() {
+		return ShareMyStatusHandleLinkArgs_Req_DEFAULT
+	}
+	return p.Req
+}
+
+var fieldIDToName_ShareMyStatusHandleLinkArgs = map[int16]string{
+	1: "req",
+}
+
+func (p *ShareMyStatusHandleLinkArgs) IsSetReq() bool {
+	return p.Req != nil
+}
+
+func (p *ShareMyStatusHandleLinkArgs) Read(iprot thrift.TProtocol) (err error) {
+	var fieldTypeId thrift.TType
+	var fieldId int16
+
+	if _, err = iprot.ReadStructBegin(); err != nil {
+		goto ReadStructBeginError
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err = iprot.ReadFieldBegin()
+		if err != nil {
+			goto ReadFieldBeginError
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRUCT {
+				if err = p.ReadField1(iprot); err != nil {
+					goto ReadFieldError
+				}
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		default:
+			if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		}
+		if err = iprot.ReadFieldEnd(); err != nil {
+			goto ReadFieldEndError
+		}
+	}
+	if err = iprot.ReadStructEnd(); err != nil {
+		goto ReadStructEndError
+	}
+
+	return nil
+ReadStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct begin error: ", p), err)
+ReadFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d begin error: ", p, fieldId), err)
+ReadFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d '%s' error: ", p, fieldId, fieldIDToName_ShareMyStatusHandleLinkArgs[fieldId]), err)
+SkipFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T field %d skip type %d error: ", p, fieldId, fieldTypeId), err)
+
+ReadFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read field end error", p), err)
+ReadStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusHandleLinkArgs) ReadField1(iprot thrift.TProtocol) error {
+	_field := legacy.NewLinkRedirectRequest()
+	if err := _field.Read(iprot); err != nil {
+		return err
+	}
+	p.Req = _field
+	return nil
+}
+
+func (p *ShareMyStatusHandleLinkArgs) Write(oprot thrift.TProtocol) (err error) {
+	var fieldId int16
+	if err = oprot.WriteStructBegin("HandleLink_args"); err != nil {
+		goto WriteStructBeginError
+	}
+	if p != nil {
+		if err = p.writeField1(oprot); err != nil {
+			fieldId = 1
+			goto WriteFieldError
+		}
+	}
+	if err = oprot.WriteFieldStop(); err != nil {
+		goto WriteFieldStopError
+	}
+	if err = oprot.WriteStructEnd(); err != nil {
+		goto WriteStructEndError
+	}
+	return nil
+WriteStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+WriteFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T write field %d error: ", p, fieldId), err)
+WriteFieldStopError:
+	return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", p), err)
+WriteStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusHandleLinkArgs) writeField1(oprot thrift.TProtocol) (err error) {
+	if err = oprot.WriteFieldBegin("req", thrift.STRUCT, 1); err != nil {
+		goto WriteFieldBeginError
+	}
+	if err := p.Req.Write(oprot); err != nil {
+		return err
+	}
+	if err = oprot.WriteFieldEnd(); err != nil {
+		goto WriteFieldEndError
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 1 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 1 end error: ", p), err)
+}
+
+func (p *ShareMyStatusHandleLinkArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("ShareMyStatusHandleLinkArgs(%+v)", *p)
+
+}
+
+type ShareMyStatusHandleLinkResult struct {
+	Success *legacy.LinkRedirectResponse `thrift:"success,0,optional"`
+}
+
+func NewShareMyStatusHandleLinkResult() *ShareMyStatusHandleLinkResult {
+	return &ShareMyStatusHandleLinkResult{}
+}
+
+func (p *ShareMyStatusHandleLinkResult) InitDefault() {
+}
+
+var ShareMyStatusHandleLinkResult_Success_DEFAULT *legacy.LinkRedirectResponse
+
+func (p *ShareMyStatusHandleLinkResult) GetSuccess() (v *legacy.LinkRedirectResponse) {
+	if !p.IsSetSuccess() {
+		return ShareMyStatusHandleLinkResult_Success_DEFAULT
+	}
+	return p.Success
+}
+
+var fieldIDToName_ShareMyStatusHandleLinkResult = map[int16]string{
+	0: "success",
+}
+
+func (p *ShareMyStatusHandleLinkResult) IsSetSuccess() bool {
+	return p.Success != nil
+}
+
+func (p *ShareMyStatusHandleLinkResult) Read(iprot thrift.TProtocol) (err error) {
+	var fieldTypeId thrift.TType
+	var fieldId int16
+
+	if _, err = iprot.ReadStructBegin(); err != nil {
+		goto ReadStructBeginError
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err = iprot.ReadFieldBegin()
+		if err != nil {
+			goto ReadFieldBeginError
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+
+		switch fieldId {
+		case 0:
+			if fieldTypeId == thrift.STRUCT {
+				if err = p.ReadField0(iprot); err != nil {
+					goto ReadFieldError
+				}
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		default:
+			if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		}
+		if err = iprot.ReadFieldEnd(); err != nil {
+			goto ReadFieldEndError
+		}
+	}
+	if err = iprot.ReadStructEnd(); err != nil {
+		goto ReadStructEndError
+	}
+
+	return nil
+ReadStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct begin error: ", p), err)
+ReadFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d begin error: ", p, fieldId), err)
+ReadFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d '%s' error: ", p, fieldId, fieldIDToName_ShareMyStatusHandleLinkResult[fieldId]), err)
+SkipFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T field %d skip type %d error: ", p, fieldId, fieldTypeId), err)
+
+ReadFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read field end error", p), err)
+ReadStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusHandleLinkResult) ReadField0(iprot thrift.TProtocol) error {
+	_field := legacy.NewLinkRedirectResponse()
+	if err := _field.Read(iprot); err != nil {
+		return err
+	}
+	p.Success = _field
+	return nil
+}
+
+func (p *ShareMyStatusHandleLinkResult) Write(oprot thrift.TProtocol) (err error) {
+	var fieldId int16
+	if err = oprot.WriteStructBegin("HandleLink_result"); err != nil {
+		goto WriteStructBeginError
+	}
+	if p != nil {
+		if err = p.writeField0(oprot); err != nil {
+			fieldId = 0
+			goto WriteFieldError
+		}
+	}
+	if err = oprot.WriteFieldStop(); err != nil {
+		goto WriteFieldStopError
+	}
+	if err = oprot.WriteStructEnd(); err != nil {
+		goto WriteStructEndError
+	}
+	return nil
+WriteStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+WriteFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T write field %d error: ", p, fieldId), err)
+WriteFieldStopError:
+	return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", p), err)
+WriteStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusHandleLinkResult) writeField0(oprot thrift.TProtocol) (err error) {
+	if p.IsSetSuccess() {
+		if err = oprot.WriteFieldBegin("success", thrift.STRUCT, 0); err != nil {
+			goto WriteFieldBeginError
+		}
+		if err := p.Success.Write(oprot); err != nil {
+			return err
+		}
+		if err = oprot.WriteFieldEnd(); err != nil {
+			goto WriteFieldEndError
+		}
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 0 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 0 end error: ", p), err)
+}
+
+func (p *ShareMyStatusHandleLinkResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("ShareMyStatusHandleLinkResult(%+v)", *p)
 
 }

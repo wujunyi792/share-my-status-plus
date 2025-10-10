@@ -86,3 +86,18 @@ func _redirectMw() []app.HandlerFunc {
 	// your code...
 	return nil
 }
+
+func _handlelinkMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _statusMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
+
+func _uploadstatusMw() []app.HandlerFunc {
+	// your code...
+	return nil
+}
