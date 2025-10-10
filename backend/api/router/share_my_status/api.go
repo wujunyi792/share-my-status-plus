@@ -17,13 +17,8 @@ import (
 func Register(r *server.Hertz) {
 
 	root := r.Group("/", rootMw()...)
-	root.GET("/link", append(_handlelinkMw(), share_my_status.HandleLink)...)
 	{
 		_api := root.Group("/api", _apiMw()...)
-		{
-			_status := _api.Group("/status", _statusMw()...)
-			_status.POST("/v1", append(_uploadstatusMw(), share_my_status.UploadStatus)...)
-		}
 		{
 			_v1 := _api.Group("/v1", _v1Mw()...)
 			_v1.GET("/ws", append(_connectMw(), share_my_status.Connect)...)

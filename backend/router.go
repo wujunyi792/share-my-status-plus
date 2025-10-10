@@ -3,11 +3,14 @@
 package main
 
 import (
+	"share-my-status/api/handler/legacy"
+
 	"github.com/cloudwego/hertz/pkg/app/server"
 )
 
 // customizeRegister registers customize routers.
 func customizedRegister(r *server.Hertz) {
-
-	// your code ...
+	// 注册旧版兼容接口
+	r.POST("/api/status/v1", legacy.UploadStatus)
+	r.GET("/link", legacy.HandleLink)
 }

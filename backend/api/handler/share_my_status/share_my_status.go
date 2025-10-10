@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	legacy "share-my-status/api/model/share_my_status/legacy"
 	"share-my-status/api/model/share_my_status/redirect"
 	"share-my-status/model"
 	"strings"
@@ -348,12 +347,6 @@ func Connect(ctx context.Context, c *app.RequestContext) {
 // Redirect .
 // @router /s/{sharingKey} [GET]
 func Redirect(ctx context.Context, c *app.RequestContext) {
-	// 获取路径参数 sharingKey
-	//sharingKey := c.Param("sharingKey")
-	//if sharingKey == "" {
-	//	c.String(consts.StatusBadRequest, "sharingKey is required")
-	//	return
-	//}
 	var req redirect.RedirectRequest
 	if err := c.BindAndValidate(&req); err != nil {
 		NewResponseHelper().SendErrorResponse(c, &redirect.RedirectResponse{}, 400, "Invalid request: "+err.Error())
@@ -372,36 +365,4 @@ func Redirect(ctx context.Context, c *app.RequestContext) {
 
 	// 进行 302 重定向
 	c.Redirect(consts.StatusFound, []byte(redirectURL))
-}
-
-// UploadStatus .
-// @router /api/status/v1 [POST]
-func UploadStatus(ctx context.Context, c *app.RequestContext) {
-	var err error
-	var req legacy.LegacyActivityRequest
-	err = c.BindAndValidate(&req)
-	if err != nil {
-		c.String(consts.StatusBadRequest, err.Error())
-		return
-	}
-
-	resp := new(legacy.LegacyActivityResponse)
-
-	c.JSON(consts.StatusOK, resp)
-}
-
-// HandleLink .
-// @router /link [GET]
-func HandleLink(ctx context.Context, c *app.RequestContext) {
-	var err error
-	var req legacy.LinkRedirectRequest
-	err = c.BindAndValidate(&req)
-	if err != nil {
-		c.String(consts.StatusBadRequest, err.Error())
-		return
-	}
-
-	resp := new(legacy.LinkRedirectResponse)
-
-	c.JSON(consts.StatusOK, resp)
 }

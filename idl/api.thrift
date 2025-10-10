@@ -3,7 +3,6 @@ include "./stats_service.thrift"
 include "./cover_service.thrift"
 include "./websocket_service.thrift"
 include "./redirect_service.thrift"
-include "./legacy_service.thrift"
 
 namespace go share_my_status
 
@@ -33,12 +32,4 @@ service ShareMyStatus {
     // 连接跳转
     redirect_service.RedirectResponse Redirect(1: redirect_service.RedirectRequest req) (api.get="/s/:sharingKey");
 
-
-
-
-    // 上报活动状态（兼容旧版 POST /api/status/v1）
-    legacy_service.LegacyActivityResponse UploadStatus(1: legacy_service.LegacyActivityRequest req) (api.post="/api/status/v1");
-
-    // 链接跳转（兼容旧版 GET /link）
-    legacy_service.LinkRedirectResponse HandleLink(1: legacy_service.LinkRedirectRequest req) (api.get="/link");
 }

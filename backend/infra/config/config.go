@@ -23,6 +23,8 @@ type Config struct {
 	Log LogConfig `json:"log"`
 	// 重定向配置
 	Redirect RedirectConfig `json:"redirect"`
+	// 加密配置（兼容旧版）
+	LegacyCrypto LegacyConfig `json:"legacyCrypto"`
 }
 
 // AppConfig 应用配置
@@ -67,6 +69,13 @@ type RedirectConfig struct {
 	DefaultTarget string `json:"defaultTarget"` // 默认跳转目标，支持{SharingKey}占位符
 }
 
+// LegacyConfig 旧版兼容性配置
+type LegacyConfig struct {
+	Key             string `json:"key"`             // 加密密钥
+	IV              string `json:"iv"`              // 初始化向量
+	DefaultJumpLink string `json:"defaultJumpLink"` // /link接口默认跳转链接
+}
+
 // Init 初始化配置
 func Init() (*Config, error) {
 	// 加载环境变量文件
@@ -104,6 +113,11 @@ func Init() (*Config, error) {
 		},
 		Redirect: RedirectConfig{
 			DefaultTarget: getEnv("REDIRECT_DEFAULT_TARGET", "https://example.com/status/{SharingKey}"),
+		},
+		LegacyCrypto: LegacyConfig{
+			Key:             getEnv("LEGACY_CRYPTO_KEY", "default-key-12345678"),
+			IV:              getEnv("LEGACY_CRYPTO_IV", "default-iv-123456"),
+			DefaultJumpLink: getEnv("LEGACY_DEFAULT_JUMP_LINK", "https://example.com"),
 		},
 	}
 

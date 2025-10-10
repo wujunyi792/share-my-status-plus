@@ -9,7 +9,6 @@ import { StatsCard } from '@/components/StatsCard';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
-import { formatRelativeTime } from '@/utils';
 
 export function StatusPage() {
   const { sharingKey } = useParams<{ sharingKey: string }>();
