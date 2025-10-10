@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { AppState, StateSnapshot, WSConnectionStatus, AppError, MusicStats } from '@/types';
+import type { AppState, StateSnapshot, WSConnectionStatus, AppError, StatsQueryResponse } from '@/types';
 
 interface AppStore extends AppState {
   // Actions
   setCurrentState: (state: StateSnapshot | null) => void;
   setConnectionStatus: (status: WSConnectionStatus) => void;
   setError: (error: AppError | null) => void;
-  setStats: (stats: MusicStats | null) => void;
+  setStats: (stats: StatsQueryResponse | null) => void;
   setLoading: (loading: boolean) => void;
   reset: () => void;
 }

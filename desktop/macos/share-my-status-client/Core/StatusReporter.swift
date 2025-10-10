@@ -352,6 +352,11 @@ class StatusReporter: ObservableObject {
             await systemService.updatePollingInterval(config.systemPollingInterval)
             try await systemService.start()
             await setupSystemReportTimer(interval: config.systemPollingInterval)
+            
+            // Immediately report once instead of waiting for first timer interval
+            logger.info("Triggering immediate system status report...")
+            await reportSystemStatus()
+            
             logger.info("System service started")
         } catch {
             logger.error("Failed to start system service: \(error)")
@@ -376,6 +381,11 @@ class StatusReporter: ObservableObject {
             await activityService.updatePollingInterval(config.activityPollingInterval)
             try await activityService.start()
             await setupActivityReportTimer(interval: config.activityPollingInterval)
+            
+            // Immediately report once instead of waiting for first timer interval
+            logger.info("Triggering immediate activity status report...")
+            await reportActivityStatus()
+            
             logger.info("Activity service started")
         } catch {
             logger.error("Failed to start activity service: \(error)")

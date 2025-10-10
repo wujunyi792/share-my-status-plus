@@ -52,31 +52,37 @@ struct SettingsTabView: View {
             // Scrollable Content
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Permissions Status
+                    // Permissions Status - Compact Layout
                     GroupBox("权限状态") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("辅助功能权限")
+                    VStack(alignment: .leading, spacing: 6) {
+                        // Main row: title + status + refresh button
+                        HStack(spacing: 12) {
+                            HStack(spacing: 6) {
+                                Text("辅助功能")
                                     .font(.subheadline)
                                     .fontWeight(.medium)
-                                Text("活动检测需要此权限")
-                                    .font(.caption)
+                                Text("•")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text("活动检测")
+                                    .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
                             
                             Spacer()
                             
+                            // Status indicator
                             HStack(spacing: 6) {
                                 Image(systemName: accessibilityGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
                                     .foregroundColor(accessibilityGranted ? .green : .red)
-                                    .imageScale(.medium)
+                                    .imageScale(.small)
                                 Text(accessibilityGranted ? "已授权" : "未授权")
-                                    .font(.caption)
+                                    .font(.caption2)
                                     .fontWeight(.medium)
                                     .foregroundColor(accessibilityGranted ? .green : .red)
                             }
                             
+                            // Refresh button
                             Button(action: {
                                 accessibilityGranted = AccessibilityPermissionChecker.isAccessibilityGranted()
                             }) {
@@ -85,38 +91,39 @@ struct SettingsTabView: View {
                             }
                             .buttonStyle(.borderless)
                             .help("刷新权限状态")
-                        }
-                        
-                        if !accessibilityGranted {
-                            VStack(alignment: .leading, spacing: 8) {
+                            
+                            // Settings button (when not granted)
+                            if !accessibilityGranted {
                                 Button(action: {
                                     AccessibilityPermissionChecker.openAccessibilitySettings()
                                 }) {
-                                    HStack(spacing: 6) {
+                                    HStack(spacing: 4) {
                                         Image(systemName: "gearshape.fill")
                                             .imageScale(.small)
-                                        Text("打开系统设置")
-                                            .font(.subheadline)
+                                        Text("打开设置")
+                                            .font(.caption2)
                                     }
                                 }
                                 .buttonStyle(.borderedProminent)
-                                .controlSize(.small)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("点击按钮后会显示详细的设置步骤")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Text("需要手动添加应用到辅助功能列表")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                    Text("授权后点击右上角刷新图标验证")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
+                                .controlSize(.mini)
                             }
-                            .padding(.top, 4)
+                        }
+                        
+                        // Compact hint (only when not granted)
+                        if !accessibilityGranted {
+                            HStack(spacing: 4) {
+                                Image(systemName: "info.circle")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                                Text("需在系统设置中手动添加应用到辅助功能列表")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.top, 2)
                         }
                     }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 4)
                 }
                 
                 // Network Settings
@@ -153,6 +160,8 @@ struct SettingsTabView: View {
                             }
                         }
                     }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 4)
                 }
                 
                 // Feature Settings
@@ -239,6 +248,8 @@ struct SettingsTabView: View {
                         }
                         .disabled(!configuration.isReportingEnabled)
                     }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 4)
                 }
                 
                 // Music Settings
@@ -250,6 +261,8 @@ struct SettingsTabView: View {
                             mode: .whitelist,
                             defaultApps: DefaultSettings.musicAppWhitelist
                         )
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 4)
                     }
                 }
                 
@@ -257,6 +270,8 @@ struct SettingsTabView: View {
                 if configuration.activityReportingEnabled {
                     GroupBox("活动设置") {
                         ActivityGroupEditor(groups: $configuration.activityGroups)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 4)
                     }
                 }
                 
@@ -286,6 +301,8 @@ struct SettingsTabView: View {
                                 .frame(width: 700, height: 800)
                         }
                     }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 4)
                 }
                 
                 // Import/Export Settings
@@ -453,6 +470,8 @@ struct SettingsTabView: View {
                             .cornerRadius(6)
                         }
                     }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 4)
                 }
                 
                 // App Information
@@ -486,14 +505,28 @@ struct SettingsTabView: View {
                             Text("应用标识符")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
-                            Text(Bundle.main.bundleIdentifier ?? "未知")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .textSelection(.enabled)
+                            HStack {
+                                Text(Bundle.main.bundleIdentifier ?? "未知")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Button(action: {
+                                    if let bundleId = Bundle.main.bundleIdentifier {
+                                        NSPasteboard.general.clearContents()
+                                        NSPasteboard.general.setString(bundleId, forType: .string)
+                                    }
+                                }) {
+                                    Image(systemName: "doc.on.doc")
+                                        .imageScale(.small)
+                                }
+                                .buttonStyle(.borderless)
+                                .foregroundColor(.blue)
+                                .help("复制到剪贴板")
+                            }
                         }
                     }
                     .padding(.vertical, 8)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 4)
                 }
                 
                     Spacer()

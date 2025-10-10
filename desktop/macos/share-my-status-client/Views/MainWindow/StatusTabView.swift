@@ -33,25 +33,29 @@ struct StatusTabView: View {
             // Scrollable Content
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Reporting Status
+                    // Reporting Status - Compact Layout
                 GroupBox("上报状态") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        StatusIndicator(
-                            isActive: reporter.isReporting,
-                            text: reporter.reportingStatus
-                        )
-                        
-                        if let error = reporter.lastError {
-                            HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.triangle")
-                                    .foregroundColor(.orange)
-                                Text(error.localizedDescription)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        
+                    VStack(alignment: .leading, spacing: 6) {
+                        // Main row: status + button + auto-reporting info
                         HStack(spacing: 12) {
+                            StatusIndicator(
+                                isActive: reporter.isReporting,
+                                text: reporter.reportingStatus
+                            )
+                            
+                            Spacer()
+                            
+                            // Info about automatic reporting (inline before button)
+                            if reporter.isReporting {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "info.circle")
+                                        .font(.caption2)
+                                    Text("自动上报中")
+                                        .font(.caption2)
+                                }
+                                .foregroundColor(.secondary)
+                            }
+                            
                             Button(reporter.isReporting ? "停止上报" : "开始上报") {
                                 if reporter.isReporting {
                                     reporter.stopReporting()
@@ -60,22 +64,24 @@ struct StatusTabView: View {
                                 }
                             }
                             .buttonStyle(.borderedProminent)
-                            
-                            Spacer()
-                            
-                            // Info about automatic reporting
-                            if reporter.isReporting {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "info.circle")
-                                        .font(.caption)
-                                    Text("自动上报中")
-                                        .font(.caption)
-                                }
-                                .foregroundColor(.secondary)
+                            .controlSize(.small)
+                        }
+                        
+                        // Error row (only shown when there's an error)
+                        if let error = reporter.lastError {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                                Text(error.localizedDescription)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
+                            .padding(.top, 2)
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 4)
                 }
                 
                 // Current Status

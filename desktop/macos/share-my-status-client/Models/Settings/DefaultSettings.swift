@@ -77,44 +77,14 @@ enum DefaultSettings {
     
     /// Default activity groups
     static let activityGroups = [
-        ActivityGroup(name: "在工作", bundleIds: [
-            "com.electron.lark",
-            "com.tencent.xinWeChat",
-            "com.microsoft.teams",
-            "com.slack.Slack"
-        ], isEnabled: true),
-        ActivityGroup(name: "在写代码", bundleIds: [
-            "com.apple.dt.Xcode",
-            "com.microsoft.VSCode",
-            "com.jetbrains.intellij",
-            "com.jetbrains.pycharm",
-            "com.jetbrains.goland",
-            "com.github.atom",
-            "com.sublimetext.3"
-        ], isEnabled: true),
-        ActivityGroup(name: "在设计", bundleIds: [
-            "com.adobe.Photoshop",
-            "com.bohemiancoding.sketch3",
-            "com.figma.Desktop",
-            "com.adobe.Illustrator",
-            "com.adobe.AfterEffects"
-        ], isEnabled: true),
-        ActivityGroup(name: "在开会", bundleIds: [
-            "us.zoom.xos",
-            "com.microsoft.teams",
-            "com.tencent.meeting",
-            "com.skype.skype"
-        ], isEnabled: true),
-        ActivityGroup(name: "在浏览", bundleIds: [
-            "com.apple.Safari",
-            "com.google.Chrome",
-            "org.mozilla.firefox",
-            "com.microsoft.edgemac"
-        ], isEnabled: false),
-        ActivityGroup(name: "在终端", bundleIds: [
-            "com.apple.Terminal",
-            "com.googlecode.iterm2"
-        ], isEnabled: true)
+        ActivityGroup(name: "在工作&研究", bundleIds: ["com.apple.iWork.Pages", "com.apple.iWork.Numbers", "com.apple.iWork.Keynote", "com.microsoft.Word", "com.microsoft.Excel", "com.microsoft.Powerpoint", "com.microsoft.onenote.mac", "com.microsoft.Outlook", "com.microsoft.teams", "com.electron.lark", "com.volcengine.corplink", "com.raycast.macos", "cn.trae.app", "com.trae.app", "com.microsoft.OneDrive"], isEnabled: true),
+        ActivityGroup(name: "在搞研发", bundleIds: ["com.microsoft.VSCode", "com.sublimetext.3", "com.apple.dt.Xcode", "com.SweetScape.010Editor", "me.qii404.another-redis-desktop-manager", "cn.apifox.app", "com.todesktop.230313mzl4w4u92", "com.jetbrains.goland", "com.jetbrains.toolbox", "com.mongodb.compass", "com.electron.ollama", "io.podmandesktop.PodmanDesktop", "com.postmanlabs.mac"], isEnabled: true),
+        ActivityGroup(name: "在设计", bundleIds: ["com.bohemiancoding.sketch3", "com.figma.Desktop", "com.adobe.Photoshop"], isEnabled: true),
+        ActivityGroup(name: "在开会", bundleIds: ["us.zoom.xos", "com.tinyspeck.slackmacgap"], isEnabled: true),
+        ActivityGroup(name: "在浏览", bundleIds: ["com.apple.Safari", "com.google.Chrome", "org.mozilla.firefox", "com.brave.Browser", "com.operasoftware.Opera", "company.thebrowser.Browser", "com.microsoft.edgemac", "com.vivaldi.Vivaldi"], isEnabled: true),
+        ActivityGroup(name: "在终端", bundleIds: ["com.apple.Terminal", "com.googlecode.iterm2", "com.googlecode.iterm2.iTermAI", "com.termius-dmg.mac"], isEnabled: true),
+        ActivityGroup(name: "在娱乐", bundleIds:["com.bytedance.douyin.desktop", "com.soda.music", "com.xingin.discover", "com.meituan.imovie", "com.netease.163music", "com.tencent.QQMusicMac", "com.spotify.client", "com.apple.Music", "com.aspiro.tidal"], isEnabled: true),
+        ActivityGroup(name: "在社交", bundleIds: ["com.tencent.qq", "ru.keepcoder.Telegram", "com.hnc.Discord", "net.whatsapp.WhatsApp", "com.tencent.xinwei.mac"], isEnabled: true),
     ]
 }
 

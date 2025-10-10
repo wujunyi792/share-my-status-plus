@@ -11,6 +11,7 @@ require (
 	github.com/google/wire v0.7.0
 	github.com/hertz-contrib/cors v0.1.0
 	github.com/hertz-contrib/websocket v0.2.0
+	github.com/jinzhu/now v1.1.5
 	github.com/joho/godotenv v1.5.1
 	github.com/larksuite/oapi-sdk-go/v3 v3.4.3
 	github.com/redis/go-redis/v9 v9.7.3
@@ -24,6 +25,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/bytedance/gg v1.1.0 // indirect
 	github.com/bytedance/gopkg v0.1.1 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
@@ -38,7 +40,6 @@ require (
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/nyaruka/phonenumbers v1.0.55 // indirect
 	github.com/tidwall/match v1.2.0 // indirect

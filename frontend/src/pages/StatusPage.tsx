@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { MusicCard } from '@/components/MusicCard';
 import { SystemCard } from '@/components/SystemCard';
 import { ActivityCard } from '@/components/ActivityCard';
+import { StatsCard } from '@/components/StatsCard';
 import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -111,64 +112,27 @@ export function StatusPage() {
           </div>
         )}
 
-        {/* 状态内容 */}
-        {currentState && (
+        {/* 状态内容 - 始终显示所有卡片，让每个卡片独立处理空状态 */}
+        {!loading && !error && (
           <div className="space-y-6">
             {/* 状态卡片网格 */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* 音乐状态 */}
-              {currentState.music && (
-                <div className="md:col-span-2 lg:col-span-2">
-                  <MusicCard music={currentState.music} />
-                </div>
-              )}
+              {/* 音乐状态 - 传入实际数据或空数据 */}
+              <div className="md:col-span-2 lg:col-span-2">
+                <MusicCard music={currentState?.music || { ts: 0 }} />
+              </div>
 
-              {/* 系统状态 */}
-              {currentState.system && (
-                <SystemCard system={currentState.system} />
-              )}
+              {/* 系统状态 - 传入实际数据或空数据 */}
+              <SystemCard system={currentState?.system || { ts: 0 }} />
 
-              {/* 活动状态 */}
-              {currentState.activity && (
-                <div className="md:col-span-2 lg:col-span-3">
-                  <ActivityCard activity={currentState.activity} />
-                </div>
-              )}
-            </div>
-
-            {/* 状态信息 */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 transition-all duration-200 hover:shadow-md">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">状态信息</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <dt className="text-sm font-medium text-gray-500">最后更新时间</dt>
-                  <dd className="mt-1 text-sm text-gray-900">
-                    {formatRelativeTime(currentState.lastUpdateTs)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-gray-500">连接状态</dt>
-                  <dd className="mt-1">
-                    <ConnectionStatus status={connectionStatus} />
-                  </dd>
-                </div>
+              {/* 活动状态 - 传入实际数据或空数据 */}
+              <div className="md:col-span-2 lg:col-span-3">
+                <ActivityCard activity={currentState?.activity || { ts: 0 }} />
               </div>
             </div>
-          </div>
-        )}
 
-        {/* 无数据状态 */}
-        {!loading && !currentState && !error && (
-          <div className="text-center py-12">
-            <div className="mx-auto h-24 w-24 text-gray-400 mb-4">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">暂无状态数据</h3>
-            <p className="text-gray-600">
-              等待设备上报状态信息...
-            </p>
+            {/* 统计数据卡片 - 移到最底下 */}
+            <StatsCard sharingKey={sharingKey} />
           </div>
         )}
       </div>

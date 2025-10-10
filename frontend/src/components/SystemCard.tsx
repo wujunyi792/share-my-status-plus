@@ -142,11 +142,19 @@ export function SystemCard({ system, className }: SystemCardProps) {
         </div>
       )}
 
-      {/* 更新时间 */}
-      <div className="mt-3 pt-3 border-t border-gray-100">
-        <div className="flex items-center justify-center space-x-1 text-gray-500">
-          <Clock className="w-3 h-3" />
-          <span className="text-xs">{formatRelativeTime(system.ts)}</span>
+      {/* 更新时间 - 优化布局，提高信息密度 */}
+      <div className="mt-3">
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <div className="flex items-center space-x-1">
+            <Clock className="w-3 h-3" />
+            <span>更新于 {formatRelativeTime(system.ts)}</span>
+          </div>
+          {!isEmpty && (
+            <div className="flex items-center space-x-1 text-blue-500">
+              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+              <span>监控中</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -21,8 +21,6 @@ type Config struct {
 	Lark LarkConfig `json:"lark"`
 	// 日志配置
 	Log LogConfig `json:"log"`
-	// 定时任务配置
-	Scheduler SchedulerConfig `json:"scheduler"`
 	// 重定向配置
 	Redirect RedirectConfig `json:"redirect"`
 }
@@ -64,13 +62,6 @@ type LogConfig struct {
 	Format string `json:"format"`
 }
 
-// SchedulerConfig 定时任务配置
-type SchedulerConfig struct {
-	Enabled                bool   `json:"enabled"`
-	CleanupCron            string `json:"cleanupCron"`
-	SnapshotRetentionHours int    `json:"snapshotRetentionHours"`
-}
-
 // RedirectConfig 重定向配置
 type RedirectConfig struct {
 	DefaultTarget string `json:"defaultTarget"` // 默认跳转目标，支持{SharingKey}占位符
@@ -110,11 +101,6 @@ func Init() (*Config, error) {
 		Log: LogConfig{
 			Level:  getEnv("LOG_LEVEL", "info"),
 			Format: getEnv("LOG_FORMAT", "json"),
-		},
-		Scheduler: SchedulerConfig{
-			Enabled:                getEnvAsBool("SCHEDULER_ENABLED", true),
-			CleanupCron:            getEnv("SCHEDULER_CLEANUP_CRON", "0 * * * *"), // 每小时执行一次
-			SnapshotRetentionHours: getEnvAsInt("SCHEDULER_SNAPSHOT_RETENTION_HOURS", 24),
 		},
 		Redirect: RedirectConfig{
 			DefaultTarget: getEnv("REDIRECT_DEFAULT_TARGET", "https://example.com/status/{SharingKey}"),

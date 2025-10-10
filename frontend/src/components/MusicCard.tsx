@@ -159,11 +159,19 @@ export function MusicCard({ music, className }: MusicCardProps) {
           )}
         </div>
 
-        {/* 更新时间 */}
-        <div className="mt-auto pt-4 border-t border-gray-100 ml-7">
-          <div className="flex items-center space-x-1 text-gray-500">
-            <Clock className="w-3 h-3" />
-            <span className="text-xs">{formatRelativeTime(music.ts)}</span>
+        {/* 更新时间 - 优化布局，提高信息密度 */}
+        <div className="mt-auto">
+          <div className="flex items-center justify-between text-xs text-gray-500">
+            <div className="flex items-center space-x-1">
+              <Clock className="w-3 h-3" />
+              <span>更新于 {formatRelativeTime(music.ts)}</span>
+            </div>
+            {!isEmpty && (
+              <div className="flex items-center space-x-1 text-green-500">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                <span>实时</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

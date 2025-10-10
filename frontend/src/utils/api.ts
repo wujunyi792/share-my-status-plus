@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { APIResponse, StateSnapshot, StatsQueryRequest, MusicStats } from '@/types';
+import type { APIResponse, StateSnapshot, StatsQueryRequest, StatsQueryResponse } from '@/types';
 import { handleError } from './index';
 
 // 创建axios实例
@@ -45,12 +45,13 @@ export const apiClient = {
   },
 
   // 查询统计信息
-  async queryStats(sharingKey: string, request: StatsQueryRequest): Promise<MusicStats> {
-    const response: APIResponse<MusicStats> = await api.post(`/v1/stats/query?sharingKey=${sharingKey}`, request);
-    if (response.code !== 0) {
-      throw new Error(response.message);
+  async queryStats(request: StatsQueryRequest, sharingKey?: string): Promise<StatsQueryResponse> {
+    const url = sharingKey ? `/v1/stats/query?sharingKey=${sharingKey}` : '/v1/stats/query';
+    const response: StatsQueryResponse = await api.post(url, request);
+    if (response.base.code !== 0) {
+      throw new Error(response.base.message || 'Failed to query stats');
     }
-    return response.data;
+    return response;
   },
 
   // 检查封面是否存在

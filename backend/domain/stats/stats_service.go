@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"share-my-status/domain/user"
 	"share-my-status/model"
+	"share-my-status/pkg/ptr"
 	"time"
 
 	common "share-my-status/api/model/share_my_status/common"
 	stats "share-my-status/api/model/share_my_status/stats"
 
+	"github.com/bytedance/gg/gslice"
+	"github.com/jinzhu/now"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -57,8 +60,17 @@ func (s *StatsService) QueryStats(ctx context.Context, userID uint64, req *stats
 		return nil, fmt.Errorf("failed to calculate time window: %w", err)
 	}
 
+	req.Window.FromTs = ptr.Of(window.StartTime.UnixMilli())
+	req.Window.ToTs = ptr.Of(window.EndTime.UnixMilli())
+
+	// 获取topN参数，默认为10
+	topN := req.TopN
+	if topN <= 0 {
+		topN = 20
+	}
+
 	// 查询统计数据
-	summary, topArtists, topTracks, err := s.getMusicStats(ctx, userID, window)
+	summary, topArtists, topTracks, topAlbums, cached, err := s.getMusicStats(ctx, userID, window, topN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get music stats: %w", err)
 	}
@@ -74,6 +86,8 @@ func (s *StatsService) QueryStats(ctx context.Context, userID uint64, req *stats
 		Summary:    summary,
 		TopArtists: topArtists,
 		TopTracks:  topTracks,
+		TopAlbums:  topAlbums,
+		Cached:     cached,
 	}
 
 	return response, nil
@@ -90,31 +104,43 @@ func (s *StatsService) calculateTimeWindow(req *stats.StatsQueryRequest) (*TimeW
 		return nil, fmt.Errorf("invalid timezone: %w", err)
 	}
 
-	now := time.Now().In(loc)
+	// 使用jinzhu/now库配置时区
+	nowConfig := &now.Config{
+		TimeLocation: loc,
+	}
+	currentTime := nowConfig.With(time.Now().In(loc))
+
 	var startTime, endTime time.Time
 
 	switch req.Window.Type {
 	case common.WindowType_ROLLING_3D:
-		startTime = now.AddDate(0, 0, -3)
-		endTime = now
+		// 对齐到整点：结束时间对齐到当前小时，开始时间往前推3天
+		endTime = currentTime.BeginningOfHour()
+		startTime = nowConfig.With(endTime.AddDate(0, 0, -3)).BeginningOfHour()
 	case common.WindowType_ROLLING_7D:
-		startTime = now.AddDate(0, 0, -7)
-		endTime = now
+		// 对齐到整点：结束时间对齐到当前小时，开始时间往前推7天
+		endTime = currentTime.BeginningOfHour()
+		startTime = nowConfig.With(endTime.AddDate(0, 0, -7)).BeginningOfHour()
 	case common.WindowType_MONTH_TO_DATE:
-		startTime = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
-		endTime = now
+		// 月初到当前小时
+		startTime = currentTime.BeginningOfMonth()
+		endTime = currentTime.BeginningOfHour()
 	case common.WindowType_YEAR_TO_DATE:
-		startTime = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, loc)
-		endTime = now
+		// 年初到当前小时
+		startTime = currentTime.BeginningOfYear()
+		endTime = currentTime.BeginningOfHour()
 	case common.WindowType_CUSTOM:
 		// 自定义时间窗口，从请求中获取开始和结束时间
 		if req.Window.Custom == nil {
 			return nil, fmt.Errorf("custom window parameters are required")
 		}
 
-		// 将毫秒时间戳转换为time.Time
-		startTime = time.Unix(req.Window.Custom.FromTs/1000, (req.Window.Custom.FromTs%1000)*1000000).In(loc)
-		endTime = time.Unix(req.Window.Custom.ToTs/1000, (req.Window.Custom.ToTs%1000)*1000000).In(loc)
+		// 将毫秒时间戳转换为time.Time并对齐到整点
+		startTimeRaw := time.Unix(req.Window.Custom.FromTs/1000, (req.Window.Custom.FromTs%1000)*1000000).In(loc)
+		endTimeRaw := time.Unix(req.Window.Custom.ToTs/1000, (req.Window.Custom.ToTs%1000)*1000000).In(loc)
+
+		startTime = nowConfig.With(startTimeRaw).BeginningOfHour()
+		endTime = nowConfig.With(endTimeRaw).BeginningOfHour()
 
 		// 验证时间范围
 		if startTime.After(endTime) {
@@ -136,6 +162,7 @@ func (s *StatsService) calculateTimeWindow(req *stats.StatsQueryRequest) (*TimeW
 	}, nil
 }
 
+// alignToHour 将时间对齐到整点
 // TimeWindow 时间窗口
 type TimeWindow struct {
 	StartTime time.Time
@@ -143,10 +170,10 @@ type TimeWindow struct {
 	Timezone  string
 }
 
-// getMusicStats 获取音乐统计
-func (s *StatsService) getMusicStats(ctx context.Context, userID uint64, window *TimeWindow) (*common.StatsSummary, []*common.TopItem, []*common.TopItem, error) {
+// getMusicStats 获取音乐统计 最多20
+func (s *StatsService) getMusicStats(ctx context.Context, userID uint64, window *TimeWindow, topN int32) (*common.StatsSummary, []*common.TopItem, []*common.TopItem, []*common.TopItem, bool, error) {
 	// 先检查缓存
-	cacheKey := fmt.Sprintf("stats:%d:%s:%d:%d", userID, window.Timezone, window.StartTime.Unix(), window.EndTime.Unix())
+	cacheKey := s.generateCacheKey(userID, window)
 	cached, err := s.cache.Get(ctx, cacheKey).Result()
 	if err == nil && cached != "" {
 		// 反序列化缓存的数据
@@ -154,11 +181,29 @@ func (s *StatsService) getMusicStats(ctx context.Context, userID uint64, window 
 			Summary    *common.StatsSummary `json:"summary"`
 			TopArtists []*common.TopItem    `json:"topArtists"`
 			TopTracks  []*common.TopItem    `json:"topTracks"`
+			TopAlbums  []*common.TopItem    `json:"topAlbums"`
 		}
 
 		if err := json.Unmarshal([]byte(cached), &cachedStats); err == nil {
 			logrus.Debugf("Cache hit for stats: %s", cacheKey)
-			return cachedStats.Summary, cachedStats.TopArtists, cachedStats.TopTracks, nil
+
+			// 对缓存的数据应用topN限制
+			topArtists := cachedStats.TopArtists
+			if int32(len(topArtists)) > topN {
+				topArtists = topArtists[:topN]
+			}
+
+			topTracks := cachedStats.TopTracks
+			if int32(len(topTracks)) > topN {
+				topTracks = topTracks[:topN]
+			}
+
+			topAlbums := cachedStats.TopAlbums
+			if int32(len(topAlbums)) > topN {
+				topAlbums = topAlbums[:topN]
+			}
+
+			return cachedStats.Summary, topArtists, topTracks, topAlbums, true, nil
 		} else {
 			logrus.Warnf("Failed to unmarshal cached stats: %v", err)
 		}
@@ -172,35 +217,56 @@ func (s *StatsService) getMusicStats(ctx context.Context, userID uint64, window 
 		Order("recorded_at ASC").
 		Find(&histories).Error
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to query state history: %w", err)
+		return nil, nil, nil, nil, false, fmt.Errorf("failed to query state history: %w", err)
 	}
 
 	// 分析音乐数据
-	summary, topArtists, topTracks := s.analyzeMusicData(histories)
+	summary, topArtists, topTracks, topAlbums := s.analyzeMusicData(histories, 20)
 
-	// 缓存结果（1小时）
+	// 缓存结果，使用用户特定的过期时间
+	// 注意：缓存时不应用topN限制，保存完整数据
 	cacheData := map[string]interface{}{
 		"summary":    summary,
 		"topArtists": topArtists,
 		"topTracks":  topTracks,
+		"topAlbums":  topAlbums,
 	}
 	if cacheJSON, err := json.Marshal(cacheData); err == nil {
-		s.cache.Set(ctx, cacheKey, string(cacheJSON), time.Hour)
+		cacheTTL := s.calculateCacheTTL(userID)
+		s.cache.Set(ctx, cacheKey, string(cacheJSON), cacheTTL)
 	}
 
-	return summary, topArtists, topTracks, nil
+	return summary, topArtists, topTracks, topAlbums, false, nil
+}
+
+// generateCacheKey 生成缓存key，使用对齐后的时间窗口
+func (s *StatsService) generateCacheKey(userID uint64, window *TimeWindow) string {
+	return fmt.Sprintf("stats:%d:%s:%d:%d",
+		userID,
+		window.Timezone,
+		window.StartTime.Unix(),
+		window.EndTime.Unix())
+}
+
+// calculateCacheTTL 计算用户特定的缓存过期时间，避免同时过期
+func (s *StatsService) calculateCacheTTL(userID uint64) time.Duration {
+	// 基础缓存时间：1小时
+	baseTTL := time.Hour
+
+	// 根据用户ID计算固定偏移量（5-20分钟）
+	// 使用用户ID的模运算确保同一用户总是得到相同的偏移量
+	offsetMinutes := 5 + (userID % 16) // 5-20分钟的偏移
+	offset := time.Duration(offsetMinutes) * time.Minute
+
+	return baseTTL + offset
 }
 
 // analyzeMusicData 分析音乐数据
-func (s *StatsService) analyzeMusicData(histories []model.StateHistory) (*common.StatsSummary, []*common.TopItem, []*common.TopItem) {
+func (s *StatsService) analyzeMusicData(histories []model.StateHistory, topN int32) (*common.StatsSummary, []*common.TopItem, []*common.TopItem, []*common.TopItem) {
 	// 统计数据结构
 	trackStats := make(map[string]*TrackStat)   // track -> stats
 	artistStats := make(map[string]*ArtistStat) // artist -> stats
 	albumStats := make(map[string]*AlbumStat)   // album -> stats
-
-	var lastMusic *common.Music
-	var lastUpdateTime time.Time
-	var totalPlayTime int64 // 总播放时间（毫秒）
 
 	for _, history := range histories {
 		snapshot := history.Snapshot.Data()
@@ -221,40 +287,26 @@ func (s *StatsService) analyzeMusicData(histories []model.StateHistory) (*common
 			music.Album = snapshot.Music.Album
 		}
 
-		// 计算播放时间
-		if lastMusic != nil && !lastUpdateTime.IsZero() {
-			// 如果音乐发生变化，记录上一首的播放时间
-			if s.isMusicChanged(lastMusic, music) {
-				playTime := history.RecordedAt.Sub(lastUpdateTime).Milliseconds()
-				if playTime > 0 && playTime < 300000 { // 最多5分钟，避免异常数据
-					s.updateTrackStats(trackStats, lastMusic, playTime)
-					s.updateArtistStats(artistStats, lastMusic, playTime)
-					s.updateAlbumStats(albumStats, lastMusic, playTime)
-					totalPlayTime += playTime
-				}
-			}
-		}
-
-		lastMusic = music
-		lastUpdateTime = history.RecordedAt
+		// 直接统计当前音乐数据
+		s.updateTrackStats(trackStats, music)
+		s.updateArtistStats(artistStats, music)
+		s.updateAlbumStats(albumStats, music)
 	}
 
 	// 转换为API格式
-	return s.convertToStatsResponse(trackStats, artistStats, albumStats, totalPlayTime)
+	return s.convertToStatsResponse(trackStats, artistStats, albumStats, topN)
 }
 
 // TrackStat 曲目统计
 type TrackStat struct {
 	Title     string
 	Artist    string
-	PlayTime  int64
 	PlayCount int64
 }
 
 // ArtistStat 艺术家统计
 type ArtistStat struct {
 	Name       string
-	PlayTime   int64
 	TrackCount int64
 }
 
@@ -262,41 +314,11 @@ type ArtistStat struct {
 type AlbumStat struct {
 	Name       string
 	Artist     string
-	PlayTime   int64
 	TrackCount int64
 }
 
-// isMusicChanged 检查音乐是否发生变化
-func (s *StatsService) isMusicChanged(last, current *common.Music) bool {
-	if last == nil || current == nil {
-		return true
-	}
-
-	if last.Title == nil && current.Title == nil {
-		return false
-	}
-	if last.Title == nil || current.Title == nil {
-		return true
-	}
-	if *last.Title != *current.Title {
-		return true
-	}
-
-	if last.Artist == nil && current.Artist == nil {
-		return false
-	}
-	if last.Artist == nil || current.Artist == nil {
-		return true
-	}
-	if *last.Artist != *current.Artist {
-		return true
-	}
-
-	return false
-}
-
 // updateTrackStats 更新曲目统计
-func (s *StatsService) updateTrackStats(trackStats map[string]*TrackStat, music *common.Music, playTime int64) {
+func (s *StatsService) updateTrackStats(trackStats map[string]*TrackStat, music *common.Music) {
 	if music.Title == nil || music.Artist == nil {
 		return
 	}
@@ -306,17 +328,15 @@ func (s *StatsService) updateTrackStats(trackStats map[string]*TrackStat, music 
 		trackStats[trackKey] = &TrackStat{
 			Title:     *music.Title,
 			Artist:    *music.Artist,
-			PlayTime:  0,
 			PlayCount: 0,
 		}
 	}
 
-	trackStats[trackKey].PlayTime += playTime
 	trackStats[trackKey].PlayCount++
 }
 
 // updateArtistStats 更新艺术家统计
-func (s *StatsService) updateArtistStats(artistStats map[string]*ArtistStat, music *common.Music, playTime int64) {
+func (s *StatsService) updateArtistStats(artistStats map[string]*ArtistStat, music *common.Music) {
 	if music.Artist == nil {
 		return
 	}
@@ -325,17 +345,15 @@ func (s *StatsService) updateArtistStats(artistStats map[string]*ArtistStat, mus
 	if artistStats[artistKey] == nil {
 		artistStats[artistKey] = &ArtistStat{
 			Name:       *music.Artist,
-			PlayTime:   0,
 			TrackCount: 0,
 		}
 	}
 
-	artistStats[artistKey].PlayTime += playTime
 	artistStats[artistKey].TrackCount++
 }
 
 // updateAlbumStats 更新专辑统计
-func (s *StatsService) updateAlbumStats(albumStats map[string]*AlbumStat, music *common.Music, playTime int64) {
+func (s *StatsService) updateAlbumStats(albumStats map[string]*AlbumStat, music *common.Music) {
 	if music.Album == nil || music.Artist == nil {
 		return
 	}
@@ -345,17 +363,15 @@ func (s *StatsService) updateAlbumStats(albumStats map[string]*AlbumStat, music 
 		albumStats[albumKey] = &AlbumStat{
 			Name:       *music.Album,
 			Artist:     *music.Artist,
-			PlayTime:   0,
 			TrackCount: 0,
 		}
 	}
 
-	albumStats[albumKey].PlayTime += playTime
 	albumStats[albumKey].TrackCount++
 }
 
 // convertToStatsResponse 转换为统计响应API格式
-func (s *StatsService) convertToStatsResponse(trackStats map[string]*TrackStat, artistStats map[string]*ArtistStat, albumStats map[string]*AlbumStat, totalPlayTime int64) (*common.StatsSummary, []*common.TopItem, []*common.TopItem) {
+func (s *StatsService) convertToStatsResponse(trackStats map[string]*TrackStat, artistStats map[string]*ArtistStat, albumStats map[string]*AlbumStat, topN int32) (*common.StatsSummary, []*common.TopItem, []*common.TopItem, []*common.TopItem) {
 	// 计算总播放次数
 	totalPlays := int32(0)
 	for _, stat := range trackStats {
@@ -381,6 +397,13 @@ func (s *StatsService) convertToStatsResponse(trackStats map[string]*TrackStat, 
 			topArtists = append(topArtists, topItem)
 		}
 	}
+	gslice.SortBy(topArtists, func(a, b *common.TopItem) bool {
+		return a.Count > b.Count
+	})
+	// 限制返回的艺术家数量
+	if int32(len(topArtists)) > topN {
+		topArtists = topArtists[:topN]
+	}
 
 	// 转换曲目统计为TopItem（按播放次数排序）
 	var topTracks []*common.TopItem
@@ -394,6 +417,33 @@ func (s *StatsService) convertToStatsResponse(trackStats map[string]*TrackStat, 
 			topTracks = append(topTracks, topItem)
 		}
 	}
+	gslice.SortBy(topTracks, func(a, b *common.TopItem) bool {
+		return a.Count > b.Count
+	})
+	// 限制返回的曲目数量
+	if int32(len(topTracks)) > topN {
+		topTracks = topTracks[:topN]
+	}
 
-	return summary, topArtists, topTracks
+	var topAlbums []*common.TopItem
+	// 转换专辑统计为TopItem（按曲目数排序）
+	if len(albumStats) > 0 {
+		topAlbums = make([]*common.TopItem, 0, len(albumStats))
+		for _, stat := range albumStats {
+			topItem := &common.TopItem{
+				Name:  stat.Name + " - " + stat.Artist,
+				Count: int32(stat.TrackCount),
+			}
+			topAlbums = append(topAlbums, topItem)
+		}
+	}
+	gslice.SortBy(topAlbums, func(a, b *common.TopItem) bool {
+		return a.Count > b.Count
+	})
+	// 限制返回的专辑数量
+	if int32(len(topAlbums)) > topN {
+		topAlbums = topAlbums[:topN]
+	}
+
+	return summary, topArtists, topTracks, topAlbums
 }

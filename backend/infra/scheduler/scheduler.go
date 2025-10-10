@@ -35,11 +35,14 @@ func NewScheduler(db *gorm.DB, cfg *config.Config) *Scheduler {
 
 // Start 启动调度器
 func (s *Scheduler) Start() {
-	if s.cfg.Scheduler.Enabled {
-		// 注册清理任务
-		cleanupTask := NewCleanupTask(s.db, s.cfg)
-		s.RegisterTask(cleanupTask)
-	}
+
+	// 注册年度清理任务
+	annualCleanupTask := NewAnnualCleanupTask(s.db)
+	s.RegisterTask(annualCleanupTask)
+
+	// 注册日常清理任务
+	dailyCleanupTask := NewDailyCleanupTask(s.db)
+	s.RegisterTask(dailyCleanupTask)
 
 	s.cron.Start()
 	logrus.Info("Scheduler started successfully")

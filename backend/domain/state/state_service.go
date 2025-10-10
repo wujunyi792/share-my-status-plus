@@ -133,16 +133,19 @@ func (s *StateService) processEvent(ctx context.Context, userID uint64, event *c
 		return fmt.Errorf("failed to update current state: %w", err)
 	}
 
-	// 检查用户是否授权音乐统计，只有授权时才保存历史记录
-	authorized, err := s.userService.IsMusicStatsAuthorized(userID)
-	if err != nil {
-		logrus.Errorf("Failed to check music stats authorization: %v", err)
-		// 不返回错误，继续执行其他逻辑
-	} else if authorized {
-		// 保存历史记录（保存原始上报的快照）
-		if err := s.saveHistory(ctx, userID, newSnapshot); err != nil {
-			logrus.Errorf("Failed to save history: %v", err)
-			// 不返回错误，因为当前状态已经更新
+	// 只有当事件包含音乐信息时才需要保存历史记录（用于音乐统计）
+	if event.Music != nil {
+		// 检查用户是否授权音乐统计，只有授权时才保存历史记录
+		authorized, err := s.userService.IsMusicStatsAuthorized(userID)
+		if err != nil {
+			logrus.Errorf("Failed to check music stats authorization: %v", err)
+			// 不返回错误，继续执行其他逻辑
+		} else if authorized {
+			// 保存历史记录（保存原始上报的快照）
+			if err := s.saveHistory(ctx, userID, newSnapshot); err != nil {
+				logrus.Errorf("Failed to save history: %v", err)
+				// 不返回错误，因为当前状态已经更新
+			}
 		}
 	}
 
@@ -268,9 +271,4 @@ func (s *StateService) QueryState(ctx context.Context, sharingKey string) (*stat
 	}
 
 	return response, nil
-}
-
-// GetCurrentState 获取当前状态（内部使用）
-func (s *StateService) GetCurrentState(ctx context.Context, userID uint64) (*common.StatusSnapshot, error) {
-	return dbutil.GetCurrentStateFromDB(ctx, s.db, userID)
 }

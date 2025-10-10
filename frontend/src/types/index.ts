@@ -54,19 +54,53 @@ export const WSMessageType = {
 export type WSConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 // 统计数据类型
-export interface MusicStats {
-  topArtist?: string;
-  topTitle?: string;
+export interface TopItem {
+  name: string;
+  count: number;
+}
+
+export interface StatsSummary {
+  plays?: number;
   uniqueTracks?: number;
-  playCountWindow?: string;
+}
+
+// 窗口类型枚举，与后端Thrift定义保持一致
+export enum WindowType {
+  ROLLING_3D = 1,
+  ROLLING_7D = 2,
+  MONTH_TO_DATE = 3,
+  YEAR_TO_DATE = 4,
+  CUSTOM = 5,
+}
+
+export interface WindowInfo {
+  type: WindowType;
+  tz: string; // 后端要求必需字段
+  custom?: {
+    fromTs: number;
+    toTs: number;
+  };
+  fromTs?: number;
+  toTs?: number;
+}
+
+export interface StatsQueryResponse {
+  base: {
+    code: number;
+    message?: string;
+  };
+  window?: WindowInfo;
+  summary?: StatsSummary;
+  topArtists?: TopItem[];
+  topTracks?: TopItem[];
+  topAlbums?: TopItem[];
+  cached?: boolean; // 是否从缓存返回
 }
 
 // 统计查询请求
 export interface StatsQueryRequest {
-  windowType: 'rolling_3d' | 'rolling_7d' | 'month_to_date' | 'year_to_date' | 'custom';
-  startTime?: number;
-  endTime?: number;
-  tz?: string;
+  window: WindowInfo;
+  metrics: string[];
   topN?: number;
 }
 
@@ -98,7 +132,7 @@ export interface AppState {
   // 错误信息
   error: AppError | null;
   // 统计信息
-  stats: MusicStats | null;
+  stats: StatsQueryResponse | null;
   // 是否正在加载
   loading: boolean;
 }

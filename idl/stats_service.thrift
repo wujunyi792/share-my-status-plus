@@ -16,4 +16,6 @@ struct StatsQueryResponse {
     3: optional common.StatsSummary summary;
     4: optional list<common.TopItem> topArtists;
     5: optional list<common.TopItem> topTracks;
+    6: optional list<common.TopItem> topAlbums;
+    7: bool cached = false;  // 是否从缓存返回
 }

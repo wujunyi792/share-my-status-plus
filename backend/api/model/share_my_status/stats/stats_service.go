@@ -303,13 +303,20 @@ type StatsQueryResponse struct {
 	Summary    *common.StatsSummary `thrift:"summary,3,optional" form:"summary" json:"summary,omitempty" query:"summary"`
 	TopArtists []*common.TopItem    `thrift:"topArtists,4,optional" form:"topArtists" json:"topArtists,omitempty" query:"topArtists"`
 	TopTracks  []*common.TopItem    `thrift:"topTracks,5,optional" form:"topTracks" json:"topTracks,omitempty" query:"topTracks"`
+	TopAlbums  []*common.TopItem    `thrift:"topAlbums,6,optional" form:"topAlbums" json:"topAlbums,omitempty" query:"topAlbums"`
+	// 是否从缓存返回
+	Cached bool `thrift:"cached,7" form:"cached" json:"cached" query:"cached"`
 }
 
 func NewStatsQueryResponse() *StatsQueryResponse {
-	return &StatsQueryResponse{}
+	return &StatsQueryResponse{
+
+		Cached: false,
+	}
 }
 
 func (p *StatsQueryResponse) InitDefault() {
+	p.Cached = false
 }
 
 var StatsQueryResponse_Base_DEFAULT *common.BaseResponse
@@ -357,12 +364,27 @@ func (p *StatsQueryResponse) GetTopTracks() (v []*common.TopItem) {
 	return p.TopTracks
 }
 
+var StatsQueryResponse_TopAlbums_DEFAULT []*common.TopItem
+
+func (p *StatsQueryResponse) GetTopAlbums() (v []*common.TopItem) {
+	if !p.IsSetTopAlbums() {
+		return StatsQueryResponse_TopAlbums_DEFAULT
+	}
+	return p.TopAlbums
+}
+
+func (p *StatsQueryResponse) GetCached() (v bool) {
+	return p.Cached
+}
+
 var fieldIDToName_StatsQueryResponse = map[int16]string{
 	1: "base",
 	2: "window",
 	3: "summary",
 	4: "topArtists",
 	5: "topTracks",
+	6: "topAlbums",
+	7: "cached",
 }
 
 func (p *StatsQueryResponse) IsSetBase() bool {
@@ -383,6 +405,10 @@ func (p *StatsQueryResponse) IsSetTopArtists() bool {
 
 func (p *StatsQueryResponse) IsSetTopTracks() bool {
 	return p.TopTracks != nil
+}
+
+func (p *StatsQueryResponse) IsSetTopAlbums() bool {
+	return p.TopAlbums != nil
 }
 
 func (p *StatsQueryResponse) Read(iprot thrift.TProtocol) (err error) {
@@ -440,6 +466,22 @@ func (p *StatsQueryResponse) Read(iprot thrift.TProtocol) (err error) {
 		case 5:
 			if fieldTypeId == thrift.LIST {
 				if err = p.ReadField5(iprot); err != nil {
+					goto ReadFieldError
+				}
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		case 6:
+			if fieldTypeId == thrift.LIST {
+				if err = p.ReadField6(iprot); err != nil {
+					goto ReadFieldError
+				}
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		case 7:
+			if fieldTypeId == thrift.BOOL {
+				if err = p.ReadField7(iprot); err != nil {
 					goto ReadFieldError
 				}
 			} else if err = iprot.Skip(fieldTypeId); err != nil {
@@ -550,6 +592,40 @@ func (p *StatsQueryResponse) ReadField5(iprot thrift.TProtocol) error {
 	p.TopTracks = _field
 	return nil
 }
+func (p *StatsQueryResponse) ReadField6(iprot thrift.TProtocol) error {
+	_, size, err := iprot.ReadListBegin()
+	if err != nil {
+		return err
+	}
+	_field := make([]*common.TopItem, 0, size)
+	values := make([]common.TopItem, size)
+	for i := 0; i < size; i++ {
+		_elem := &values[i]
+		_elem.InitDefault()
+
+		if err := _elem.Read(iprot); err != nil {
+			return err
+		}
+
+		_field = append(_field, _elem)
+	}
+	if err := iprot.ReadListEnd(); err != nil {
+		return err
+	}
+	p.TopAlbums = _field
+	return nil
+}
+func (p *StatsQueryResponse) ReadField7(iprot thrift.TProtocol) error {
+
+	var _field bool
+	if v, err := iprot.ReadBool(); err != nil {
+		return err
+	} else {
+		_field = v
+	}
+	p.Cached = _field
+	return nil
+}
 
 func (p *StatsQueryResponse) Write(oprot thrift.TProtocol) (err error) {
 	var fieldId int16
@@ -575,6 +651,14 @@ func (p *StatsQueryResponse) Write(oprot thrift.TProtocol) (err error) {
 		}
 		if err = p.writeField5(oprot); err != nil {
 			fieldId = 5
+			goto WriteFieldError
+		}
+		if err = p.writeField6(oprot); err != nil {
+			fieldId = 6
+			goto WriteFieldError
+		}
+		if err = p.writeField7(oprot); err != nil {
+			fieldId = 7
 			goto WriteFieldError
 		}
 	}
@@ -698,6 +782,48 @@ WriteFieldBeginError:
 	return thrift.PrependError(fmt.Sprintf("%T write field 5 begin error: ", p), err)
 WriteFieldEndError:
 	return thrift.PrependError(fmt.Sprintf("%T write field 5 end error: ", p), err)
+}
+func (p *StatsQueryResponse) writeField6(oprot thrift.TProtocol) (err error) {
+	if p.IsSetTopAlbums() {
+		if err = oprot.WriteFieldBegin("topAlbums", thrift.LIST, 6); err != nil {
+			goto WriteFieldBeginError
+		}
+		if err := oprot.WriteListBegin(thrift.STRUCT, len(p.TopAlbums)); err != nil {
+			return err
+		}
+		for _, v := range p.TopAlbums {
+			if err := v.Write(oprot); err != nil {
+				return err
+			}
+		}
+		if err := oprot.WriteListEnd(); err != nil {
+			return err
+		}
+		if err = oprot.WriteFieldEnd(); err != nil {
+			goto WriteFieldEndError
+		}
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 6 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 6 end error: ", p), err)
+}
+func (p *StatsQueryResponse) writeField7(oprot thrift.TProtocol) (err error) {
+	if err = oprot.WriteFieldBegin("cached", thrift.BOOL, 7); err != nil {
+		goto WriteFieldBeginError
+	}
+	if err := oprot.WriteBool(p.Cached); err != nil {
+		return err
+	}
+	if err = oprot.WriteFieldEnd(); err != nil {
+		goto WriteFieldEndError
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 7 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 7 end error: ", p), err)
 }
 
 func (p *StatsQueryResponse) String() string {
