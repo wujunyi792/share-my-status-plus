@@ -1,7 +1,10 @@
-import React from 'react';
+import { useCallback, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { useAppStore } from '@/store/useAppStore';
+import { 
+  useStatusPageState, 
+  useAppStoreActions,
+} from '@/store/useAppStore';
 import { MusicCard } from '@/components/MusicCard';
 import { SystemCard } from '@/components/SystemCard';
 import { ActivityCard } from '@/components/ActivityCard';
@@ -12,7 +15,10 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 
 export function StatusPage() {
   const { sharingKey } = useParams<{ sharingKey: string }>();
-  const { currentState, connectionStatus, error, loading, setError } = useAppStore();
+  
+  // Use combined selector for StatusPage state
+  const { currentState, connectionStatus, error, loading } = useStatusPageState();
+  const { setError, setCurrentState, setConnectionStatus } = useAppStoreActions();
 
   // 演示模式：如果没有sharingKey，使用模拟数据
   const isDemoMode = !sharingKey || sharingKey === 'demo';
@@ -52,17 +58,17 @@ export function StatusPage() {
   });
 
   // 演示模式下设置模拟数据
-  React.useEffect(() => {
+  useEffect(() => {
     if (isDemoMode && !currentState) {
-      useAppStore.getState().setCurrentState(demoState);
-      useAppStore.getState().setConnectionStatus('connected');
+      setCurrentState(demoState);
+      setConnectionStatus('connected');
     }
-  }, [isDemoMode, currentState]);
+  }, [isDemoMode, currentState, setCurrentState, setConnectionStatus]);
 
   // 清除错误
-  const handleDismissError = () => {
+  const handleDismissError = useCallback(() => {
     setError(null);
-  };
+  }, [setError]);
 
   // 如果没有sharingKey，显示错误
   if (!sharingKey) {

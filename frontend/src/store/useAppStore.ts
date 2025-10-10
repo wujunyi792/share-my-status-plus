@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { shallow } from 'zustand/shallow';
 import type { AppState, StateSnapshot, WSConnectionStatus, AppError, StatsQueryResponse } from '@/types';
 
 interface AppStore extends AppState {
@@ -22,7 +23,7 @@ const initialState: AppState = {
 
 export const useAppStore = create<AppStore>()(
   devtools(
-    (set, get) => ({
+    (set) => ({
       ...initialState,
 
       setCurrentState: (state) => {
@@ -55,9 +56,33 @@ export const useAppStore = create<AppStore>()(
   )
 );
 
-// Selectors
+// Selectors - 精确订阅，避免不必要的重新渲染
 export const useCurrentState = () => useAppStore((state) => state.currentState);
 export const useConnectionStatus = () => useAppStore((state) => state.connectionStatus);
 export const useError = () => useAppStore((state) => state.error);
 export const useStats = () => useAppStore((state) => state.stats);
 export const useLoading = () => useAppStore((state) => state.loading);
+
+// Actions selectors - 不会触发重新渲染，因为actions不会变化
+export const useAppStoreActions = () => useAppStore(
+  (state) => ({
+    setCurrentState: state.setCurrentState,
+    setConnectionStatus: state.setConnectionStatus,
+    setError: state.setError,
+    setStats: state.setStats,
+    setLoading: state.setLoading,
+    reset: state.reset,
+  }),
+  shallow
+);
+
+// 组合selectors - 当需要多个状态时使用
+export const useStatusPageState = () => useAppStore(
+  (state) => ({
+    currentState: state.currentState,
+    connectionStatus: state.connectionStatus,
+    error: state.error,
+    loading: state.loading,
+  }),
+  shallow
+);

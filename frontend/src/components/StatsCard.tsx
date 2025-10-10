@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { BarChart3, TrendingUp, Music, Calendar, ChevronDown, ChevronUp, Database, RefreshCw, Disc3 } from 'lucide-react';
 import { apiClient } from '@/utils/api';
-import { useAppStore } from '@/store/useAppStore';
+import { useStats, useAppStoreActions } from '@/store/useAppStore';
 import type { StatsQueryRequest, TopItem } from '@/types';
 import { WindowType } from '@/types';
 import { cn } from '@/utils';
@@ -32,9 +32,12 @@ export function StatsCard({ className, sharingKey }: StatsCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const { stats, setStats } = useAppStore();
+  // Use precise selectors to avoid unnecessary re-renders
+  const stats = useStats();
+  const { setStats } = useAppStoreActions();
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
+    console.log('Loading stats for sharingKey:', sharingKey);
     setIsLoading(true);
     setError(null);
     
@@ -57,11 +60,11 @@ export function StatsCard({ className, sharingKey }: StatsCardProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [sharingKey, selectedWindow, topN, setStats]);
 
   useEffect(() => {
     loadStats();
-  }, [selectedWindow, topN]);
+  }, [loadStats]);
 
   const formatCount = (count: number) => {
     if (count >= 1000) {

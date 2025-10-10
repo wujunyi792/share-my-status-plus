@@ -3,8 +3,7 @@ package legacy
 import (
 	"context"
 	"share-my-status/infra"
-	"share-my-status/pkg/crypto"
-	"strconv"
+	"share-my-status/model"
 	"time"
 
 	common "share-my-status/api/model/share_my_status/common"
@@ -18,8 +17,8 @@ type MusicData struct {
 	Artist   string `json:"artist"`
 	Title    string `json:"title"`
 	Album    string `json:"album"`
-	Duration int    `json:"duration"`
-	Artwork  string `json:"artwork"`
+	Duration string `json:"duration"`
+	Artwork  string `json:"-"`
 }
 
 // ActivityRequest 旧版活动请求结构
@@ -50,23 +49,12 @@ func UploadStatus(ctx context.Context, c *app.RequestContext) {
 	logrus.Infof("Legacy UploadStatus request: key=%s, type=%s", req.Key, req.Type)
 
 	// 解密key获取用户ID
-	config := infra.GetGlobalAppDependencies().Config
-	userIDStr, err := crypto.Decode(req.Key, config.LegacyCrypto.Key, config.LegacyCrypto.IV)
+	var user model.User
+	err := infra.GetGlobalAppDependencies().DB.Where("secret_key = ?", req.Key).First(&user).Error
 	if err != nil {
-		logrus.Errorf("Failed to decode key: %v", err)
 		c.JSON(400, ActivityResponse{
 			Error:   1,
-			Message: "Invalid key",
-		})
-		return
-	}
-
-	userID, err := strconv.ParseUint(userIDStr, 10, 64)
-	if err != nil {
-		logrus.Errorf("Failed to parse user ID: %v", err)
-		c.JSON(400, ActivityResponse{
-			Error:   1,
-			Message: "Invalid key format",
+			Message: err.Error(),
 		})
 		return
 	}
@@ -92,22 +80,18 @@ func UploadStatus(ctx context.Context, c *app.RequestContext) {
 			}
 		}
 	default:
-		// 默认处理为音乐数据
-		if req.MusicData != nil {
-			event.Music = &common.Music{
-				Title:  &req.MusicData.Title,
-				Artist: &req.MusicData.Artist,
-				Album:  &req.MusicData.Album,
-				Ts:     currentTime,
-			}
-		}
+		c.JSON(200, ActivityResponse{
+			Error:   0,
+			Message: "success",
+		})
+		return
 	}
 
 	events = append(events, event)
 
 	// 调用新版BatchReport
 	stateService := infra.GetGlobalAppDependencies().StateService
-	resp, err := stateService.BatchReport(ctx, userID, events)
+	resp, err := stateService.BatchReport(ctx, user.ID, events)
 	if err != nil {
 		logrus.Errorf("Failed to batch report: %v", err)
 		c.JSON(400, ActivityResponse{
