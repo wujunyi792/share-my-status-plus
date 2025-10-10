@@ -82,22 +82,6 @@ create_backup() {
         warning "Redis container is not running, skipping Redis backup"
     fi
     
-    # Backup Grafana data
-    if [[ -d "data/grafana" ]]; then
-        log "Backing up Grafana data..."
-        tar -czf "$backup_path/grafana_data.tar.gz" -C data grafana/
-        success "Grafana backup completed"
-    fi
-    
-    # Backup Prometheus data
-    if [[ -d "data/prometheus" ]]; then
-        log "Backing up Prometheus data..."
-        tar -czf "$backup_path/prometheus_data.tar.gz" -C data prometheus/
-        success "Prometheus backup completed"
-    fi
-    
-
-    
     # Backup configuration files
     log "Backing up configuration files..."
     mkdir -p "$backup_path/config"
@@ -184,20 +168,6 @@ restore_backup() {
         tar -xzf "$backup_path/redis_data.tar.gz" -C data/
     fi
     
-    if [[ -f "$backup_path/grafana_data.tar.gz" ]]; then
-        log "Restoring Grafana data..."
-        rm -rf data/grafana
-        tar -xzf "$backup_path/grafana_data.tar.gz" -C data/
-    fi
-    
-    if [[ -f "$backup_path/prometheus_data.tar.gz" ]]; then
-        log "Restoring Prometheus data..."
-        rm -rf data/prometheus
-        tar -xzf "$backup_path/prometheus_data.tar.gz" -C data/
-    fi
-    
-
-    
     # Restore configuration files
     if [[ -d "$backup_path/config" ]]; then
         log "Restoring configuration files..."
@@ -209,7 +179,6 @@ restore_backup() {
     # Set proper permissions
     sudo chown -R 999:999 data/mysql 2>/dev/null || true
     sudo chown -R 999:999 data/redis 2>/dev/null || true
-    sudo chown -R 472:472 data/grafana 2>/dev/null || true
 
     
     success "Backup restored successfully"

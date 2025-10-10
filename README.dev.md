@@ -57,8 +57,6 @@ go run main.go
 
 | 服务 | 端口 | 用途 | 访问地址 |
 |------|------|------|----------|
-| Prometheus | 9091 | 指标收集 | http://localhost:9091 |
-| Grafana | 3001 | 数据可视化 | http://localhost:3001 |
 | Jaeger | 16687 | 链路追踪 | http://localhost:16687 |
 
 ## 🔧 配置说明

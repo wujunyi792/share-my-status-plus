@@ -1083,12 +1083,11 @@ _ = db.Model(&CurrentState{}).Where("battery_pct > ?", 0.8).Order("music_artist 
 ## 18 部署与配置
 部署与配置
 
-**目标**：提供可直接落地的 Docker 与 Kubernetes（Helm）部署清单，覆盖后端（Golang）、前端（React+Nginx）、MySQL 8.0、Redis，以及 Prometheus/Grafana/Alertmanager 的监控与告警。部署全程遵循隐私约束：**不收集 deviceId、appName、macOS、player、foreground**；音乐仅用 **title/artist/album**；封面仅用 **coverHash/coverB64（内部用途）**；模板变量**不暴露 coverHash**；日志对 `open_id` 等敏感标识**做哈希或脱敏**。
+**目标**：提供可直接落地的 Docker 与 Kubernetes（Helm）部署清单，覆盖后端（Golang）、前端（React+Nginx）、MySQL 8.0、Redis 的监控与告警。部署全程遵循隐私约束：**不收集 deviceId、appName、macOS、player、foreground**；音乐仅用 **title/artist/album**；封面仅用 **coverHash/coverB64（内部用途）**；模板变量**不暴露 coverHash**；日志对 `open_id` 等敏感标识**做哈希或脱敏**。
 
 > **关键动作点**：
 > - **不要向仓库提交 .env 与任何密钥文件**；本地用 dotenv 管理，生产用 **Kubernetes Secret** 注入。
 > - **统一健康检查路径**：后端与 Nginx 均提供 `/healthz`；K8s 使用 **Readiness/Liveness probes**。
-> - **监控默认开启**：后端暴露 `/metrics`；Prometheus 挂载规则文件；Grafana 预配置看板；Alertmanager 加载告警路由与接收人。
 
 ### 18.1 Docker 部署方案
 #### 18.1.1 后端（Golang）Dockerfile：多阶段构建（go1.22-alpine → distroless 或 alpine 运行）
@@ -1296,51 +1295,12 @@ services:
     networks:
       - appnet
 
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
-      - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
-    depends_on:
-      - api
-      - redis-exporter
-      - mysqld-exporter
-    networks:
-      - appnet
-
-  alertmanager:
-    image: prom/alertmanager:latest
-    volumes:
-      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-    ports:
-      - "9093:9093"
-    networks:
-      - appnet
-
-  grafana:
-    image: grafana/grafana:latest
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-    ports:
-      - "3000:3000"
-    networks:
-      - appnet
-
 networks:
   appnet:
     driver: bridge
 
 volumes:
   mysql_data:
-  prometheus_data:
-  grafana_data:
 ```
 
 #### 18.1.4 .env 示例（不要提交到仓库）
@@ -1363,150 +1323,17 @@ DB_DSN=app:app-pass@tcp(mysql:3306)/share_my_status?charset=utf8mb4&parseTime=Tr
 
 # Redis
 REDIS_URL=redis://redis:6379
-
-# Grafana
-GRAFANA_ADMIN_USER=admin
-GRAFANA_ADMIN_PASSWORD=admin
 ```
 
-#### 18.1.5 Prometheus 配置与规则示例
+#### 18.1.5 配置示例
 ```yaml
-# monitoring/prometheus/prometheus.yml
-global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-
-alerting:
-  alertmanagers:
-    - static_configs:
-        - targets: ["alertmanager:9093"]
-
-rule_files:
-  - "/etc/prometheus/rules/*.yml"
-
-scrape_configs:
-  - job_name: "api"
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["api:8080"]
-  - job_name: "redis"
-    static_configs:
-      - targets: ["redis-exporter:9121"]
-  - job_name: "mysql"
-    static_configs:
-      - targets: ["mysqld-exporter:9104"]
+# 配置文件示例（占位）
+# 可根据需要添加应用配置
 ```
 
-```yaml
-# monitoring/prometheus/rules/api.yml
-groups:
-- name: api.rules
-  rules:
-  - alert: ApiHighErrorRate
-    expr: (sum(rate(http_requests_total{service="api",status=~"5.."}[5m])) / sum(rate(http_requests_total{service="api"}[5m]))) > 0.05
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: "API 5xx 错误率超过 5%（持续 5m）"
-      description: "检查上游依赖与最近发布，关注 rate(http_requests_total) 与异常日志。"
-
-  - alert: ApiHighLatencyP95
-    expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="api"}[5m])) by (le)) > 1.0
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: "API P95 延迟 > 1s"
-      description: "关注慢接口与资源瓶颈，必要时扩容或降级。"
-
-  - alert: WsConnectionsDrop
-    expr: (increase(ws_disconnect_total[5m]) / (increase(ws_connect_total[5m]) + 1)) > 0.2
-    for: 10m
-    labels:
-      severity: warning
-    annotations:
-      summary: "WS 断连率在 10 分钟内 > 20%"
-      description: "检查房间广播与心跳设置、网关健康。"
-```
-
-```yaml
-# monitoring/prometheus/rules/redis.yml
-groups:
-- name: redis.rules
-  rules:
-  - alert: RedisDown
-    expr: redis_up == 0
-    for: 1m
-    labels:
-      severity: critical
-    annotations:
-      summary: "Redis 不可用"
-      description: "redis_exporter 指示 Redis down。"
-
-  - alert: RedisConnectedClientsLow
-    expr: redis_connected_clients < 1
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: "Redis 客户端连接数异常偏低"
-      description: "检查网络、权限或服务状态。"
-```
-
-```yaml
-# monitoring/prometheus/rules/mysql.yml
-groups:
-- name: mysql.rules
-  rules:
-  - alert: MySQLSlowQueriesHigh
-    expr: increase(mysql_global_status_slow_queries[5m]) > 10
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: "MySQL 慢查询 5 分钟 > 10"
-      description: "检查索引、执行计划与热点表。"
-
-  - alert: MySQLQPSHigh
-    expr: sum(rate(mysql_global_status_queries[1m])) > 2000
-    for: 5m
-    labels:
-      severity: info
-    annotations:
-      summary: "MySQL QPS > 2000（信息告警）"
-      description: "评估当前容量与缓存命中率，必要时扩容。"
-
-  # 需要 Node Exporter 提供磁盘指标；如未启用请跳过该规则
-  - alert: MySQLDiskUsageHigh
-    expr: (node_filesystem_size_bytes{mountpoint="/var/lib/mysql"} - node_filesystem_avail_bytes{mountpoint="/var/lib/mysql"}) / node_filesystem_size_bytes{mountpoint="/var/lib/mysql"} > 0.85
-    for: 10m
-    labels:
-      severity: warning
-    annotations:
-      summary: "MySQL 数据卷使用率 > 85%"
-      description: "请扩容 PVC 或清理过期数据。"
-```
-
-```yaml
-# monitoring/alertmanager/alertmanager.yml
-route:
-  group_by: ["alertname"]
-  group_wait: 10s
-  group_interval: 1m
-  repeat_interval: 4h
-  receiver: default
-receivers:
-- name: default
-  # 可按需配置 webhook/email/slack 等接收器
-  # webhook_configs:
-  # - url: "http://ops-notify/receptor"
-```
-
-> **Grafana 看板与接入**：
-> - 默认管理账号：`admin/admin`（**首次登录后请立刻修改密码**）。
-> - 建议导入看板（文件占位）：`monitoring/grafana/dashboards/api-overview.json`、`db-overview.json`、`redis-overview.json`。
-> - Prometheus 数据源：`http://prometheus:9090`；Alertmanager：`http://alertmanager:9093`。
+> **部署说明**：
+> - 默认管理账号配置请参考 .env 文件。
+> - 建议根据实际需求配置监控和告警。
 
 ### 18.2 Kubernetes Helm 部署方案
 #### 18.2.1 Chart 目录结构（示例名：share-my-status）
@@ -1527,7 +1354,7 @@ share-my-status/
     deployment-redis.yaml
     service-redis.yaml
     servicemonitor-api.yaml
-    prometheusrules.yaml
+    alertingrules.yaml
     hpa-api.yaml
     pdb-api.yaml
 ```
@@ -1539,7 +1366,7 @@ global:
   imagePullPolicy: IfNotPresent
   monitoring:
     enabled: true
-    prometheusOperator: true
+    monitoringOperator: true
 
 api:
   image:
@@ -1921,7 +1748,7 @@ spec:
     targetPort: redis
 ```
 
-#### 18.2.6 监控与告警（ServiceMonitor、PrometheusRule）
+#### 18.2.6 监控与告警（ServiceMonitor、AlertingRule）
 ```yaml
 # templates/servicemonitor-api.yaml
 {{- if and .Values.global.monitoring.enabled .Values.api.monitoring.serviceMonitor.enabled -}}
@@ -1941,10 +1768,10 @@ spec:
 ```
 
 ```yaml
-# templates/prometheusrules.yaml
+# templates/alertingrules.yaml
 {{- if .Values.global.monitoring.enabled -}}
 apiVersion: monitoring.coreos.com/v1
-kind: PrometheusRule
+kind: AlertingRule
 metadata:
   name: sms-rules
 spec:
@@ -2048,14 +1875,14 @@ helm rollback sms 1 -n sms
 
 - **Redis**：默认**不持久化**（AOF=off）；如需可靠队列或离线数据，开启 AOF 并设置 `persistence.enabled: true`；连接密码通过 Secret 注入。
 
-- **监控持久化**：Prometheus 与 Grafana 挂载数据卷；Prometheus 规则与 Alertmanager 路由以挂载文件管理。
+- **监控持久化**：监控系统挂载数据卷；告警规则与路由配置以挂载文件管理。
 
 ### 18.5 监控与报警清单（落地）
 - **采集**：API `/metrics`（HTTP 请求计数与耗时、WS 连接计数、Redis/MySQL客户端错误计数等）；`redis_exporter`；`mysqld_exporter`；（可选）`node_exporter`。
 
-- **Grafana 看板**：API 概览、DB 概览、Redis 概览（文件占位）；统一数据源 `Prometheus`。
+- **监控看板**：API 概览、DB 概览、Redis 概览（文件占位）；统一数据源配置。
 
-- **Alertmanager 规则**：
+- **告警规则**：
 	- API：**错误率**、**延迟 P95**、**WS 断连率**。
 	- Redis：**redis_up**、连接数异常。
 	- MySQL：**慢查询**、**QPS 阈值**、（可选）**数据卷使用率**。
@@ -2066,12 +1893,11 @@ helm rollback sms 1 -n sms
 	2. 在 `db/init/` 放置初始化 SQL（文档中的 DDL）。
 	3. 执行 **docker-compose up -d**；等待 `mysql` 健康后 `api` 与 `web` 进入 `healthy`。
 	4. 访问 `http://localhost:8081`；后端健康检查 `http://localhost:8080/healthz`，指标 `http://localhost:8080/metrics`。
-	5. Grafana 默认 `http://localhost:3000`，账号 `admin/admin`（**首次登录后立刻修改密码**）。
 
 - **集群部署**：
 	1. 编辑 `values.yaml`，填充镜像、Secret、数据库与缓存连接、Ingress 域名与 TLS。
 	2. 执行 **helm upgrade --install** 安装到命名空间 `sms`。
-	3. 验证 Service、Ingress、`/healthz` 与 `/metrics`；在 Grafana 导入看板文件并连接 Prometheus 数据源。
+	3. 验证 Service、Ingress、`/healthz` 与 `/metrics`；配置监控看板并连接数据源。
 	4. 启用 HPA 与 PDB，观察滚动升级时的探针与副本健康；必要时回滚。
 
 ## 19 监控与告警

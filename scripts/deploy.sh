@@ -75,13 +75,12 @@ create_directories() {
     log "Creating necessary directories..."
     
     mkdir -p logs
-    mkdir -p data/{mysql,redis,prometheus,grafana}
+    mkdir -p data/{mysql,redis}
     mkdir -p "$BACKUP_DIR"
     
     # Set proper permissions for data directories
     sudo chown -R 999:999 data/mysql 2>/dev/null || true
     sudo chown -R 999:999 data/redis 2>/dev/null || true
-    sudo chown -R 472:472 data/grafana 2>/dev/null || true
 
     
     success "Directories created successfully"
@@ -123,12 +122,6 @@ backup_data() {
     if [[ -d "data/redis" ]] && [[ "$(ls -A data/redis)" ]]; then
         log "Backing up Redis data..."
         tar -czf "$BACKUP_PATH/redis_data.tar.gz" -C data redis/
-    fi
-    
-    # Backup Grafana data if exists
-    if [[ -d "data/grafana" ]] && [[ "$(ls -A data/grafana)" ]]; then
-        log "Backing up Grafana data..."
-        tar -czf "$BACKUP_PATH/grafana_data.tar.gz" -C data grafana/
     fi
     
     success "Backup created at $BACKUP_PATH"
@@ -179,22 +172,6 @@ health_check() {
     else
         warning "Backend health check failed - it may still be starting up"
     fi
-    
-    # Check Prometheus
-    log "Checking Prometheus..."
-    if curl -f http://localhost:9090/-/healthy &>/dev/null; then
-        success "Prometheus is healthy"
-    else
-        warning "Prometheus health check failed"
-    fi
-    
-    # Check Grafana
-    log "Checking Grafana..."
-    if curl -f http://localhost:3000/api/health &>/dev/null; then
-        success "Grafana is healthy"
-    else
-        warning "Grafana health check failed"
-    fi
 }
 
 # Show service status
@@ -205,8 +182,6 @@ show_status() {
     echo ""
     log "Access URLs:"
     echo "  Backend API: http://localhost:8080"
-    echo "  Grafana: http://localhost:3000 (admin/admin_password_change_me)"
-    echo "  Prometheus: http://localhost:9090"
 
 }
 

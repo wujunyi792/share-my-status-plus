@@ -28,10 +28,7 @@
 
 ### 基础设施
 - **容器化**: Docker + Docker Compose
-- **监控**: Prometheus + Grafana
-- **日志**: Loki + Promtail
-- **链路追踪**: Jaeger
-- **指标导出**: Node Exporter, Redis Exporter, MySQL Exporter
+
 
 ### 开发工具
 - **构建**: Make
@@ -88,9 +85,6 @@ make quick-deploy
 | 服务 | 地址 | 说明 |
 |------|------|------|
 | 后端 API | http://localhost:8080 | 应用接口 |
-| Grafana | http://localhost:3000 | 监控面板 |
-| Prometheus | http://localhost:9090 | 指标收集 |
-| Jaeger | http://localhost:16686 | 链路追踪 |
 
 ## 📖 文档
 
@@ -175,12 +169,6 @@ make restore BACKUP_NAME=backup_name
 
 ## 📊 监控与可观测性
 
-### Grafana 面板
-- **应用监控**: HTTP 请求、响应时间、错误率
-- **系统监控**: CPU、内存、磁盘、网络
-- **数据库监控**: 连接数、查询性能、慢查询
-- **缓存监控**: Redis 性能、内存使用、命中率
-
 ### 日志聚合
 - 结构化应用日志
 - 系统日志收集
@@ -233,8 +221,6 @@ make restore BACKUP_NAME=backup_name
 ## 🙏 致谢
 
 - [Hertz](https://github.com/cloudwego/hertz) - 高性能 Go HTTP 框架
-- [Prometheus](https://prometheus.io/) - 监控和告警工具
-- [Grafana](https://grafana.com/) - 可视化和监控平台
 - [Jaeger](https://www.jaegertracing.io/) - 分布式链路追踪
 
 ## 📞 支持

@@ -28,10 +28,7 @@ Share My Status 是一个实时状态分享平台，支持：
 - **后端服务**: Go + Hertz 框架
 - **数据库**: MySQL 8.4.5
 - **缓存**: Redis 7.4
-- **监控**: Prometheus + Grafana
-- **日志**: Loki + Promtail
-- **链路追踪**: Jaeger
-- **指标导出**: Node Exporter, Redis Exporter, MySQL Exporter
+
 
 ## 💻 系统要求
 
@@ -157,9 +154,6 @@ FEISHU_APP_SECRET=your_feishu_app_secret
 # 安全配置
 JWT_SECRET=your_jwt_secret_key_here
 ENCRYPTION_KEY=your_encryption_key_32_chars_long
-
-# Grafana 配置
-GRAFANA_ADMIN_PASSWORD=your_secure_password
 ```
 
 ### 部署到生产环境
@@ -212,24 +206,16 @@ make prod-stop
 | 服务 | 地址 | 用途 |
 |------|------|------|
 | 后端 API | http://localhost:8080 | 应用接口 |
-| Grafana | http://localhost:3000 | 监控面板 |
-| Prometheus | http://localhost:9090 | 指标收集 |
 | Jaeger | http://localhost:16686 | 链路追踪 |
-
-### Grafana 默认登录
-- **用户名**: admin
-- **密码**: 在 `.env.docker` 中配置的 `GRAFANA_ADMIN_PASSWORD`
 
 ### 监控指标
 
 - **应用指标**: HTTP 请求、响应时间、错误率
 - **系统指标**: CPU、内存、磁盘、网络
-- **数据库指标**: 连接数、查询性能、慢查询
-- **缓存指标**: Redis 性能、内存使用、命中率
 
 ### 日志聚合
 
-所有服务日志通过 Promtail 收集到 Loki，可在 Grafana 中查看：
+所有服务日志通过 Promtail 收集到 Loki：
 - 应用日志（结构化 JSON）
 - 系统日志
 - 容器日志
@@ -296,7 +282,6 @@ vim .env.docker
 ```bash
 # 修复数据目录权限
 sudo chown -R 999:999 data/mysql
-sudo chown -R 472:472 data/grafana
 ```
 
 #### 3. 内存不足
@@ -418,7 +403,7 @@ docker-compose pull                     # 拉取最新镜像
 2. **网络安全**: 生产环境建议使用防火墙限制端口访问
 3. **SSL/TLS**: 生产环境建议配置 HTTPS
 4. **定期备份**: 建议每日自动备份重要数据
-5. **监控告警**: 配置 Grafana 告警规则
+5. **监控告警**: 配置监控系统告警规则
 6. **日志审计**: 定期检查访问日志和错误日志
 
 ## 📞 支持与反馈

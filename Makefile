@@ -158,8 +158,6 @@ clean-all: ## Clean up everything including data
 health: ## Check service health
 	@echo "🏥 Checking service health..."
 	@curl -f http://localhost:8080/health || echo "❌ Backend unhealthy"
-	@curl -f http://localhost:9090/-/healthy || echo "❌ Prometheus unhealthy"
-	@curl -f http://localhost:3000/api/health || echo "❌ Grafana unhealthy"
 
 # Quick Commands
 quick-start: install dev-start ## Quick start for new developers
@@ -179,8 +177,6 @@ setup-prod: ## Setup production environment
 	@./scripts/deploy.sh
 	@echo "✅ Production environment ready!"
 	@echo "🌐 Backend: http://localhost:8080"
-	@echo "📊 Grafana: http://localhost:3000"
-	@echo "📈 Prometheus: http://localhost:9090"
 
 
 # Documentation

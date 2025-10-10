@@ -39,9 +39,9 @@ services:
       - "${REDIS_PORT:-6380}:6379"  # 使用不同端口避免冲突
     volumes:
       - redis_dev_data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_dev_password_123}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_dev_password_123}", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -49,60 +49,12 @@ services:
     networks:
       - dev-network
 
-  # 轻量级监控 - Prometheus (可选)
-  prometheus-dev:
-    image: prom/prometheus:v2.55.1
-    container_name: share-my-status-prometheus-dev
-    restart: unless-stopped
-    env_file: *env_file
-    ports:
-      - "${PROMETHEUS_PORT:-9091}:9090"  # 使用不同端口
-    volumes:
-      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_dev_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=7d'  # 开发环境保留7天即可
-      - '--web.enable-lifecycle'
-      - '--web.enable-admin-api'
-    networks:
-      - dev-network
 
-  # 轻量级可视化 - Grafana (可选)
-  grafana-dev:
-    image: grafana/grafana:11.4.0
-    container_name: share-my-status-grafana-dev
-    restart: unless-stopped
-    env_file: *env_file
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
-      - GF_USERS_ALLOW_SIGN_UP=true  # 开发环境允许注册
-      - GF_INSTALL_PLUGINS=redis-datasource
-      - GF_SECURITY_ALLOW_EMBEDDING=true
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
-    ports:
-      - "${GRAFANA_PORT:-3001}:3000"  # 使用不同端口
-    volumes:
-      - grafana_dev_data:/var/lib/grafana
-      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    depends_on:
-      - prometheus-dev
-    networks:
-      - dev-network
 
 volumes:
   mysql_dev_data:
     driver: local
   redis_dev_data:
-    driver: local
-  prometheus_dev_data:
-    driver: local
-  grafana_dev_data:
     driver: local
 
 networks:
