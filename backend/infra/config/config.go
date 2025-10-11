@@ -85,12 +85,10 @@ func Init() (*Config, error) {
 
 	config := &Config{
 		App: AppConfig{
-			Name:        getEnv("APP_NAME", "share-my-status"),
-			Version:     getEnv("APP_VERSION", "1.0.0"),
-			Environment: getEnv("APP_ENV", "dev"),
-			Port:        getEnvAsInt("HTTP_PORT", 8080),
-			Debug:       getEnvAsBool("DEBUG", false),
-			DefaultTZ:   getEnv("DEFAULT_TZ", "Asia/Shanghai"),
+			Name:      getEnv("APP_NAME", "share-my-status"),
+			Port:      getEnvAsInt("HTTP_PORT", 8080),
+			Debug:     getEnvAsBool("DEBUG", false),
+			DefaultTZ: getEnv("DEFAULT_TZ", "Asia/Shanghai"),
 		},
 		Database: DatabaseConfig{
 			DSN:             getEnv("DB_DSN", ""),

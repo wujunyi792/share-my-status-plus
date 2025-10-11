@@ -1,4 +1,3 @@
-import React from 'react';
 import { Wifi, WifiOff, AlertCircle, Loader2 } from 'lucide-react';
 import type { WSConnectionStatus } from '@/types';
 import { cn } from '@/utils';

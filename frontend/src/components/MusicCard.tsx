@@ -53,31 +53,31 @@ export function MusicCard({ music, className }: MusicCardProps) {
       "bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-200 hover:shadow-md h-full flex",
       className
     )}>
-      {/* 左侧：黑胶唱片 */}
-      <div className="relative flex-shrink-0 w-48 bg-gray-50 flex items-center justify-center">
-        {/* 黑胶唱片外圈 */}
-        <div className="relative w-40 h-40">
+      {/* 左侧：黑胶唱片 - 响应式宽度 */}
+      <div className="relative flex-shrink-0 w-32 sm:w-40 md:w-48 bg-gray-50 flex items-center justify-center">
+        {/* 黑胶唱片外圈 - 响应式尺寸 */}
+        <div className="relative w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40">
           {/* 旋转的黑胶唱片 */}
           <div className={cn(
             "absolute inset-0 rounded-full bg-gradient-to-br from-gray-900 via-black to-gray-900 shadow-2xl",
             isEmpty ? "" : "animate-spin-slow"
           )}>
-            {/* 唱片纹路 */}
+            {/* 唱片纹路 - 响应式间距 */}
             {[...Array(8)].map((_, i) => (
               <div
                 key={i}
                 className="absolute inset-0 rounded-full border border-gray-700/30"
                 style={{
-                  margin: `${i * 5}px`,
+                  margin: `${i * 3}px`,
                 }}
               />
             ))}
             
-            {/* 中心封面（跟随旋转） */}
+            {/* 中心封面（跟随旋转） - 响应式尺寸 */}
             <div className="absolute inset-0 flex items-center justify-center">
               <div 
                 className={cn(
-                  "relative w-16 h-16 rounded-full overflow-hidden shadow-lg transition-transform",
+                  "relative w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full overflow-hidden shadow-lg transition-transform",
                   isEmpty ? "cursor-default" : "cursor-pointer hover:scale-105"
                 )}
                 onClick={isEmpty ? undefined : handleCoverClick}
@@ -96,7 +96,7 @@ export function MusicCard({ music, className }: MusicCardProps) {
                     "w-full h-full flex items-center justify-center",
                     isEmpty ? "bg-gray-300" : "bg-gray-200"
                   )}>
-                    <Music className={cn("w-5 h-5", isEmpty ? "text-gray-500" : "text-gray-400")} />
+                    <Music className={cn("w-4 h-4 sm:w-5 sm:h-5", isEmpty ? "text-gray-500" : "text-gray-400")} />
                   </div>
                 )}
               </div>
@@ -107,69 +107,71 @@ export function MusicCard({ music, className }: MusicCardProps) {
               <div className="w-2 h-2 rounded-full bg-gray-600 shadow-inner" />
             </div>
 
-            {/* 禁止标志（空状态时显示） */}
+            {/* 禁止标志（空状态时显示） - 响应式尺寸 */}
             {isEmpty && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-32 h-32 border-4 border-red-500 rounded-full opacity-60" />
-                <div className="absolute w-32 h-1 bg-red-500 rotate-45 opacity-60" />
+                <div className="w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 border-2 sm:border-2 md:border-4 border-red-500 rounded-full opacity-60" />
+                <div className="absolute w-20 sm:w-28 md:w-32 h-0.5 sm:h-1 bg-red-500 rotate-45 opacity-60" />
               </div>
             )}
           </div>
         </div>
 
-        {/* 播放指示器 */}
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+        {/* 播放指示器 - 响应式 */}
+        <div className="absolute bottom-2 sm:bottom-3 md:bottom-4 left-1/2 transform -translate-x-1/2">
           {isEmpty ? (
-            <div className="flex items-center space-x-2 bg-gray-500/50 backdrop-blur-sm rounded-full px-3 py-1">
-              <div className="w-2 h-2 bg-gray-400 rounded-full" />
-              <span className="text-xs text-white font-medium">Not Playing</span>
+            <div className="flex items-center space-x-1 sm:space-x-2 bg-gray-500/50 backdrop-blur-sm rounded-full px-2 sm:px-3 py-0.5 sm:py-1">
+              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gray-400 rounded-full" />
+              <span className="text-[10px] sm:text-xs text-white font-medium hidden sm:inline">Not Playing</span>
+              <span className="text-[10px] text-white font-medium sm:hidden">暂停</span>
             </div>
           ) : (
-            <div className="flex items-center space-x-2 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-xs text-white font-medium">Playing</span>
+            <div className="flex items-center space-x-1 sm:space-x-2 bg-black/50 backdrop-blur-sm rounded-full px-2 sm:px-3 py-0.5 sm:py-1">
+              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-[10px] sm:text-xs text-white font-medium hidden sm:inline">Playing</span>
+              <span className="text-[10px] text-white font-medium sm:hidden">播放中</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* 右侧：音乐信息 */}
-      <div className="flex-1 flex flex-col justify-center p-6 min-w-0">
+      {/* 右侧：音乐信息 - 响应式内边距和字体 */}
+      <div className="flex-1 flex flex-col justify-center p-3 sm:p-4 md:p-6 min-w-0">
         {/* 音乐标题 */}
-        <div className="mb-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <Volume2 className={cn("w-5 h-5 flex-shrink-0", isEmpty ? "text-gray-400" : "text-green-500")} />
-            <h3 className={cn("text-lg font-semibold truncate", isEmpty ? "text-gray-500" : "text-gray-900")}>
+        <div className="mb-2 sm:mb-3 md:mb-4">
+          <div className="flex items-center space-x-1.5 sm:space-x-2 mb-1 sm:mb-2">
+            <Volume2 className={cn("w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0", isEmpty ? "text-gray-400" : "text-green-500")} />
+            <h3 className={cn("text-sm sm:text-base md:text-lg font-semibold truncate", isEmpty ? "text-gray-500" : "text-gray-900")}>
               {isEmpty ? '未在听歌' : (music.title || '未知曲目')}
             </h3>
           </div>
           
           {/* 艺术家 */}
           {!isEmpty && (
-            <p className="text-base text-gray-600 truncate ml-7">
+            <p className="text-xs sm:text-sm md:text-base text-gray-600 truncate ml-5 sm:ml-7">
               {music.artist || '-'}
             </p>
           )}
           
           {/* 专辑 */}
           {!isEmpty && (
-            <p className="text-sm text-gray-500 truncate ml-7 mt-1">
+            <p className="text-xs sm:text-sm text-gray-500 truncate ml-5 sm:ml-7 mt-0.5 sm:mt-1">
               专辑：{music.album || '-'}
             </p>
           )}
         </div>
 
-        {/* 更新时间 - 优化布局，提高信息密度 */}
+        {/* 更新时间 - 响应式布局 */}
         <div className="mt-auto">
-          <div className="flex items-center justify-between text-xs text-gray-500">
-            <div className="flex items-center space-x-1">
-              <Clock className="w-3 h-3" />
-              <span>更新于 {formatRelativeTime(music.ts)}</span>
+          <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-500">
+            <div className="flex items-center space-x-1 min-w-0 flex-1">
+              <Clock className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">更新于 {formatRelativeTime(music.ts)}</span>
             </div>
             {!isEmpty && (
-              <div className="flex items-center space-x-1 text-green-500">
+              <div className="flex items-center space-x-1 text-green-500 flex-shrink-0 ml-2">
                 <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                <span>实时</span>
+                <span className="hidden sm:inline">实时</span>
               </div>
             )}
           </div>

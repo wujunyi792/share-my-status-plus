@@ -167,16 +167,10 @@ struct SettingsTabView: View {
                 // Feature Settings
                 GroupBox("功能设置") {
                     VStack(alignment: .leading, spacing: 15) {
-                        Toggle("启用状态上报", isOn: $configuration.isReportingEnabled)
-                            .font(.headline)
-                        
-                        Divider()
-                        
-                        VStack(alignment: .leading, spacing: 15) {
-                            // Music Reporting
-                            Toggle("音乐信息上报", isOn: $configuration.musicReportingEnabled)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
+                        // Music Reporting
+                        Toggle("音乐信息上报", isOn: $configuration.musicReportingEnabled)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
                             
                             Divider()
                             
@@ -242,11 +236,9 @@ struct SettingsTabView: View {
                                                 .frame(width: 60)
                                         }
                                     }
-                                    .padding(.leading, 20)
-                                }
+                                .padding(.leading, 20)
                             }
                         }
-                        .disabled(!configuration.isReportingEnabled)
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 4)

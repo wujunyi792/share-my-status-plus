@@ -19,13 +19,8 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
-        ws: false, // 禁用WebSocket代理，避免冲突
-      },
-      '/v1': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-        ws: false, // 禁用WebSocket代理，避免冲突
+        rewriteWsOrigin: true,
+        ws: true,
       },
     },
   },

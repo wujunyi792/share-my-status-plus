@@ -16,6 +16,9 @@ class StatusReporter: ObservableObject {
     @Published var lastError: Error?
     @Published var reportingStatus = "未启动"
     
+    // UserDefaults key for persisting reporting state
+    private static let reportingStateKey = "reporterIsEnabled"
+    
     @Published var currentMusic: MusicSnapshot?
     @Published var currentSystem: SystemSnapshot?
     @Published var currentActivity: ActivitySnapshot?
@@ -81,7 +84,7 @@ class StatusReporter: ObservableObject {
     private var lastReportedActivityLabel: String?
 
     // Configuration Update
-    func updateConfiguration(_ config: AppConfiguration) {
+    func updateConfiguration(_ config: AppConfiguration, autoStart: Bool = false) {
         // Prevent concurrent configuration updates
         guard !isUpdatingConfiguration else {
             logger.warning("Configuration update already in progress, skipping")
@@ -106,7 +109,7 @@ class StatusReporter: ObservableObject {
                 }
             }
             
-            logger.info("Updating configuration...")
+            logger.info("Updating configuration (autoStart=\(autoStart))...")
             
             // Update all services
             await mediaService.updateWhitelist(config.musicAppWhitelist)
@@ -124,19 +127,14 @@ class StatusReporter: ObservableObject {
             await systemService.updatePollingInterval(config.systemPollingInterval)
             await activityService.updatePollingInterval(config.activityPollingInterval)
             
-            // Handle reporting state changes
-            if !config.isReportingEnabled && isReporting {
-                // User disabled reporting entirely
-                logger.info("Reporting disabled, stopping all services")
-                stopReporting()
-            } else if config.isReportingEnabled && !isReporting {
-                // User enabled reporting
-                logger.info("Reporting enabled, starting services")
-                startReporting()
-            } else if config.isReportingEnabled && isReporting {
-                // Reporting is active, check individual service toggles
-                logger.info("Reporting active, checking service toggles")
+            // Handle service toggles if reporting is active
+            if isReporting {
+                logger.info("Reporting is active, checking service toggles")
                 await handleServiceToggles(previous: previousSnapshot, current: config)
+            } else if autoStart {
+                // Only auto-start if explicitly requested (e.g., initial launch with saved state)
+                logger.info("Auto-start requested, starting services")
+                startReporting()
             }
             
             logger.info("Configuration update completed")
@@ -209,6 +207,19 @@ class StatusReporter: ObservableObject {
         await updateReportingStatus()
     }
     
+    // Persistent State Management
+    
+    /// Get the saved reporting state from UserDefaults
+    func getSavedReportingState() -> Bool {
+        return UserDefaults.standard.bool(forKey: Self.reportingStateKey)
+    }
+    
+    /// Save the reporting state to UserDefaults
+    private func saveReportingState(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: Self.reportingStateKey)
+        logger.info("Reporting state saved: \(enabled)")
+    }
+    
     // Start Reporting
     func startReporting() {
         guard let config = configuration else {
@@ -226,6 +237,9 @@ class StatusReporter: ObservableObject {
         logger.info("Starting status reporting...")
         isReporting = true
         lastError = nil
+        
+        // Persist reporting state
+        saveReportingState(true)
         
         Task {
             // Start each enabled service using dedicated methods
@@ -255,6 +269,9 @@ class StatusReporter: ObservableObject {
     func stopReporting() {
         logger.info("Stopping status reporting...")
         isReporting = false
+        
+        // Persist reporting state
+        saveReportingState(false)
         
         Task {
             // Stop all services using dedicated methods
@@ -436,7 +453,7 @@ class StatusReporter: ObservableObject {
     
     /// Report music change immediately (event-driven)
     private func reportMusicChange(_ music: MusicSnapshot?) async {
-        guard let config = configuration, config.isReportingEnabled else {
+        guard let config = configuration else {
             return
         }
         
@@ -486,7 +503,7 @@ class StatusReporter: ObservableObject {
     
     /// Report system status periodically (polling-based)
     private func reportSystemStatus() async {
-        guard let config = configuration, config.isReportingEnabled, config.systemReportingEnabled else {
+        guard let config = configuration, config.systemReportingEnabled else {
             return
         }
         
@@ -513,7 +530,7 @@ class StatusReporter: ObservableObject {
     
     /// Report activity status periodically (polling-based)
     private func reportActivityStatus() async {
-        guard let config = configuration, config.isReportingEnabled, config.activityReportingEnabled else {
+        guard let config = configuration, config.activityReportingEnabled else {
             return
         }
         
@@ -569,11 +586,6 @@ class StatusReporter: ObservableObject {
     private func updateReportingStatus() async {
         guard let config = configuration else {
             reportingStatus = "未配置"
-            return
-        }
-        
-        if !config.isReportingEnabled {
-            reportingStatus = "已禁用"
             return
         }
         

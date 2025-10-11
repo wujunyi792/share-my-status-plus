@@ -87,16 +87,18 @@ export function StatusPage() {
       {/* 头部 */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex-1 min-w-0">
               <h1 className="text-2xl font-bold text-gray-900">
                 {isDemoMode ? '演示模式 - 实时状态' : '实时状态'}
               </h1>
-              <p className="text-gray-600 mt-1">
+              <p className="text-gray-600 mt-1 text-sm sm:text-base truncate">
                 {isDemoMode ? '演示数据展示' : `分享链接: /s/${sharingKey}`}
               </p>
             </div>
-            <ConnectionStatus status={connectionStatus} />
+            <div className="flex-shrink-0">
+              <ConnectionStatus status={connectionStatus} />
+            </div>
           </div>
         </div>
       </div>

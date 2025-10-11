@@ -4,7 +4,6 @@ import { handleError } from './index';
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: '/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -37,7 +36,7 @@ api.interceptors.response.use(
 export const apiClient = {
   // 查询状态
   async queryState(sharingKey: string): Promise<StateSnapshot> {
-    const response: APIResponse<StateSnapshot> = await api.get(`/v1/state/query?sharingKey=${sharingKey}`);
+    const response: APIResponse<StateSnapshot> = await api.get(`/api/v1/state/query?sharingKey=${sharingKey}`);
     if (response.code !== 0) {
       throw new Error(response.message);
     }
@@ -46,26 +45,12 @@ export const apiClient = {
 
   // 查询统计信息
   async queryStats(request: StatsQueryRequest, sharingKey?: string): Promise<StatsQueryResponse> {
-    const url = sharingKey ? `/v1/stats/query?sharingKey=${sharingKey}` : '/v1/stats/query';
+    const url = sharingKey ? `/api/v1/stats/query?sharingKey=${sharingKey}` : '/api/v1/stats/query';
     const response: StatsQueryResponse = await api.post(url, request);
     if (response.base.code !== 0) {
       throw new Error(response.base.message || 'Failed to query stats');
     }
     return response;
-  },
-
-  // 检查封面是否存在
-  async checkCoverExists(md5: string): Promise<{ exists: boolean; url?: string }> {
-    try {
-      const response = await api.get(`/v1/cover/exists?md5=${md5}`);
-      const responseData = response as any;
-      return { exists: true, url: responseData.url };
-    } catch (error) {
-      if (axios.isAxiosError(error) && error.response?.status === 404) {
-        return { exists: false };
-      }
-      throw error;
-    }
   },
 
   // 获取封面URL
@@ -74,17 +59,6 @@ export const apiClient = {
     const baseUrl = window.location.origin;
     const path = size ? `/api/v1/cover/${hash}?size=${size}` : `/api/v1/cover/${hash}`;
     return `${baseUrl}${path}`;
-  },
-
-  // 上传封面
-  async uploadCover(base64Data: string): Promise<{ hash: string }> {
-    const response: APIResponse<{ hash: string }> = await api.post('/v1/cover/upload', {
-      b64: base64Data,
-    });
-    if (response.code !== 0) {
-      throw new Error(response.message);
-    }
-    return response.data;
   },
 };
 

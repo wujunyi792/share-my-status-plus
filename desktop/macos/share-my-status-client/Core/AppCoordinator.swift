@@ -45,9 +45,11 @@ class AppCoordinator: ObservableObject {
             .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self = self else { return }
-                logger.info("Configuration changed, updating reporter")
+                logger.info("Configuration changed, updating reporter (without auto-start)")
                 Task { @MainActor in
-                    self.reporter.updateConfiguration(self.configuration)
+                    // Update configuration only, do not auto-start reporting
+                    // The user controls reporting state through manual start/stop buttons
+                    self.reporter.updateConfiguration(self.configuration, autoStart: false)
                 }
             }
             .store(in: &cancellables)
@@ -56,12 +58,24 @@ class AppCoordinator: ObservableObject {
     // Lifecycle
     func applicationDidFinishLaunching() {
         logger.info("Application did finish launching")
-        logger.info("Configuration: isReportingEnabled=\(configuration.isReportingEnabled), isValid=\(configuration.isValidConfiguration())")
+        logger.info("Configuration: isValid=\(configuration.isValidConfiguration())")
         
         // Perform initial configuration sync
-        // This will auto-start services if enabled in configuration
         logger.info("Performing initial configuration sync...")
-        reporter.updateConfiguration(configuration)
+        
+        // Check if reporting was enabled in previous session
+        let shouldAutoStart = reporter.getSavedReportingState()
+        logger.info("Saved reporting state: \(shouldAutoStart)")
+        
+        if shouldAutoStart && configuration.isValidConfiguration() {
+            // Auto-start reporting if it was enabled before and configuration is valid
+            logger.info("Auto-starting reporting from saved state...")
+            reporter.updateConfiguration(configuration, autoStart: true)
+        } else {
+            // Just update configuration without auto-starting
+            logger.info("Not auto-starting reporting")
+            reporter.updateConfiguration(configuration, autoStart: false)
+        }
     }
     
     func applicationWillTerminate() {

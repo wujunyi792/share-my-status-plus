@@ -20,9 +20,6 @@ enum DefaultSettings {
     
     // Feature Toggles
     
-    /// Default reporting enabled state
-    static let isReportingEnabled = true
-    
     /// Default music reporting enabled state
     static let musicReportingEnabled = true
     

@@ -1,4 +1,3 @@
-import React from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import type { AppError } from '@/types';
 import { cn } from '@/utils';

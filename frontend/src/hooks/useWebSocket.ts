@@ -271,8 +271,10 @@ export function useWebSocket({
   ]);
 
   // Disconnect from WebSocket
-  const disconnect = useCallback(() => {
-    isManualCloseRef.current = true;
+  const disconnect = useCallback((isManual = true) => {
+    if (isManual) {
+      isManualCloseRef.current = true;
+    }
     clearReconnectTimer();
 
     if (wsRef.current) {
@@ -334,8 +336,20 @@ export function useWebSocket({
     }
   }, [sharingKey]);
 
+  // Handle page unload - clean up WebSocket connection
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      console.log('Page unloading - closing WebSocket');
+      disconnect(true); // Manual close
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [disconnect]);
+
   // Initialize connection on mount
   useEffect(() => {
+    // Always reset manual close flag on mount
     isManualCloseRef.current = false;
     backoffDelayRef.current = reconnectInterval;
 
@@ -345,15 +359,19 @@ export function useWebSocket({
     }
 
     return () => {
-      // Skip disconnect in development/HMR mode
-      const isDev = typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.DEV;
-      const isHMR = typeof import.meta !== 'undefined' && !!(import.meta as any).hot;
-      if (isDev && isHMR) {
-        return;
+      // In cleanup, only clear timers, don't close WebSocket
+      // This prevents issues with React Strict Mode in production
+      // The WebSocket will be cleaned up when the page unloads
+      clearReconnectTimer();
+      
+      // Only truly disconnect on page unload (not on component unmount)
+      // This check ensures we don't break connections during React remounts
+      if (typeof window !== 'undefined' && !document.hidden) {
+        // Page is still visible, likely a React remount - keep connection alive
+        console.log('Component unmounting but page visible - keeping WebSocket alive');
       }
-      disconnect();
     };
-  }, [connect, disconnect, reconnectInterval]);
+  }, [connect, reconnectInterval, clearReconnectTimer]);
 
   return {
     connect,

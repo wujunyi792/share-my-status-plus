@@ -327,7 +327,7 @@ func (h *EventHandler) executeInfoCommand(ctx context.Context, user *model.User,
 		"📈 音乐统计: %s\n"+
 		"🔗 分享链接: %s",
 		status,
-		"[已加密存储]", // Secret Key 不直接显示
+		user.SecretKey,
 		user.SharingKey,
 		map[bool]string{true: "开启", false: "关闭"}[publicEnabled],
 		map[bool]string{true: "已授权", false: "未授权"}[musicStatsAuthorized],

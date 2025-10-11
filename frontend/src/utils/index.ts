@@ -80,10 +80,7 @@ export function getResourceColor(value?: number): string {
 
 // 生成WebSocket URL
 export function getWebSocketURL(sharingKey: string): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  // 直接连接到后端服务器，避免通过Vite代理
-  const backendHost = 'localhost:8080';
-  return `${protocol}//${backendHost}/api/v1/ws?sharingKey=${encodeURIComponent(sharingKey)}`;
+    return `/api/v1/ws?sharingKey=${encodeURIComponent(sharingKey)}`;
 }
 
 // 错误处理

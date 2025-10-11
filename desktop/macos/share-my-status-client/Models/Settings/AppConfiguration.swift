@@ -15,7 +15,6 @@ import AppKit
 struct ExportableConfiguration: Codable {
     var secretKey: String?  // Optional to allow excluding sensitive data
     var endpointURL: String
-    var isReportingEnabled: Bool
     var musicReportingEnabled: Bool
     var systemReportingEnabled: Bool
     var activityReportingEnabled: Bool
@@ -47,12 +46,6 @@ class AppConfiguration: ObservableObject {
     }
     
     // Feature Toggles
-    @Published var isReportingEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(isReportingEnabled, forKey: "isReportingEnabled")
-        }
-    }
-    
     @Published var musicReportingEnabled: Bool {
         didSet {
             UserDefaults.standard.set(musicReportingEnabled, forKey: "musicReportingEnabled")
@@ -115,7 +108,6 @@ class AppConfiguration: ObservableObject {
         self.endpointURL = UserDefaults.standard.string(forKey: "endpointURL") ?? DefaultSettings.endpointURL
         
         // Feature toggles
-        self.isReportingEnabled = UserDefaults.standard.object(forKey: "isReportingEnabled") as? Bool ?? DefaultSettings.isReportingEnabled
         self.musicReportingEnabled = UserDefaults.standard.object(forKey: "musicReportingEnabled") as? Bool ?? DefaultSettings.musicReportingEnabled
         self.systemReportingEnabled = UserDefaults.standard.object(forKey: "systemReportingEnabled") as? Bool ?? DefaultSettings.systemReportingEnabled
         self.activityReportingEnabled = UserDefaults.standard.object(forKey: "activityReportingEnabled") as? Bool ?? DefaultSettings.activityReportingEnabled
@@ -147,7 +139,7 @@ class AppConfiguration: ObservableObject {
     func resetToDefaults() {
         let defaults = UserDefaults.standard
         let keys = [
-            "secretKey", "endpointURL", "isReportingEnabled",
+            "secretKey", "endpointURL",
             "musicReportingEnabled", "systemReportingEnabled", "activityReportingEnabled",
             "musicStatsAuthorized", "musicAppWhitelist",
             "activityGroups",
@@ -159,7 +151,6 @@ class AppConfiguration: ObservableObject {
         // Reset to default values
         self.secretKey = DefaultSettings.secretKey
         self.endpointURL = DefaultSettings.endpointURL
-        self.isReportingEnabled = DefaultSettings.isReportingEnabled
         self.musicReportingEnabled = DefaultSettings.musicReportingEnabled
         self.systemReportingEnabled = DefaultSettings.systemReportingEnabled
         self.activityReportingEnabled = DefaultSettings.activityReportingEnabled
@@ -179,7 +170,6 @@ class AppConfiguration: ObservableObject {
         let config = ExportableConfiguration(
             secretKey: includeSecretKey ? secretKey : nil,
             endpointURL: endpointURL,
-            isReportingEnabled: isReportingEnabled,
             musicReportingEnabled: musicReportingEnabled,
             systemReportingEnabled: systemReportingEnabled,
             activityReportingEnabled: activityReportingEnabled,
@@ -236,7 +226,6 @@ class AppConfiguration: ObservableObject {
             self.secretKey = secretKey
         }
         self.endpointURL = config.endpointURL
-        self.isReportingEnabled = config.isReportingEnabled
         self.musicReportingEnabled = config.musicReportingEnabled
         self.systemReportingEnabled = config.systemReportingEnabled
         self.activityReportingEnabled = config.activityReportingEnabled

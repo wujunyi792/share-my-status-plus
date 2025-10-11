@@ -4,14 +4,15 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache git gcc libc-dev ca-certificates tzdata
+ RUN apk add --no-cache git bash
 
 # Copy go.mod and go.sum first to leverage Docker cache
-COPY go.mod go.sum ./
+COPY backend/go.mod backend/go.sum ./
+
 RUN go mod download
 
 # Copy the entire source code
-COPY . .
+COPY backend/ ./
 
 # Make build script executable and run it
 RUN chmod +x build.sh && ./build.sh
@@ -22,20 +23,14 @@ FROM alpine:3.22.0
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata curl
+RUN apk add --no-cache ca-certificates tzdata curl bash
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
-# Copy the built binary from builder stage
-COPY --from=builder /app/output/bin/hertz_service /app/share-my-status
-
-# Copy bootstrap script and other output files
-COPY --from=builder /app/output/bootstrap.sh /app/bootstrap.sh
-
-# Copy configuration files if they exist
-COPY --from=builder /app/.env.example /app/.env.example
+# Copy the built output from builder stage
+COPY --from=builder /app/output/ /app/
 
 # Set proper ownership
 RUN chown -R appuser:appgroup /app && \

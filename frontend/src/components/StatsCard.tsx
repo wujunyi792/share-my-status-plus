@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { BarChart3, TrendingUp, Music, Calendar, ChevronDown, ChevronUp, Database, RefreshCw, Disc3 } from 'lucide-react';
 import { apiClient } from '@/utils/api';
 import { useStats, useAppStoreActions } from '@/store/useAppStore';
@@ -36,7 +36,79 @@ export function StatsCard({ className, sharingKey }: StatsCardProps) {
   const stats = useStats();
   const { setStats } = useAppStoreActions();
 
+  // Check if in demo mode
+  const isDemoMode = !sharingKey || sharingKey === 'demo';
+
+  // Demo data - memoized to avoid recreating on every render
+  const demoStats = useMemo(() => ({
+    base: {
+      code: 0,
+      message: 'Demo mode',
+    },
+    window: {
+      type: selectedWindow,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      fromTs: Date.now() - 7 * 24 * 60 * 60 * 1000,
+      toTs: Date.now(),
+    },
+    summary: {
+      plays: 342,
+      uniqueTracks: 128,
+    },
+    topArtists: [
+      { name: 'Coldplay', count: 45 },
+      { name: 'Taylor Swift', count: 38 },
+      { name: 'The Weeknd', count: 32 },
+      { name: 'Ed Sheeran', count: 28 },
+      { name: 'Imagine Dragons', count: 24 },
+      { name: 'Maroon 5', count: 21 },
+      { name: 'Bruno Mars', count: 18 },
+      { name: 'Adele', count: 15 },
+      { name: 'Justin Bieber', count: 12 },
+      { name: 'Ariana Grande', count: 10 },
+    ],
+    topTracks: [
+      { name: 'Yellow', count: 23 },
+      { name: 'Blinding Lights', count: 19 },
+      { name: 'Shape of You', count: 17 },
+      { name: 'Anti-Hero', count: 15 },
+      { name: 'Believer', count: 14 },
+      { name: 'Someone Like You', count: 12 },
+      { name: 'Uptown Funk', count: 11 },
+      { name: 'Perfect', count: 10 },
+      { name: 'Sorry', count: 9 },
+      { name: 'thank u, next', count: 8 },
+    ],
+    topAlbums: [
+      { name: 'Parachutes', count: 45 },
+      { name: 'After Hours', count: 32 },
+      { name: 'Divide', count: 28 },
+      { name: 'Midnights', count: 24 },
+      { name: 'Night Visions', count: 21 },
+      { name: '21', count: 18 },
+      { name: 'Unorthodox Jukebox', count: 15 },
+      { name: 'Purpose', count: 12 },
+      { name: 'thank u, next', count: 10 },
+      { name: 'Red', count: 8 },
+    ],
+    cached: false,
+  }), [selectedWindow]);
+
   const loadStats = useCallback(async () => {
+    // In demo mode, use mock data instead of API call
+    if (isDemoMode) {
+      console.log('Demo mode: using mock stats data');
+      setIsLoading(true);
+      setError(null);
+      
+      // Simulate loading delay
+      setTimeout(() => {
+        setStats(demoStats);
+        setIsLoading(false);
+      }, 300);
+      return;
+    }
+
     console.log('Loading stats for sharingKey:', sharingKey);
     setIsLoading(true);
     setError(null);
@@ -60,7 +132,7 @@ export function StatsCard({ className, sharingKey }: StatsCardProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sharingKey, selectedWindow, topN, setStats]);
+  }, [isDemoMode, sharingKey, selectedWindow, topN, setStats, demoStats]);
 
   useEffect(() => {
     loadStats();
@@ -112,22 +184,24 @@ export function StatsCard({ className, sharingKey }: StatsCardProps) {
     )}>
       {/* 头部 */}
       <div className="p-4 border-b border-gray-100">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* 左侧标题 */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             <div className="p-2 bg-purple-100 rounded-lg">
               <BarChart3 className="w-5 h-5 text-purple-600" />
             </div>
             <div>
               <h3 className="font-semibold text-gray-900">音乐统计</h3>
-              <p className="text-sm text-gray-500">聚合播放数据</p>
+              <p className="text-sm text-gray-500 hidden sm:block">聚合播放数据</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          {/* 右侧控制按钮 */}
+          <div className="flex items-center gap-2 flex-wrap">
             {/* 刷新按钮 */}
             <button
               onClick={loadStats}
-              className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
               disabled={isLoading}
               title="刷新统计数据"
             >
@@ -141,7 +215,7 @@ export function StatsCard({ className, sharingKey }: StatsCardProps) {
             <select
               value={selectedWindow}
               onChange={(e) => setSelectedWindow(Number(e.target.value) as WindowType)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="text-xs sm:text-sm border border-gray-200 rounded-lg px-2 sm:px-3 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent flex-shrink-0"
               disabled={isLoading}
             >
               {windowTypeOptions.map((option) => (
@@ -155,7 +229,7 @@ export function StatsCard({ className, sharingKey }: StatsCardProps) {
             <select
               value={topN}
               onChange={(e) => setTopN(Number(e.target.value))}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="text-xs sm:text-sm border border-gray-200 rounded-lg px-2 sm:px-3 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent flex-shrink-0"
               disabled={isLoading}
             >
               {topNOptions.map((option) => (
@@ -168,7 +242,7 @@ export function StatsCard({ className, sharingKey }: StatsCardProps) {
             {/* 展开/收起按钮 */}
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
               disabled={isLoading}
             >
               {isExpanded ? (

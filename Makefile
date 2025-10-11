@@ -1,45 +1,105 @@
-# Share My Status - Makefile
-# Simplifies common development and deployment tasks
+# Share My Status - Minimal Makefile
+# Only the most basic development setup, deployment and ops commands
 
-.PHONY: help dev dev-start dev-stop dev-restart dev-logs dev-clean dev-backend hz-update prod prod-start prod-stop prod-restart prod-status prod-logs prod-monitor prod-update build deploy deploy-skip-backup deploy-skip-build backup backup-list backup-clean restore test lint format clean clean-all install wire health quick-start quick-deploy setup-dev setup-prod docs version debug
+.PHONY: help setup dev dev-start dev-stop dev-logs dev-clean prod prod-start prod-stop prod-restart prod-status prod-logs deploy clean health hz-update wire prod-rebuild-backend prod-rebuild-frontend
 
 # Default target
-help: ## Show this help message
-	@echo "Share My Status - Available Commands:"
+help: ## Show available commands
+	@echo "Share My Status - Basic Commands:"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Examples:"
-	@echo "  make dev-start    # Start development environment"
-	@echo "  make prod-deploy  # Deploy to production"
-	@echo "  make backup       # Create backup"
+	@echo "  make setup       # Prepare local env files"
+	@echo "  make dev-start   # Start development services"
+	@echo "  make deploy      # Deploy to production"
+	@echo "  make prod-logs   # View production logs"
+
+# Environment Setup
+setup: ## Prepare local environment files (.env and backend/.env)
+	@echo "🛠️ Preparing environment files..."
+	@if [ ! -f ".env" ]; then \
+		if [ -f ".env.example" ]; then \
+			echo "📝 Creating .env from .env.example"; \
+			cp .env.example .env; \
+		else \
+			echo "⚠️ .env.example not found, please create .env manually"; \
+		fi; \
+	fi
+	@if [ ! -f "backend/.env" ]; then \
+		if [ -f "backend/.env.example" ]; then \
+			echo "📝 Creating backend/.env from backend/.env.example"; \
+			cp backend/.env.example backend/.env; \
+		else \
+			echo "⚠️ backend/.env.example not found, please create backend/.env manually"; \
+		fi; \
+	fi
+	@echo "✅ Environment setup complete. Review .env and backend/.env before starting."
 
 # Development Commands
-dev: dev-start ## Start development environment (alias for dev-start)
+dev: dev-start ## Start development environment (alias)
+
+COMPOSE := $(shell if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then echo docker\ compose; else echo docker-compose; fi)
+ENV_FILE := .env
+COMPOSE_FILE := docker-compose.yml
 
 dev-start: ## Start development services
 	@echo "🚀 Starting development environment..."
-	@./scripts/dev.sh start
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) ps
 
 dev-stop: ## Stop development services
 	@echo "🛑 Stopping development environment..."
-	@./scripts/dev.sh stop
-
-dev-restart: ## Restart development services
-	@echo "🔄 Restarting development environment..."
-	@./scripts/dev.sh restart
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) down
 
 dev-logs: ## Show development logs
 	@echo "📋 Showing development logs..."
-	@./scripts/dev.sh logs
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) logs -f
 
 dev-clean: ## Clean development data
 	@echo "🧹 Cleaning development data..."
-	@./scripts/dev.sh clean
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) down -v --remove-orphans
 
-dev-backend: ## Run backend locally with hot reload
-	@echo "🔥 Starting backend with hot reload..."
-	@./scripts/dev.sh backend
+# Production / Ops Commands
+prod: prod-start ## Start production services (alias)
+
+prod-start: ## Start production services
+	@echo "🚀 Starting production services..."
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) ps
+
+prod-stop: ## Stop production services
+	@echo "🛑 Stopping production services..."
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) down
+
+prod-restart: ## Restart production services
+	@echo "🔄 Restarting production services..."
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) restart || { $(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) down; $(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d; }
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) ps
+
+prod-status: ## Show production service status
+	@echo "📊 Checking production status..."
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) ps
+
+prod-logs: ## Show production logs
+	@echo "📋 Showing production logs..."
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) logs -f
+
+# Deployment
+deploy: ## Deploy to production
+	@echo "🚀 Deploying to production..."
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) pull || true
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d
+
+# Ops Utilities
+clean: ## Clean up Docker resources (containers, images, volumes)
+	@echo "🧹 Cleaning up Docker resources..."
+	@docker system prune -f
+	@docker volume prune -f
+
+health: ## Check backend service health
+	@echo "🏥 Checking service health..."
+	@curl -f http://localhost:8080/healthz || echo "❌ Backend unhealthy"
 
 hz-update: ## Update backend code from IDL files
 	@echo "🔄 Updating backend code from IDL..."
@@ -49,166 +109,15 @@ wire: ## Generate dependency injection code
 	@echo "🔌 Generating dependency injection code..."
 	@cd backend && wire ./infra/
 
-# Production Commands
-prod: prod-start ## Start production services (alias for prod-start)
 
-prod-start: ## Start production services
-	@echo "🚀 Starting production services..."
-	@./scripts/start.sh start
+prod-rebuild-backend: ## Rebuild backend service (rm container/image, then compose up)
+	@echo "🧱 Rebuilding backend service..."
+	@docker rm -f share-my-status-backend || true
+	@docker image rm -f share-my-status-share-backend:latest || docker image rm -f share-my-status_share-backend:latest || true
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d share-backend
 
-prod-stop: ## Stop production services
-	@echo "🛑 Stopping production services..."
-	@./scripts/start.sh stop
-
-prod-restart: ## Restart production services
-	@echo "🔄 Restarting production services..."
-	@./scripts/start.sh restart
-
-prod-status: ## Show production service status
-	@echo "📊 Checking production status..."
-	@./scripts/start.sh status
-
-prod-logs: ## Show production logs
-	@echo "📋 Showing production logs..."
-	@./scripts/start.sh logs
-
-prod-monitor: ## Monitor production services
-	@echo "👀 Monitoring production services..."
-	@./scripts/start.sh monitor
-
-prod-update: ## Update production deployment
-	@echo "⬆️ Updating production deployment..."
-	@./scripts/start.sh update
-
-# Deployment Commands
-build: ## Build application images
-	@echo "🔨 Building application..."
-	@docker build -t share-my-status-backend:latest ./backend/
-
-deploy: ## Deploy to production with backup
-	@echo "🚀 Deploying to production..."
-	@./scripts/deploy.sh
-
-deploy-skip-backup: ## Deploy to production without backup
-	@echo "🚀 Deploying to production (skipping backup)..."
-	@./scripts/deploy.sh --skip-backup
-
-deploy-skip-build: ## Deploy to production without building
-	@echo "🚀 Deploying to production (skipping build)..."
-	@./scripts/deploy.sh --skip-build
-
-# Backup Commands
-backup: ## Create backup
-	@echo "💾 Creating backup..."
-	@./scripts/backup.sh create
-
-backup-list: ## List available backups
-	@echo "📋 Listing backups..."
-	@./scripts/backup.sh list
-
-backup-clean: ## Clean old backups (7+ days)
-	@echo "🧹 Cleaning old backups..."
-	@./scripts/backup.sh clean
-
-restore: ## Restore from backup (requires BACKUP_NAME)
-	@if [ -z "$(BACKUP_NAME)" ]; then \
-		echo "❌ Please specify BACKUP_NAME: make restore BACKUP_NAME=20240101_120000"; \
-		exit 1; \
-	fi
-	@echo "🔄 Restoring from backup: $(BACKUP_NAME)..."
-	@./scripts/backup.sh restore $(BACKUP_NAME)
-
-# Utility Commands
-install: ## Install dependencies and setup environment
-	@echo "📦 Installing dependencies..."
-	@if [ ! -f ".env.docker" ]; then \
-		echo "📝 Creating environment file..."; \
-		cp .env.docker.example .env.docker 2>/dev/null || echo "Please create .env.docker manually"; \
-	fi
-	@echo "✅ Setup complete. Please edit .env.docker with your configuration."
-
-test: ## Run tests
-	@echo "🧪 Running tests..."
-	@cd backend && go test ./...
-
-lint: ## Run linting
-	@echo "🔍 Running linting..."
-	@cd backend && go vet ./...
-	@cd backend && golangci-lint run || echo "golangci-lint not installed, skipping"
-
-format: ## Format code
-	@echo "✨ Formatting code..."
-	@cd backend && go fmt ./...
-
-clean: ## Clean up containers, images, and volumes
-	@echo "🧹 Cleaning up Docker resources..."
-	@docker system prune -f
-	@docker volume prune -f
-
-clean-all: ## Clean up everything including data
-	@echo "⚠️  This will remove all data! Press Ctrl+C to cancel..."
-	@sleep 5
-	@docker-compose --env-file .env.docker down -v --remove-orphans
-	@docker system prune -af
-	@docker volume prune -f
-	@rm -rf data/
-	@echo "🧹 Complete cleanup finished"
-
-# Health Checks
-health: ## Check service health
-	@echo "🏥 Checking service health..."
-	@curl -f http://localhost:8080/health || echo "❌ Backend unhealthy"
-
-# Quick Commands
-quick-start: install dev-start ## Quick start for new developers
-
-quick-deploy: backup build deploy ## Quick production deployment with backup
-
-# Environment Setup
-setup-dev: ## Setup development environment
-	@echo "🛠️ Setting up development environment..."
-	@./scripts/dev.sh start
-	@echo "✅ Development environment ready!"
-	@echo "🌐 Backend: http://localhost:8080"
-
-
-setup-prod: ## Setup production environment
-	@echo "🛠️ Setting up production environment..."
-	@./scripts/deploy.sh
-	@echo "✅ Production environment ready!"
-	@echo "🌐 Backend: http://localhost:8080"
-
-
-# Documentation
-docs: ## Generate documentation
-	@echo "📚 Generating documentation..."
-	@cd backend && go doc -all > ../docs/api.md || echo "Documentation generation requires go doc"
-
-# Version Management
-version: ## Show version information
-	@echo "📋 Version Information:"
-	@echo "Project: Share My Status"
-	@echo "Docker: $(shell docker --version)"
-	@echo "Docker Compose: $(shell docker-compose --version)"
-	@echo "Go: $(shell cd backend && go version)"
-
-# Troubleshooting
-debug: ## Show debug information
-	@echo "🐛 Debug Information:"
-	@echo "=== Docker Info ==="
-	@docker info
-	@echo ""
-	@echo "=== Container Status ==="
-	@docker ps -a
-	@echo ""
-	@echo "=== Network Status ==="
-	@docker network ls
-	@echo ""
-	@echo "=== Volume Status ==="
-	@docker volume ls
-	@echo ""
-	@echo "=== Disk Usage ==="
-	@df -h
-	@echo ""
-	@echo "=== Memory Usage ==="
-	@free -h
+prod-rebuild-frontend: ## Rebuild frontend service (rm container/image, then compose up)
+	@echo "🧩 Rebuilding frontend service..."
+	@docker rm -f share-my-status-web || true
+	@docker image rm -f share-my-status-share-web:latest || docker image rm -f share-my-status_share-web:latest || true
+	@$(COMPOSE) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d share-web

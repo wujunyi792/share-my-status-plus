@@ -38,14 +38,6 @@ export function SystemCard({ system, className }: SystemCardProps) {
     }
   };
 
-  const getBatteryLevel = () => {
-    if (batteryPct === undefined) return 'w-0';
-    if (batteryPct > 0.75) return 'w-full';
-    if (batteryPct > 0.5) return 'w-3/4';
-    if (batteryPct > 0.25) return 'w-1/2';
-    return 'w-1/4';
-  };
-
   return (
     <div className={cn(
       "bg-white rounded-xl shadow-sm border border-gray-200 p-4 h-full flex flex-col transition-all duration-200 hover:shadow-md",

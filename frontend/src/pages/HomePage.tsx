@@ -1,6 +1,5 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
-import { Music, Monitor, Activity, Share2, Zap } from 'lucide-react';
+import { Music, Monitor, Activity, Zap } from 'lucide-react';
 
 export function HomePage() {
   return (
