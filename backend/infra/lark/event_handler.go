@@ -9,6 +9,7 @@ import (
 	"share-my-status/domain/user"
 	"share-my-status/infra/config"
 	"share-my-status/model"
+	"share-my-status/pkg/crypto"
 	"share-my-status/pkg/dbutil"
 	"strings"
 	"time"
@@ -97,13 +98,22 @@ func (h *EventHandler) OnP2CardURLPreviewGet(ctx context.Context, event *callbac
 	}
 
 	// 提取参数
-	sharingKey := h.extractSharingKey(parsedURL.Path)
-	if sharingKey == "" {
+	key := h.extractSharingKey(parsedURL.Path)
+	var fn func(id string) (*model.User, error)
+	if key == "" {
 		// 旧版兼容
-		sharingKey = parsedURL.Query().Get("u")
+		openIDEncoded := parsedURL.Query().Get("u")
+		key, err = crypto.Decode(openIDEncoded, h.config.LegacyCrypto.Key, h.config.LegacyCrypto.IV)
+		if err != nil {
+			logrus.Errorf("Failed to decode openID: %v", err)
+			return urlPreview, nil
+		}
+		fn = h.userService.GetUserByOpenID
+	} else {
+		fn = h.userService.GetUserBySharingKey
 	}
 
-	if sharingKey == "" {
+	if key == "" {
 		logrus.Warn("No sharing key found in URL")
 		return urlPreview, nil
 	}
@@ -114,15 +124,14 @@ func (h *EventHandler) OnP2CardURLPreviewGet(ctx context.Context, event *callbac
 	}
 
 	// 获取用户状态
-	userService := h.userService
-	user, err := userService.GetUserBySharingKey(sharingKey)
+	u, err := fn(key)
 	if err != nil {
 		logrus.Errorf("Failed to get user by sharing key: %v", err)
 		return urlPreview, nil
 	}
 
 	// 检查公开访问权限
-	publicEnabled, err := userService.IsPublicEnabled(user.ID)
+	publicEnabled, err := h.userService.IsPublicEnabled(u.ID)
 	if err != nil {
 		logrus.Errorf("Failed to check public access: %v", err)
 		return urlPreview, nil
@@ -134,7 +143,7 @@ func (h *EventHandler) OnP2CardURLPreviewGet(ctx context.Context, event *callbac
 	}
 
 	// 获取当前状态
-	currentState, err := h.getCurrentState(ctx, user.ID)
+	currentState, err := h.getCurrentState(ctx, u.ID)
 	if err != nil {
 		logrus.Errorf("Failed to get current state: %v", err)
 		return urlPreview, nil
