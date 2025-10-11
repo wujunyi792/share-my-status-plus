@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"share-my-status/api/middleware"
 	"share-my-status/infra"
+	"share-my-status/version"
 	"strconv"
 	"syscall"
 	"time"
@@ -74,35 +75,12 @@ func startHTTPServer(ctx context.Context, deps *infra.AppDependencies) *server.H
 
 	// 健康检查端点
 	h.GET("/healthz", func(ctx context.Context, c *app.RequestContext) {
-		c.JSON(200, map[string]interface{}{
+		c.JSON(200, map[string]any{
 			"status":    "ok",
 			"timestamp": time.Now().Unix(),
-			"version":   "1.0.0",
+			"version":   version.SysVersion,
 		})
 	})
-
-	//h.GET("/echo", func(_ context.Context, c *app.RequestContext) {
-	//	var upgrader = websocket.HertzUpgrader{} // use default options
-	//	err := upgrader.Upgrade(c, func(conn *websocket.Conn) {
-	//		for {
-	//			mt, message, err := conn.ReadMessage()
-	//			if err != nil {
-	//				log.Println("read:", err)
-	//				break
-	//			}
-	//			log.Printf("recv: %s", message)
-	//			err = conn.WriteMessage(mt, message)
-	//			if err != nil {
-	//				log.Println("write:", err)
-	//				break
-	//			}
-	//		}
-	//	})
-	//	if err != nil {
-	//		log.Print("upgrade:", err)
-	//		return
-	//	}
-	//})
 
 	// 启动服务器
 	go func() {
