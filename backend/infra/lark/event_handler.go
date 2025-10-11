@@ -98,14 +98,19 @@ func (h *EventHandler) OnP2CardURLPreviewGet(ctx context.Context, event *callbac
 
 	// 提取参数
 	sharingKey := h.extractSharingKey(parsedURL.Path)
-	template := parsedURL.Query().Get("m")
-	if template == "" {
-		template = "{artist}的{title}"
+	if sharingKey == "" {
+		// 旧版兼容
+		sharingKey = parsedURL.Query().Get("u")
 	}
 
 	if sharingKey == "" {
 		logrus.Warn("No sharing key found in URL")
 		return urlPreview, nil
+	}
+
+	template := parsedURL.Query().Get("m")
+	if template == "" {
+		template = "正在听{artist}-{title}"
 	}
 
 	// 获取用户状态
