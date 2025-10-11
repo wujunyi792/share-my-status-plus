@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: share-my-status-deployment
+  namespace: share-my-status
+  labels:
+    app: share-my-status
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: share-my-status-app
+  template:
+    metadata:
+      labels:
+        app: share-my-status-app
+    spec:
+      containers:
+        - name: share-my-status-container
+          image: wujunyi792/share-my-status-backend:v1.0.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: share-my-status-config
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

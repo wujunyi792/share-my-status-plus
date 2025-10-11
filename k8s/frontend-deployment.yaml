@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: share-my-status-frontend-deployment
+  namespace: share-my-status
+  labels:
+    app: share-my-status-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: share-my-status-frontend-app
+  template:
+    metadata:
+      labels:
+        app: share-my-status-frontend-app
+    spec:
+      containers:
+        - name: share-my-status-frontend-container
+          image: wujunyi792/share-my-status-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: frontend-nginx-conf
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+      volumes:
+        - name: frontend-nginx-conf
+          configMap:
+            name: share-my-status-frontend-nginx-conf

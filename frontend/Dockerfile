@@ -4,7 +4,7 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # if you located in China, you can use aliyun mirror to speed up
-RUN #sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+# RUN #sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 # Install bash git dos2unix for TypeScript compiler
 RUN apk add --no-cache bash git
@@ -28,7 +28,7 @@ RUN pnpm run build
 FROM nginx:1.25-alpine
 
 # if you located in China, you can use aliyun mirror to speed up
-RUN #sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+# RUN #sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 # Install necessary tools for SSL configuration
 RUN apk add --no-cache bash

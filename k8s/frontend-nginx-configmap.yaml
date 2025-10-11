@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: share-my-status-frontend-nginx-conf
+  namespace: share-my-status
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+
+        location / {
+            root   /usr/share/nginx/html;
+            try_files $uri $uri/ /index.html;
+            index  index.html index.htm;
+            autoindex on;
+            autoindex_exact_size off;
+            autoindex_localtime on;
+
+            etag on;
+            if_modified_since exact;
+            add_header Cache-Control "no-cache";
+            add_header Cache-Control "public, max-age=3600";
+        }
+    }
