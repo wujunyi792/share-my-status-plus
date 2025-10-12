@@ -13,7 +13,7 @@ concurrency:
 jobs:
   build_macos_client:
     name: Build macOS Client and Upload to Release
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,13 +35,6 @@ jobs:
             -configuration Release \
             -derivedDataPath build \
             -destination 'platform=macOS,arch=arm64' \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-            SWIFT_VERSION=5 \
-            SWIFT_STRICT_CONCURRENCY=Minimal \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
-            CLANG_WARNINGS_AS_ERRORS=NO \
-            GCC_WARNINGS_AS_ERRORS=NO \
-            OTHER_SWIFT_FLAGS="-suppress-warnings" \
             clean build | xcpretty
 
       - name: Read version and build number from Info.plist
