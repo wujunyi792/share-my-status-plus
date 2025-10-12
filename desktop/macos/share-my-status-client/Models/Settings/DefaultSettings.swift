@@ -54,16 +54,16 @@ enum DefaultSettings {
     // Polling Interval Ranges
     
     /// System polling interval range (min...max)
-    static let systemPollingIntervalRange: ClosedRange<TimeInterval> = 5...60
+    static let systemPollingIntervalRange: ClosedRange<TimeInterval> = 5...300
     
     /// System polling interval step
-    static let systemPollingIntervalStep: TimeInterval = 5
+    static let systemPollingIntervalStep: TimeInterval = 1
     
     /// Activity polling interval range (min...max)
-    static let activityPollingIntervalRange: ClosedRange<TimeInterval> = 5...60
+    static let activityPollingIntervalRange: ClosedRange<TimeInterval> = 5...300
     
     /// Activity polling interval step
-    static let activityPollingIntervalStep: TimeInterval = 1
+    static let activityPollingIntervalStep: TimeInterval = 5
     
 
      // Activity Detection
