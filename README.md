@@ -1,78 +1,102 @@
+<div align="center">
+
+  <svg width="100%" height="140" viewBox="0 0 1200 140" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Share My Status Plus">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#7c3aed"/>
+        <stop offset="50%" stop-color="#06b6d4"/>
+        <stop offset="100%" stop-color="#22c55e"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="1200" height="140" fill="url(#g)" rx="16"/>
+    <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="44" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial" fill="#ffffff" font-weight="700">Share My Status Plus</text>
+    <text x="50%" y="80%" dominant-baseline="middle" text-anchor="middle" font-size="18" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial" fill="#e5e7eb">实时状态 · 推送 · 看板 · 跳转</text>
+  </svg>
+
+  <p>
+    <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" />
+    <img alt="Hertz" src="https://img.shields.io/badge/Hertz-0.10.2-ff6f00?logo=apache&logoColor=white" />
+    <img alt="React" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white" />
+    <img alt="Vite" src="https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white" />
+    <img alt="TailwindCSS" src="https://img.shields.io/badge/Tailwind-3-38B2AC?logo=tailwindcss&logoColor=white" />
+    <img alt="Thrift" src="https://img.shields.io/badge/Thrift-IDL-1f2937?logo=apache&logoColor=white" />
+  </p>
+
+  <p>
+    <a href="#快速开始">🚀 快速开始</a> ·
+    <a href="#项目结构">📁 项目结构</a> ·
+    <a href="#部署">🛠️ 部署</a> ·
+    <a href="#反馈与贡献">🤝 贡献</a>
+  </p>
+</div>
+
 # Share My Status Plus
 
-一个现代化的实时状态分享平台。支持分享音乐播放状态与系统活动，提供隐私控制、统计分析与容器化部署方案。
+一个用于分享个人/团队实时状态的轻量级全栈项目，包含后端服务、Web 前端与 macOS 桌面客户端。支持实时推送、统计看板与便捷跳转，开箱即用，易于部署。
 
-## 特性
-- 实时音乐状态分享与系统活动监控
-- 细粒度隐私与安全：JWT、加密、审计日志
-- 数据统计与分析
-- 多平台支持（macOS/Windows/Linux）
-- 容器化与备份恢复，一键部署
+## 功能亮点
+- 实时状态推送（WebSocket）与在线用户同步
+- 状态统计与图表展示（前端看板）
+- 封面与公共跳转服务（/s 路由）
+- macOS 桌面端快速更新状态
+- 支持 Docker Compose 与 Kubernetes 部署
 
-## 技术栈
-- 后端：Go + Hertz
-- 数据库：MySQL 8.4.x
-- 缓存：Redis 7.4
-- 基础设施：Docker / Docker Compose
+<div style="display:flex; gap:16px; flex-wrap:wrap; margin:8px 0 16px;">
+  <span style="background:#eef2ff; color:#4f46e5; padding:6px 10px; border-radius:999px; font-size:12px;">WebSocket</span>
+  <span style="background:#ecfeff; color:#0e7490; padding:6px 10px; border-radius:999px; font-size:12px;">Stats</span>
+  <span style="background:#f0fdf4; color:#15803d; padding:6px 10px; border-radius:999px; font-size:12px;">Redirect</span>
+  <span style="background:#f5f3ff; color:#6b21a8; padding:6px 10px; border-radius:999px; font-size:12px;">macOS Client</span>
+</div>
 
-## 快速开始（开发）
-1) 克隆与进入项目
-- git clone <your-repo-url>
-- cd share-my-status-plus
+## 项目结构
+- backend/：Go 后端（Hertz + GORM + DI）
+- frontend/：Vite + React + Tailwind 前端
+- desktop/macos/：macOS 客户端（Xcode 工程）
+- idl/：Thrift IDL（服务接口与数据契约）
+- k8s/：Kubernetes 部署清单
 
-## Kubernetes 部署说明
+## 快速开始
+1) 克隆与准备
+- 参考 .env.example 与 backend/.env.example 配置环境变量（本地推荐 APP_ENV=debug）。
 
-本项目已将原先的 `k8s.yaml` 拆分至 `k8s/` 目录，按资源类型独立管理，便于维护与按需应用。
+2) 后端启动
+- 生成依赖注入：在项目根目录执行 `make wire`
+- 启动服务：在 backend 目录执行 `APP_ENV=debug go run .`
+- 健康检查：`GET /healthz`
 
-### 前置条件
-- 已有可用的 Kubernetes 集群，并安装了 Ingress 控制器（当前配置使用 `ingressClassName: higress`）。
-- 已安装并配置 cert-manager，且集群中存在名为 `mjclouds-com` 的 ClusterIssuer（用于自动签发与续期证书）。
-- 域名 `lark.mjclouds.com`、`status-sharing.mjclouds.com` 已解析到 Ingress 的入口地址（LoadBalancer 或边缘入口）。
+3) 前端启动
+- 进入 frontend 目录：`pnpm install && pnpm dev`
+- 默认本地开发端口由 Vite 输出日志可见
 
-### 目录结构（k8s/）
-- 命名空间：`k8s/namespace.yaml`
-- 应用配置：`k8s/configmap.yaml`
-- 后端：`k8s/backend-deployment.yaml`、`k8s/backend-service.yaml`
-- 前端：`k8s/frontend-deployment.yaml`、`k8s/frontend-service.yaml`、`k8s/frontend-nginx-configmap.yaml`
-- 数据库与缓存：`k8s/mysql-deployment.yaml`、`k8s/mysql-service.yaml`、`k8s/redis-deployment.yaml`、`k8s/redis-service.yaml`
-- Ingress：`k8s/ingress.yaml`
+4) 桌面端（macOS）
+- 打开 `desktop/macos/share-my-status-client.xcodeproj`，按需配置签名后运行
 
-### 快速部署
-1. 按需修改镜像地址（默认为 DockerHub：
-   - 后端镜像：`backend-deployment.yaml` 中的 `image: wujunyi792/share-my-status-backend:v1.0.1`
-   - 前端镜像：`frontend-deployment.yaml` 中的 `image: wujunyi792/share-my-status-frontend:latest`
-   如使用私有仓库，请为 Deployment 增加 `imagePullSecrets`。
-2. 如需修改应用变量，请编辑 `k8s/configmap.yaml`（例如 `DB_DSN`、`REDIS_URL`、`FEISHU_APP_*` 等）。
-3. 如需修改域名与证书配置，请编辑 `k8s/ingress.yaml`（`rules.hosts`、`tls.hosts`、`annotations.cert-manager.io/cluster-issuer`）。当前配置已设置：
-   - 注解：`cert-manager.io/cluster-issuer: mjclouds-com`
-   - TLS：`tls.secretName: share-my-status-cert`（固定证书 Secret 名称）
-4. 一键部署：
-   ```bash
-   kubectl apply -f k8s/
-   ```
+5) IDL 与路由模型更新
+- 修改 idl/*.thrift 后，在项目根目录执行：`make hz-update`
+- 新增接口按需在 backend/api/handler/<service>/ 下实现逻辑
 
-### 路由与证书
-- Ingress 路由划分：
-  - `/api/v1/ws`、`/link`、`/api`、`/v1` → 后端服务 `share-my-status-svc:8080`
-  - `/` → 前端服务 `share-my-status-frontend-svc:80`
-- 证书：由 cert-manager 基于 `ClusterIssuer` 自动签发与续期；Ingress 中已配置 `tls.secretName: share-my-status-cert`，无需手动声明 `Certificate`。
+## 开发约定（后端）
+- 环境选择：通过 APP_ENV 加载 .env 或 .env.<APP_ENV>
+- 路由：常规 API 挂载于 `/api/v1`，公共跳转路由在 `/s`
+- 鉴权：仅对需要保护的接口启用中间件（如 SecretKeyAuth、SharingKeyAuth）；公开接口不启用鉴权
+- 数据库模型：集中在 `backend/model/db.go`，通过 AutoMigrate 自动迁移
+- 依赖注入：仅在 `backend/infra/wire.go` 声明依赖，生成文件 `wire_gen.go` 不手动修改
+- 响应结构：统一使用 ResponseHelper（基础 code/message + 业务数据）
+- 日志：使用 logrus 记录，错误信息清晰不泄露敏感信息
 
-### 验证部署
-- 查看资源状态：
-  ```bash
-  kubectl -n share-my-status get pods,svc,ingress
-  kubectl -n share-my-status describe ingress share-my-status-ingress
-  ```
-- 访问前端：`https://lark.mjclouds.com` 或 `https://status-sharing.mjclouds.com`
-- 校验接口与 WebSocket：前端页面加载后，接口 `GET /api/...` 与 WebSocket `/api/v1/ws` 应能正常连通。
+## 部署
+- Docker Compose：直接使用项目根目录 `docker-compose.yml`
+- Kubernetes：参考 `k8s/` 目录的 Deployment/Service/Ingress/ConfigMap；按需调整配置后应用到集群
 
-### 注意事项（生产建议）
-- 当前 MySQL 与 Redis 使用 `emptyDir` 作为临时存储，重启即丢失数据；生产环境请改为 `PersistentVolumeClaim (PVC)`。
-- 将敏感配置（例如数据库与 Redis 密码、第三方密钥）迁移至 Secret，并在 Deployment 中以 `envFrom` 或 `env` 引用。
-- 若使用不同的 Ingress 控制器（非 Higress），可能需要调整注解或 IngressClass。
-- 若需要前端 Nginx 直接代理 `/api` 或 `/api/v1/ws`，可选择让 Ingress 的 `/api/*` 先指向前端服务，再由前端 Nginx 反代到后端；当前配置是直接在 Ingress 层分流到后端，减少一次转发。
+<div style="border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa;">
+  <b>提示：</b> 本地开发推荐使用 <code>APP_ENV=debug</code>，并通过 <code>make wire</code>、<code>make hz-update</code> 同步依赖与路由。
+</div>
 
-### 升级与回滚
-- 升级：修改对应 yaml 后再次执行 `kubectl apply -f k8s/`
-- 回滚：可通过 `kubectl rollout undo deployment/<name> -n share-my-status` 或按需调整镜像标签回退。
+## 目录速览
+- .github/workflows：CI/CD
+- docker/：Nginx 与持久化数据目录
+- Makefile：常用开发与生成命令（wire、hz-update 等）
+
+## 反馈与贡献
+欢迎提交 Issue 或 PR 来完善功能与文档。部署或开发问题请附带日志与环境说明，便于快速定位与协作。
 
