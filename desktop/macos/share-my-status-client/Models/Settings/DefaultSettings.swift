@@ -65,10 +65,11 @@ enum DefaultSettings {
     /// Activity polling interval step
     static let activityPollingIntervalStep: TimeInterval = 1
     
-    // Activity Detection
-    
-    /// Default idle time threshold (seconds)
-    static let idleTimeThreshold: TimeInterval = 300 // 5 minutes
+
+     // Activity Detection
+     
+     /// Default idle time threshold (seconds)
+     static let idleTimeThreshold: TimeInterval = 300 // 5 minutes
     
     /// Default activity groups
     static let activityGroups = [

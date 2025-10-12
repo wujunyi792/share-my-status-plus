@@ -10,6 +10,7 @@ import SwiftUI
 struct StatusTabView: View {
     @EnvironmentObject var configuration: AppConfiguration
     @EnvironmentObject var reporter: StatusReporter
+    @EnvironmentObject var coordinator: AppCoordinator
     
     
     var body: some View {
@@ -29,6 +30,13 @@ struct StatusTabView: View {
             .background(Color(NSColor.controlBackgroundColor))
             
             Divider()
+            
+            // Update banner prompt
+            if let latest = coordinator.availableUpdate {
+                UpdateBannerView(latest: latest)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+            }
             
             // Scrollable Content
             ScrollView {
@@ -129,6 +137,64 @@ struct StatusTabView: View {
                 .padding()
             }
         }
+    }
+}
+
+private struct UpdateBannerView: View {
+    let latest: ClientVersionInfo
+    
+    var versionText: String { latest.version ?? "未知版本" }
+    var buildText: String { latest.buildNumber != nil ? String(latest.buildNumber!) : "未知构建" }
+    var isForce: Bool { latest.forceUpdate ?? false }
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: isForce ? "exclamationmark.triangle.fill" : "arrow.down.circle.fill")
+                .foregroundColor(isForce ? .orange : .blue)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(isForce ? "发现强制更新" : "发现新版本")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text("版本：\(versionText) (\(buildText))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                if let note = latest.releaseNote, !note.isEmpty {
+                    Text(note)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(3)
+                }
+                // 新增：下载链接文本，点击打开浏览器
+                if let urlStr = latest.downloadUrl, let url = URL(string: urlStr) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "link")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                        Link("打开下载页面", destination: url)
+                            .font(.caption)
+                    }
+                }
+            }
+            Spacer()
+            
+            if let urlStr = latest.downloadUrl, let url = URL(string: urlStr) {
+                Button(isForce ? "立即更新" : "去下载") {
+                    NSWorkspace.shared.open(url)
+                }
+                .buttonStyle(.borderedProminent)
+                
+                if isForce {
+                    Button("退出应用") {
+                        NSApp.terminate(nil)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .padding(10)
+        .background((isForce ? Color.orange : Color.blue).opacity(0.08))
+        .cornerRadius(8)
     }
 }
 

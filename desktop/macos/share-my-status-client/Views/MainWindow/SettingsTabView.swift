@@ -244,6 +244,7 @@ struct SettingsTabView: View {
                     .padding(.horizontal, 4)
                 }
                 
+                // 更新检查已默认开启；如有更新将在状态页与菜单栏提示                
                 // Music Settings
                 if configuration.musicReportingEnabled {
                     GroupBox("音乐设置") {
@@ -348,6 +349,10 @@ struct SettingsTabView: View {
                             .sheet(isPresented: $showImportDialog) {
                                 ImportDialogView(
                                     jsonText: $importJSONText,
+                                    showValidationError: $showValidationError,
+                                    validationErrorMessage: $validationErrorMessage,
+                                    showImportError: $showImportError,
+                                    importErrorMessage: $importErrorMessage,
                                     onImportFromFile: {
                                         showImportDialog = false
                                         openConfigurationFile()
@@ -414,7 +419,7 @@ struct SettingsTabView: View {
                             }
                         }
                         
-                        if showImportError {
+                        if showImportError && !showImportDialog {
                             HStack {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundColor(.orange)
@@ -438,7 +443,7 @@ struct SettingsTabView: View {
                             .cornerRadius(6)
                         }
                         
-                        if showValidationError {
+                        if showValidationError && !showImportDialog {
                             HStack {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundColor(.red)
@@ -748,10 +753,14 @@ private struct ExportOptionsView: View {
 /// Import configuration dialog
 private struct ImportDialogView: View {
     @Binding var jsonText: String
+    @Binding var showValidationError: Bool
+    @Binding var validationErrorMessage: String
+    @Binding var showImportError: Bool
+    @Binding var importErrorMessage: String
     let onImportFromFile: () -> Void
     let onImportManual: (String) -> Void
     let onCancel: () -> Void
-    
+
     var body: some View {
         VStack(spacing: 20) {
             // Header
@@ -777,6 +786,55 @@ private struct ImportDialogView: View {
             // Manual input only
             VStack(alignment: .leading, spacing: 12) {
                 ManualImportView(jsonText: $jsonText)
+
+                // Inline error messages below the TextEditor
+                if showValidationError {
+                    HStack {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.red)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("格式校验失败")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                            Text(validationErrorMessage)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Button("关闭") {
+                            showValidationError = false
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                    }
+                    .padding(8)
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(6)
+                }
+
+                if showImportError {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("导入失败")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                            Text(importErrorMessage)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Button("关闭") {
+                            showImportError = false
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                    }
+                    .padding(8)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(6)
+                }
             }
             
             Divider()

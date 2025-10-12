@@ -1,0 +1,79 @@
+name: Manual macOS Client Build & Release Upload
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macos-client-release-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build_macos_client:
+    name: Build macOS Client and Upload to Release
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build macOS app (Release, no code signing)
+        run: |
+          xcodebuild \
+            -project desktop/macos/share-my-status-client.xcodeproj \
+            -scheme share-my-status-client \
+            -configuration Release \
+            -sdk macosx \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            -derivedDataPath build \
+            clean build
+
+      - name: Read version and build number from Info.plist
+        id: read_version
+        run: |
+          INFO_PLIST="build/Build/Products/Release/share-my-status-client.app/Contents/Info.plist"
+          if [ ! -f "$INFO_PLIST" ]; then
+            echo "::error::Info.plist not found at $INFO_PLIST"
+            ls -R build/Build/Products || true
+            exit 1
+          fi
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")
+          BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$INFO_PLIST")
+          TAG_NAME="desktop-macos-v${VERSION}-${BUILD_NUMBER}"
+          ARTIFACT_NAME="share-my-status-client-macos-v${VERSION}-${BUILD_NUMBER}.zip"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
+          echo "Version: $VERSION, Build: $BUILD_NUMBER, Tag: $TAG_NAME, Artifact: $ARTIFACT_NAME"
+
+      - name: Package app as zip with versioned filename
+        run: |
+          APP_PATH="build/Build/Products/Release/Share My Status.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::App not found at $APP_PATH"
+            ls -R build/Build/Products || true
+            exit 1
+          fi
+          ditto -c -k --keepParent "$APP_PATH" "$ARTIFACT_NAME"
+          shasum -a 256 "$ARTIFACT_NAME" > "$ARTIFACT_NAME.sha256"
+
+      - name: Upload to GitHub Release (auto create with version/build tag)
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: macOS Client ${{ env.VERSION }} (${{ env.BUILD_NUMBER }})
+          files: |
+            ${{ env.ARTIFACT_NAME }}
+            ${{ env.ARTIFACT_NAME }}.sha256
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

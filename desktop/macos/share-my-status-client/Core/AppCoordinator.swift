@@ -7,6 +7,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import AppKit
 
 /// Application coordinator for managing app lifecycle and service coordination
 @MainActor
@@ -17,9 +18,11 @@ class AppCoordinator: ObservableObject {
     // Properties
     @Published var configuration: AppConfiguration
     @Published var reporter: StatusReporter
+    @Published var availableUpdate: ClientVersionInfo?
     
     private let logger = AppLogger.app
     private var cancellables = Set<AnyCancellable>()
+    private let versionService = VersionUpdateService()
     
     // Initialization
     private init() {
@@ -50,6 +53,7 @@ class AppCoordinator: ObservableObject {
                     // Update configuration only, do not auto-start reporting
                     // The user controls reporting state through manual start/stop buttons
                     self.reporter.updateConfiguration(self.configuration, autoStart: false)
+                    await self.versionService.updateConfiguration(baseURL: self.configuration.endpointURL)
                 }
             }
             .store(in: &cancellables)
@@ -75,6 +79,35 @@ class AppCoordinator: ObservableObject {
             // Just update configuration without auto-starting
             logger.info("Not auto-starting reporting")
             reporter.updateConfiguration(configuration, autoStart: false)
+        }
+        
+        // Update version service configuration
+        Task { @MainActor in
+            await self.versionService.updateConfiguration(baseURL: self.configuration.endpointURL)
+        }
+        
+        // Auto check updates on launch (always enabled by default)
+        checkAndPromptUpdate()
+    }
+    
+    // Manual or automatic update check
+    func checkAndPromptUpdate(forceManual: Bool = false) {
+        // Even if configuration is not fully valid (e.g., secretKey empty), we can still check updates as long as endpointURL is present
+        Task { @MainActor in
+            let version = AppVersionUtility.appVersion
+            let buildStr = AppVersionUtility.buildNumber
+            let build: Int32 = Int32(buildStr) ?? 0
+            
+            do {
+                if let latest = try await self.versionService.checkForUpdates(version: version, build: build) {
+                    // Set available update for UI prompts on status page and status bar
+                    self.availableUpdate = latest
+                } else {
+                    self.logger.info("No updates available")
+                }
+            } catch {
+                self.logger.error("Failed to check updates: \(error.localizedDescription)")
+            }
         }
     }
     

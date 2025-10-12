@@ -23,8 +23,52 @@ struct ExportableConfiguration: Codable {
     var systemPollingInterval: TimeInterval
     var activityPollingInterval: TimeInterval
     
+    
     var exportDate: String = ISO8601DateFormatter().string(from: Date())
     var version: String = "1.0"
+    
+    enum CodingKeys: String, CodingKey {
+        case secretKey, endpointURL, musicReportingEnabled, systemReportingEnabled, activityReportingEnabled, musicAppWhitelist, activityGroups, systemPollingInterval, activityPollingInterval, exportDate, version
+    }
+    
+    init(secretKey: String? = nil,
+         endpointURL: String,
+         musicReportingEnabled: Bool,
+         systemReportingEnabled: Bool,
+         activityReportingEnabled: Bool,
+         musicAppWhitelist: [String],
+         activityGroups: [ActivityGroup],
+         systemPollingInterval: TimeInterval,
+         activityPollingInterval: TimeInterval,
+         exportDate: String = ISO8601DateFormatter().string(from: Date()),
+         version: String = "1.0") {
+        self.secretKey = secretKey
+        self.endpointURL = endpointURL
+        self.musicReportingEnabled = musicReportingEnabled
+        self.systemReportingEnabled = systemReportingEnabled
+        self.activityReportingEnabled = activityReportingEnabled
+        self.musicAppWhitelist = musicAppWhitelist
+        self.activityGroups = activityGroups
+        self.systemPollingInterval = systemPollingInterval
+        self.activityPollingInterval = activityPollingInterval
+        self.exportDate = exportDate
+        self.version = version
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.secretKey = try container.decodeIfPresent(String.self, forKey: .secretKey)
+        self.endpointURL = try container.decode(String.self, forKey: .endpointURL)
+        self.musicReportingEnabled = try container.decode(Bool.self, forKey: .musicReportingEnabled)
+        self.systemReportingEnabled = try container.decode(Bool.self, forKey: .systemReportingEnabled)
+        self.activityReportingEnabled = try container.decode(Bool.self, forKey: .activityReportingEnabled)
+        self.musicAppWhitelist = try container.decode([String].self, forKey: .musicAppWhitelist)
+        self.activityGroups = try container.decode([ActivityGroup].self, forKey: .activityGroups)
+        self.systemPollingInterval = try container.decode(TimeInterval.self, forKey: .systemPollingInterval)
+        self.activityPollingInterval = try container.decode(TimeInterval.self, forKey: .activityPollingInterval)
+        self.exportDate = try container.decodeIfPresent(String.self, forKey: .exportDate) ?? ISO8601DateFormatter().string(from: Date())
+        self.version = try container.decodeIfPresent(String.self, forKey: .version) ?? "1.0"
+    }
 }
 
 // Application Configuration
@@ -105,6 +149,7 @@ class AppConfiguration: ObservableObject {
         self.systemReportingEnabled = UserDefaults.standard.object(forKey: "systemReportingEnabled") as? Bool ?? DefaultSettings.systemReportingEnabled
         self.activityReportingEnabled = UserDefaults.standard.object(forKey: "activityReportingEnabled") as? Bool ?? DefaultSettings.activityReportingEnabled
         
+        
         // App lists
         self.musicAppWhitelist = UserDefaults.standard.stringArray(forKey: "musicAppWhitelist") ?? DefaultSettings.musicAppWhitelist
         
@@ -133,8 +178,7 @@ class AppConfiguration: ObservableObject {
             "musicReportingEnabled", "systemReportingEnabled", "activityReportingEnabled",
             "musicAppWhitelist",
             "activityGroups",
-            "systemPollingInterval", "activityPollingInterval"
-        ]
+            "systemPollingInterval", "activityPollingInterval"        ]
         
         keys.forEach { defaults.removeObject(forKey: $0) }
         
@@ -147,8 +191,7 @@ class AppConfiguration: ObservableObject {
         self.musicAppWhitelist = DefaultSettings.musicAppWhitelist
         self.activityGroups = DefaultSettings.activityGroups
         self.systemPollingInterval = DefaultSettings.systemPollingInterval
-        self.activityPollingInterval = DefaultSettings.activityPollingInterval
-    }
+        self.activityPollingInterval = DefaultSettings.activityPollingInterval    }
     
     // Import/Export
     
@@ -166,8 +209,7 @@ class AppConfiguration: ObservableObject {
             musicAppWhitelist: musicAppWhitelist,
             activityGroups: activityGroups,
             systemPollingInterval: systemPollingInterval,
-            activityPollingInterval: activityPollingInterval
-        )
+            activityPollingInterval: activityPollingInterval        )
         
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -221,8 +263,7 @@ class AppConfiguration: ObservableObject {
         self.musicAppWhitelist = config.musicAppWhitelist
         self.activityGroups = config.activityGroups
         self.systemPollingInterval = config.systemPollingInterval
-        self.activityPollingInterval = config.activityPollingInterval
-        
+        self.activityPollingInterval = config.activityPollingInterval        
         return nil
     }
     
@@ -291,12 +332,12 @@ class AppConfiguration: ObservableObject {
             }
             
             // Validate intervals
-            if config.systemPollingInterval < 1 || config.systemPollingInterval > 300 {
-                return (false, "系统轮询间隔必须在 1-300 秒之间")
+            if config.systemPollingInterval < 5 || config.systemPollingInterval > 300 {
+                return (false, "系统轮询间隔必须在 5-300 秒之间")
             }
             
-            if config.activityPollingInterval < 1 || config.activityPollingInterval > 60 {
-                return (false, "活动轮询间隔必须在 1-60 秒之间")
+            if config.activityPollingInterval < 1 || config.activityPollingInterval > 300 {
+                return (false, "活动轮询间隔必须在 5-60 秒之间")
             }
             
             return (true, nil)

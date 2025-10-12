@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: share-my-status-frontend-container
-          image: wujunyi792/share-my-status-frontend:v1.0.1
+          image: wujunyi792/share-my-status-frontend:v1.0.3
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80

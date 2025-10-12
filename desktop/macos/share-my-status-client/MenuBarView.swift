@@ -9,6 +9,7 @@ import SwiftUI
 struct MenuBarView: View {
     @EnvironmentObject var configuration: AppConfiguration
     @EnvironmentObject var reporter: StatusReporter
+    @EnvironmentObject var coordinator: AppCoordinator
     
     @Environment(\.openWindow) private var openWindow
     
@@ -26,6 +27,13 @@ struct MenuBarView: View {
             .padding(.vertical, 8)
             
             Divider()
+            
+            // Update banner prompt in menu bar
+            if let latest = coordinator.availableUpdate {
+                MenuBarUpdateBanner(latest: latest)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+            }
             
             // Permission Warning
             if configuration.activityReportingEnabled && !AccessibilityPermissionChecker.isAccessibilityGranted() {
@@ -145,7 +153,6 @@ struct MenuBarView: View {
                     }
                 }
                 
-                // Current Activity
                 if let activity = reporter.currentActivity {
                     HStack(spacing: 6) {
                         Image(systemName: activity.isIdle ? "moon.zzz" : "person.crop.circle")
@@ -169,7 +176,6 @@ struct MenuBarView: View {
             
             Divider()
             
-            // Action Buttons
             VStack(spacing: 0) {
                 Button(action: {
                     if reporter.isReporting {
@@ -217,70 +223,86 @@ struct MenuBarView: View {
         .frame(width: 280)
     }
     
-    // Helper Methods
     private func openMainWindow() {
-        // Find existing main window (exclude status bar and panels)
-        let existingWindow = NSApplication.shared.windows.first { window in
-            // Exclude NSPanel (status bar popup)
-            guard !window.isKind(of: NSPanel.self) else { return false }
-            
-            // Exclude NSStatusBarWindow explicitly
-            let className = NSStringFromClass(type(of: window))
-            guard !className.contains("StatusBar") else { return false }
-            
-            // Must have content and be regular window
-            return window.contentView != nil && window.canBecomeKey
-        }
-        
-        if let window = existingWindow {
-            // Found existing window, bring it to front
-            NSApplication.shared.setActivationPolicy(.regular)
-            NSApplication.shared.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
-            window.orderFrontRegardless()
+        // Try open by window id first
+        if #available(macOS 13.0, *) {
+            openWindow(id: "main")
         } else {
-            // No existing window, create new one
-            NSApplication.shared.setActivationPolicy(.regular)
-            NSApplication.shared.activate(ignoringOtherApps: true)
-            
-            if #available(macOS 14.0, *) {
-                openWindow(id: "main")
-            } else {
-                // Fallback for macOS 13.x
-                createMainWindowManually()
-            }
+            createMainWindowManually()
         }
     }
     
-    /// Manually create main window for macOS 13.x
     private func createMainWindowManually() {
-        let contentView = ContentView()
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 750, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.center()
+        window.title = "Share My Status"
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: ContentView()
             .environmentObject(configuration)
             .environmentObject(reporter)
-        
-        let hostingController = NSHostingController(rootView: contentView)
-        
-        let window = NSWindow(contentViewController: hostingController)
-        window.title = "Share My Status"
-        window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 600, height: 500))
-        window.center()
-        
-        // Setup window close handler to hide from Dock
-        setupWindowCloseHandler(window)
-        
+            .environmentObject(coordinator)
+        )
         window.makeKeyAndOrderFront(nil)
-        NSApplication.shared.activate(ignoringOtherApps: true)
+        
+        // Keep regular app appearance when main window is open
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        setupWindowCloseHandler(window)
     }
     
-    /// Setup window close handler to switch back to accessory mode
     private func setupWindowCloseHandler(_ window: NSWindow) {
-        // Use NSWindowDelegate to handle window close
         let delegate = WindowCloseDelegate()
         window.delegate = delegate
-        
-        // Store delegate to prevent deallocation
-        objc_setAssociatedObject(window, "closeDelegate", delegate, .OBJC_ASSOCIATION_RETAIN)
+    }
+}
+
+private struct MenuBarUpdateBanner: View {
+    let latest: ClientVersionInfo
+    var versionText: String { latest.version ?? "未知版本" }
+    var buildText: String { latest.buildNumber != nil ? String(latest.buildNumber!) : "未知构建" }
+    var isForce: Bool { latest.forceUpdate ?? false }
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: isForce ? "exclamationmark.triangle.fill" : "arrow.down.circle")
+                .foregroundColor(isForce ? .orange : .blue)
+                .frame(width: 12)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isForce ? "强制更新可用" : "有新版本可用")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                Text("\(versionText) (\(buildText))")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                // 新增：下载链接文本，点击打开浏览器
+                if let urlStr = latest.downloadUrl, let url = URL(string: urlStr) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "link")
+                            .font(.caption2)
+                            .foregroundColor(.blue)
+                        Link("打开下载页面", destination: url)
+                            .font(.caption2)
+                    }
+                }
+            }
+            Spacer()
+            if let urlStr = latest.downloadUrl, let url = URL(string: urlStr) {
+                Button(isForce ? "更新" : "下载") {
+                    NSWorkspace.shared.open(url)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(8)
+        .background((isForce ? Color.orange : Color.blue).opacity(0.08))
+        .cornerRadius(6)
     }
 }
 

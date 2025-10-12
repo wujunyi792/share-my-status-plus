@@ -369,29 +369,20 @@ func (h *EventHandler) executeInfoCommand(ctx context.Context, user *model.User,
 		musicStatsAuthorized = settings.Settings.Data().AuthorizedMusicStats
 	}
 
-	// 获取当前状态
-	currentState, err := h.getCurrentState(ctx, user.ID)
-	if err != nil {
-		logrus.Errorf("Failed to get current state: %v", err)
-	}
-
-	status := "未在播放"
-	if currentState != nil && currentState.Music != nil {
-		if currentState.Music.Title != nil && currentState.Music.Artist != nil {
-			status = fmt.Sprintf("%s - %s", *currentState.Music.Artist, *currentState.Music.Title)
-		}
-	}
-
 	sharingURL := h.buildSharingURL(user.SharingKey)
+	reportURL := h.config.App.Endpoint + "/api/v1/state/report"
+	signatureURL := h.config.App.Endpoint + "/s/" + user.SharingKey
 	info := fmt.Sprintf("📊 账户信息\n"+
-		"🎵 当前状态: %s\n"+
 		"🔑 Secret Key: %s\n"+
+		"📮 上报地址: %s\n"+
+		"✍️ 飞书签名链接: %s\n"+
 		"🔗 Sharing Key: %s\n"+
 		"🌐 公开访问: %s\n"+
 		"📈 音乐统计: %s\n"+
 		"🔗 分享链接: %s",
-		status,
 		user.SecretKey,
+		reportURL,
+		signatureURL,
 		user.SharingKey,
 		map[bool]string{true: "开启", false: "关闭"}[publicEnabled],
 		map[bool]string{true: "已授权", false: "未授权"}[musicStatsAuthorized],
@@ -772,7 +763,7 @@ func (h *EventHandler) buildRecommendedConfigJSON(user *model.User, cfg *config.
 		"isReportingEnabled":       true,
 		"musicAppWhitelist":        musicAppWhitelist,
 		"musicReportingEnabled":    true,
-		"secretKey":                user.SecretKey,
+		"secretKey":                string(user.SecretKey),
 		"systemPollingInterval":    5,
 		"systemReportingEnabled":   true,
 		"version":                  "1.0",

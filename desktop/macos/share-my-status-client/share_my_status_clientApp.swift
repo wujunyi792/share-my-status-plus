@@ -17,6 +17,7 @@ struct share_my_status_clientApp: App {
             ContentView()
                 .environmentObject(coordinator.configuration)
                 .environmentObject(coordinator.reporter)
+                .environmentObject(coordinator)
                 // Note: Configuration is already synced in AppCoordinator.init
                 // and will auto-update via Combine observer
                 .handlesExternalEvents(preferring: Set(arrayLiteral: "main"), allowing: Set(arrayLiteral: "*"))
@@ -36,6 +37,7 @@ struct share_my_status_clientApp: App {
             MenuBarView()
                 .environmentObject(coordinator.configuration)
                 .environmentObject(coordinator.reporter)
+                .environmentObject(coordinator)
         }
         .menuBarExtraStyle(.window)
     }
