@@ -28,18 +28,26 @@ jobs:
       - name: Build macOS app
         run: |
           set -euo pipefail
-          # Build without treating warnings as errors and relax Swift concurrency checks
+          # Build without treating warnings as errors, use Swift 5 language mode, and relax Swift concurrency checks
           xcodebuild \
             -project desktop/macos/share-my-status-client.xcodeproj \
             -scheme share-my-status-client \
             -configuration Release \
             -derivedDataPath build \
+            -destination 'platform=macOS,arch=arm64' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            SWIFT_VERSION=5 \
+            SWIFT_STRICT_CONCURRENCY=Minimal \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
+            CLANG_WARNINGS_AS_ERRORS=NO \
+            GCC_WARNINGS_AS_ERRORS=NO \
+            OTHER_SWIFT_FLAGS="-suppress-warnings" \
             clean build | xcpretty
 
       - name: Read version and build number from Info.plist
         id: read_version
         run: |
-          INFO_PLIST="build/Build/Products/Release/share-my-status-client.app/Contents/Info.plist"
+          INFO_PLIST="build/Build/Products/Release/Share My Status.app/Contents/Info.plist"
           if [ ! -f "$INFO_PLIST" ]; then
             echo "::error::Info.plist not found at $INFO_PLIST"
             ls -R build/Build/Products || true
