@@ -12,6 +12,7 @@ spec:
       hosts:
         - lark.mjclouds.com
         - status-sharing.mjclouds.com
+
   rules:
     - host: lark.mjclouds.com
       http:
