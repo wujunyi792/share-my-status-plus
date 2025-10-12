@@ -507,44 +507,74 @@ GET /v1/cover/{hash}?size=128
 ## 11 飞书机器人交互
 **命令格式**：
 
-- `/status revoke`：撤销当前 **SharingKey**（公开页立即失效，WS 房间强制关闭）。
+- `/public on|off`：开启/关闭 **Web 公开访问**（公开页访问授权）。
 
-- `/status rotate`：轮转 **SecretKey**（客户端需重新配置）。
+- `/stat on|off`：开启/关闭 **音乐统计授权**（历史数据存储授权）。
 
-- `/status publish on|off`：打开/关闭 **Web 公开授权**。
+- `/rotate secret-key`：轮转 **SecretKey**（客户端需重新配置）。
+
+- `/rotate sharing-key`：轮转 **SharingKey**（分享链接立即失效，WS 房间强制关闭）。
+
+- `/info`：查看当前用户信息（包括密钥、链接、授权状态等）。
+
+- `/config`：返回推荐的客户端配置 JSON（包括默认活动分组、音乐应用白名单等）。
+
+- `/help`：显示帮助信息。
+
+**中文别名命令**：
+
+- `开启公开访问` / `关闭公开访问`
+- `授权音乐统计` / `取消授权音乐统计`
+- `查看我的信息`
+- `轮转数据上报密钥` / `轮转分享链接`
+- `推荐配置`
+- `帮助`
 
 **交互流程**：
 
-1. 用户在机器人会话中输入命令。
+1. 用户在机器人会话中输入命令或中文别名。
 
-2. 机器人调用后端接口，进行**用户绑定校验**与**签名验证**（如 `X-Signature` + 时间戳）。
+2. 机器人通过飞书 SDK 长链接会话接收消息事件（P2MessageReceiveV1）。
 
-3. 通过权限与频控（如 10/min）后执行操作；返回成功提示与后续动作（如“重新配置客户端 SecretKey”）。
+3. 解析命令，获取或创建用户（通过 OpenID）。
 
-4. 记录**审计日志**（操作人、时间、旧值/新值、结果），并发送通知。
+4. 执行相应操作：
+   - 更新用户设置（`user_settings`表）
+   - 轮转密钥（更新`users`表）
+   - 生成推荐配置 JSON（包含活动分组、白名单等）
+
+5. 通过飞书 API 回复消息：
+   - 普通命令使用文本消息回复
+   - `/config` 命令使用富文本(Post)回复，包含 JSON 代码块
 
 **安全校验与权限**：
 
-- 机器人需绑定用户帐号与我们的账户系统；命令仅作用于**本人资源**。
+- 机器人通过飞书 OpenID 自动关联用户，首次交互时自动创建用户记录。
 
-- 采用**签名验证**与**重放防护**（时间戳窗口与一次性 nonce）。
+- 命令仅作用于**本人资源**（通过 OpenID 识别）。
 
-- 失败提示清晰可执行（如“当前未开启公开授权”、“请先绑定账户”）。
+- 所有操作记录到日志系统，包含操作人、时间、操作类型。
+
+- 失败提示清晰可执行（如"当前未开启公开授权"、"用法错误"）。
 
 ## 12 服务端设计
-**接口设计**：
+**接口设计**（所有接口均以 `/api/v1` 为前缀）：
 
-- 上报：`POST /v1/state/report`（支持批量）。
+- 上报：`POST /api/v1/state/report`（支持批量）。
 
-- 查询最近：`GET /v1/state/query?sharingKey=...`。
+- 查询最近：`GET /api/v1/state/query?sharingKey=...`。
 
-- 统计：`POST /v1/stats/query`（需授权）。
+- 统计：`POST /api/v1/stats/query`（需授权）。
 
-- WebSocket：`GET /v1/ws?sharingKey=...`。
+- WebSocket：`GET /api/v1/ws?sharingKey=...`。
 
-- 飞书事件处理：在**官方 SDK 长链接会话**内接收**链接预览拉取事件**，内部 handler 解析请求并执行预览渲染与必要的**预览更新能力**，遵循幂等与频控。**注意**：出于性能考虑，飞书链接预览**暂不支持聚合统计变量渲染**，仅返回实时状态（音乐、系统、活动）。
+- 客户端版本检查：`GET /api/v1/client/check-version`（查询最新客户端版本信息）。
 
-- 封面：`GET /v1/cover/exists`、`POST /v1/cover/upload`、`GET /v1/cover/{id}`。
+- 飞书事件处理：在**官方 SDK 长链接会话**内接收**链接预览拉取事件**和**消息接收事件**，内部 handler 解析请求并执行预览渲染、命令处理与必要的**预览更新能力**，遵循幂等与频控。**注意**：出于性能考虑，飞书链接预览**暂不支持聚合统计变量渲染**，仅返回实时状态（音乐、系统、活动）。
+
+- 封面：`GET /api/v1/cover/exists?md5=...`、`POST /api/v1/cover/upload`、`GET /api/v1/cover/:hash?size=...`。
+
+- 分享链接重定向：`GET /s/:sharingKey`（重定向到 Web 页面或自定义目标）。
 
 **WebSocket 频道模型**：
 
@@ -701,7 +731,7 @@ type StatsQueryRequest struct {
 CREATE TABLE users (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '内部主键',
   open_id VARCHAR(64) NOT NULL COMMENT '飞书 OpenID，唯一用户标识',
-  secret_key VARBINARY(64) NOT NULL COMMENT '客户端上报密钥（服务端以哈希存储）',
+  secret_key VARBINARY(64) NOT NULL COMMENT '客户端上报密钥（服务端存储原文，用于认证）',
   sharing_key VARCHAR(64) NOT NULL COMMENT '公开展示密钥，拼接分享链接',
   status TINYINT NOT NULL DEFAULT 1 COMMENT '用户状态：0=禁用，1=启用',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -713,134 +743,84 @@ CREATE TABLE users (
 
 -- 用户策略与隐私设置（JSON）
 CREATE TABLE user_settings (
-  open_id VARCHAR(64) NOT NULL PRIMARY KEY COMMENT '飞书 OpenID（FK）',
+  user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY COMMENT '用户ID（FK）',
   settings JSON NOT NULL COMMENT '用户隐私与功能开关（JSON）',
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  authorized_music_stats TINYINT(1)
-    GENERATED ALWAYS AS (
-      CAST(JSON_UNQUOTE(JSON_EXTRACT(settings, '$.authorizedMusicStats')) AS UNSIGNED)
-    ) STORED COMMENT '是否授权存储音乐统计',
-  public_enabled TINYINT(1)
-    GENERATED ALWAYS AS (
-      CAST(JSON_UNQUOTE(JSON_EXTRACT(settings, '$.publicEnabled')) AS UNSIGNED)
-    ) STORED COMMENT '是否开启公开页',
-  default_tz VARCHAR(32)
-    GENERATED ALWAYS AS (
-      JSON_UNQUOTE(JSON_EXTRACT(settings, '$.defaultTz'))
-    ) STORED COMMENT '默认时区',
-  KEY ix_user_settings_authorized (authorized_music_stats),
-  KEY ix_user_settings_public (public_enabled),
-  KEY ix_user_settings_tz (default_tz),
-  CONSTRAINT fk_settings_user FOREIGN KEY (open_id) REFERENCES users(open_id)
+  CONSTRAINT fk_settings_user FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户隐私设置（JSON）';
 
 -- 当前状态快照（JSON）
 CREATE TABLE current_state (
-  open_id VARCHAR(64) NOT NULL PRIMARY KEY COMMENT '飞书 OpenID（FK）',
+  user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY COMMENT '用户ID（FK）',
   snapshot JSON NOT NULL COMMENT '当前状态快照（System/Music/Activity）',
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  music_title VARCHAR(256)
-    GENERATED ALWAYS AS (JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.music.title'))) STORED COMMENT '曲目名',
-  music_artist VARCHAR(256)
-    GENERATED ALWAYS AS (JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.music.artist'))) STORED COMMENT '歌手',
-  music_album VARCHAR(256)
-    GENERATED ALWAYS AS (JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.music.album'))) STORED COMMENT '专辑',
-  cover_hash CHAR(32)
-    GENERATED ALWAYS AS (JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.music.coverHash'))) STORED COMMENT '封面哈希',
-  battery_pct DECIMAL(5,2)
-    GENERATED ALWAYS AS (
-      CAST(JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.system.batteryPct')) AS DECIMAL(5,2))
-    ) STORED COMMENT '电量百分比',
-  charging TINYINT(1)
-    GENERATED ALWAYS AS (
-      CAST(JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.system.charging')) AS UNSIGNED)
-    ) STORED COMMENT '是否充电',
-  cpu_pct DECIMAL(5,2)
-    GENERATED ALWAYS AS (
-      CAST(JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.system.cpuPct')) AS DECIMAL(5,2))
-    ) STORED COMMENT 'CPU 使用率',
-  memory_pct DECIMAL(5,2)
-    GENERATED ALWAYS AS (
-      CAST(JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.system.memoryPct')) AS DECIMAL(5,2))
-    ) STORED COMMENT '内存使用率',
-  activity_label VARCHAR(64)
-    GENERATED ALWAYS AS (JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.activity.label'))) STORED COMMENT '活动标签',
   KEY ix_state_updated (updated_at),
-  KEY ix_state_cover (cover_hash),
-  KEY ix_state_artist (music_artist),
-  KEY ix_state_title (music_title),
-  KEY ix_state_activity (activity_label),
-  KEY ix_state_battery (battery_pct),
-  KEY ix_state_cpu (cpu_pct),
-  CONSTRAINT fk_current_user FOREIGN KEY (open_id) REFERENCES users(open_id)
+  CONSTRAINT fk_current_user FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='当前状态快照（JSON）';
 
 -- 历史状态流（JSON + 记录时间）
 CREATE TABLE state_history (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '历史记录主键',
-  open_id VARCHAR(64) NOT NULL COMMENT '飞书 OpenID（FK）',
+  user_id BIGINT UNSIGNED NOT NULL COMMENT '用户ID（FK）',
   recorded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录时间',
   snapshot JSON NOT NULL COMMENT '状态快照（JSON）',
-  music_title VARCHAR(256)
-    GENERATED ALWAYS AS (JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.music.title'))) STORED COMMENT '曲目名',
-  music_artist VARCHAR(256)
-    GENERATED ALWAYS AS (JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.music.artist'))) STORED COMMENT '歌手',
-  music_album VARCHAR(256)
-    GENERATED ALWAYS AS (JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.music.album'))) STORED COMMENT '专辑',
-  cover_hash CHAR(32)
-    GENERATED ALWAYS AS (JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.music.coverHash'))) STORED COMMENT '封面哈希',
-  activity_label VARCHAR(64)
-    GENERATED ALWAYS AS (JSON_UNQUOTE(JSON_EXTRACT(snapshot, '$.activity.label'))) STORED COMMENT '活动标签',
-  KEY ix_hist_user_time (open_id, recorded_at),
-  KEY ix_hist_cover (cover_hash),
-  KEY ix_hist_artist_title (music_artist, music_title),
-  KEY ix_hist_activity (activity_label),
-  CONSTRAINT fk_history_user FOREIGN KEY (open_id) REFERENCES users(open_id)
+  KEY ix_hist_user_time (user_id, recorded_at),
+  CONSTRAINT fk_history_user FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='历史状态流水（JSON）';
 
 -- 封面资源去重（MD5 主键）
 CREATE TABLE cover_assets (
   cover_hash CHAR(32) PRIMARY KEY COMMENT 'MD5 of decoded image bytes，用于封面去重',
-  asset JSON NOT NULL COMMENT '封面内容，字段 b64 为 base64 字符串',
+  asset JSON NOT NULL COMMENT '封面内容 JSON，包含字段：b64（base64字符串）、contentType（MIME类型）、size（字节大小）、uploadTime（上传时间戳）、storageType（固定为"base64"）',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='封面资源（仅存 base64 JSON，不再提供 content_type/size_bytes；扩展字段可置于 asset JSON）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='封面资源（JSON 格式存储）';
 
 -- 聚合统计结果（JSON；支持窗口类型与起止时间）
+-- 注意：此表暂未在当前实现中使用，统计功能计划在后续版本实现
 CREATE TABLE music_stats (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '统计主键',
-  open_id VARCHAR(64) NOT NULL COMMENT '飞书 OpenID（FK）',
+  user_id BIGINT UNSIGNED NOT NULL COMMENT '用户ID（FK）',
   window_type ENUM('rolling_3d','rolling_7d','month_to_date','year_to_date','custom') NOT NULL COMMENT '窗口类型',
   tz VARCHAR(32) NOT NULL DEFAULT 'Asia/Shanghai' COMMENT '时区',
   start_time TIMESTAMP NOT NULL COMMENT '窗口开始',
   end_time TIMESTAMP NOT NULL COMMENT '窗口结束',
   stats JSON NOT NULL COMMENT '统计载荷（JSON：plays/uniqueTracks/topArtists/topTracks）',
-  plays INT GENERATED ALWAYS AS (
-    CAST(JSON_UNQUOTE(JSON_EXTRACT(stats, '$.plays')) AS UNSIGNED)
-  ) STORED COMMENT '播放次数',
-  unique_tracks INT GENERATED ALWAYS AS (
-    CAST(JSON_UNQUOTE(JSON_EXTRACT(stats, '$.uniqueTracks')) AS UNSIGNED)
-  ) STORED COMMENT '唯一歌曲数',
-  UNIQUE KEY uk_user_window (open_id, window_type, start_time, end_time),
-  KEY ix_stats_plays (plays),
-  KEY ix_stats_unique (unique_tracks),
-  CONSTRAINT fk_stats_user FOREIGN KEY (open_id) REFERENCES users(open_id)
+  UNIQUE KEY uk_user_window (user_id, window_type, start_time, end_time),
+  CONSTRAINT fk_stats_user FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='音乐统计结果（JSON）';
+```
+
+-- 客户端版本信息表
+CREATE TABLE client_versions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '版本记录主键',
+  platform VARCHAR(16) NOT NULL COMMENT '平台：windows、macos',
+  version VARCHAR(32) NOT NULL COMMENT '版本号',
+  build_number INT NOT NULL COMMENT '构建号',
+  download_url VARCHAR(255) NOT NULL COMMENT '下载链接',
+  release_note TEXT COMMENT '发布说明',
+  force_update TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否强制更新',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  KEY ix_platform (platform)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='客户端版本信息';
 ```
 
 **主键与索引建议**：
 
-- `users`：`id` 主键；`open_id`、`secret_key`、`sharing_key` 唯一索引，便于查找与撤销。
+- `users`：`id` 自增主键；`open_id`、`secret_key`、`sharing_key` 唯一索引，便于查找与撤销。
 
-- `user_settings`：对 `authorized_music_stats`、`public_enabled` 建索引，便于筛选与审计；`default_tz` 辅助查询。
+- `user_settings`：`user_id` 主键关联 `users.id`；存储用户隐私设置（JSON格式）。
 
-- `current_state`：`open_id` 主键；对 `updated_at`、`cover_hash`、`music_artist/title`、`activity_label`、`battery_pct`、`cpu_pct` 建索引，支撑前端查询与去重。
+- `current_state`：`user_id` 主键关联 `users.id`；对 `updated_at` 建索引用于时间范围查询。
 
-- `state_history`：`(open_id, recorded_at)` 复合索引；对 `music_artist/title` 与 `activity_label` 建索引用于统计与检索。
+- `state_history`：`(user_id, recorded_at)` 复合索引，用于按用户和时间查询历史记录。
 
-- `cover_assets`：`cover_hash` 主键；`asset` JSON **仅存 base64**；**不提供 content_type/size_bytes**；结合 CDN 缓存策略按访问路径控制缓存与清理。
+- `cover_assets`：`cover_hash` 主键（MD5）；`asset` JSON 包含 `b64`（base64字符串）、`contentType`（MIME类型）、`size`（字节大小）、`uploadTime`（上传时间戳）、`storageType`（固定为"base64"）；结合 CDN 缓存策略按访问路径控制缓存与清理。
 
-- `music_stats`：`uk_user_window` 唯一约束避免重复窗口；对 `plays`、`unique_tracks` 建索引用于看板排序。
+- `music_stats`：`uk_user_window` 唯一约束避免重复窗口（暂未启用，计划后续版本实现）。
+
+- `client_versions`：`platform` 索引用于快速查询各平台最新版本。
 
 > **保留与清理策略**：
 > - `current_state`：仅保留最近快照；无清理任务，按覆盖更新。
@@ -865,29 +845,28 @@ import (
 )
 
 // =====================================
-// users（统一使用 open_id）
+// users（使用自增 id 作为主键，open_id 作为业务标识）
 // =====================================
 type User struct {
-    ID        uint64    `gorm:"column:id;primaryKey;autoIncrement"`
-    OpenID    string    `gorm:"column:open_id;type:varchar(64);uniqueIndex;not null"`
-    SecretKey []byte    `gorm:"column:secret_key;type:varbinary(64);uniqueIndex;not null"`
-    SharingKey string   `gorm:"column:sharing_key;type:varchar(64);uniqueIndex;not null"`
-    Status    int       `gorm:"column:status;type:tinyint;not null;default:1"`
-    CreatedAt time.Time `gorm:"column:created_at"`
-    UpdatedAt time.Time `gorm:"column:updated_at"`
+    ID         uint64    `gorm:"column:id;primaryKey;autoIncrement"`
+    OpenID     string    `gorm:"column:open_id;type:varchar(64);uniqueIndex;not null"`
+    SecretKey  []byte    `gorm:"column:secret_key;type:varbinary(64);uniqueIndex;not null"`
+    SharingKey string    `gorm:"column:sharing_key;type:varchar(64);uniqueIndex;not null"`
+    Status     int       `gorm:"column:status;type:tinyint;not null;default:1"`
+    CreatedAt  time.Time `gorm:"column:created_at"`
+    UpdatedAt  time.Time `gorm:"column:updated_at"`
 }
 
 // =====================================
 // user_settings（JSONType[T]）
 // =====================================
 type SettingsPayload struct {
-    AuthorizedMusicStats bool   `json:"authorizedMusicStats"`
     PublicEnabled        bool   `json:"publicEnabled"`
-    DefaultTz            string `json:"defaultTz"`
+    AuthorizedMusicStats bool   `json:"authorizedMusicStats"`
 }
 
 type UserSettings struct {
-    OpenID    string                              `gorm:"column:open_id;type:varchar(64);primaryKey"`
+    UserID    uint64                              `gorm:"column:user_id;primaryKey"`
     Settings  datatypes.JSONType[SettingsPayload] `gorm:"column:settings;type:json;not null"`
     UpdatedAt time.Time                           `gorm:"column:updated_at;autoUpdateTime"`
 }
@@ -923,26 +902,30 @@ type StatusSnapshot struct {
 // current_state（JSONType[T]）
 // =====================================
 type CurrentState struct {
-    OpenID    string                             `gorm:"column:open_id;type:varchar(64);primaryKey"`
-    Snapshot  datatypes.JSONType[StatusSnapshot] `gorm:"column:snapshot;type:json;not null"`
-    UpdatedAt time.Time                          `gorm:"column:updated_at;autoUpdateTime"`
+    UserID    uint64                                    `gorm:"column:user_id;primaryKey"`
+    Snapshot  datatypes.JSONType[common.StatusSnapshot] `gorm:"column:snapshot;type:json;not null"`
+    UpdatedAt time.Time                                 `gorm:"column:updated_at;autoUpdateTime"`
 }
 
 // =====================================
 // state_history（JSONType[T]）
 // =====================================
 type StateHistory struct {
-    ID         uint64                            `gorm:"column:id;primaryKey;autoIncrement"`
-    OpenID     string                            `gorm:"column:open_id;type:varchar(64);index:ix_hist_user_time,priority:1"`
-    RecordedAt time.Time                         `gorm:"column:recorded_at;index:ix_hist_user_time,priority:2"`
-    Snapshot   datatypes.JSONType[StatusSnapshot] `gorm:"column:snapshot;type:json;not null"`
+    ID         uint64                                    `gorm:"column:id;primaryKey;autoIncrement"`
+    UserID     uint64                                    `gorm:"column:user_id;index:ix_hist_user_time,priority:1"`
+    RecordedAt time.Time                                 `gorm:"column:recorded_at;index:ix_hist_user_time,priority:2"`
+    Snapshot   datatypes.JSONType[common.StatusSnapshot] `gorm:"column:snapshot;type:json;not null"`
 }
 
 // =====================================
-// cover_assets（仅存 base64 JSON；取消 content_type 与 size_bytes）
+// cover_assets（JSON 格式存储封面信息）
 // =====================================
 type CoverAssetPayload struct {
-    B64 string `json:"b64"`
+    B64         string `json:"b64"`         // base64编码数据
+    ContentType string `json:"contentType"` // MIME类型
+    Size        int64  `json:"size"`        // 文件大小（字节）
+    UploadTime  int64  `json:"uploadTime"`  // 上传时间戳
+    StorageType string `json:"storageType"` // 固定为 "base64"
 }
 
 type CoverAsset struct {
@@ -953,43 +936,46 @@ type CoverAsset struct {
 }
 
 // =====================================
-// music_stats（JSONType[T]）
+// music_stats（JSONType[T]）- 计划后续版本实现
 // =====================================
 type MusicStatsPayload struct {
-    Plays        int         `json:"plays"`
-    UniqueTracks int         `json:"uniqueTracks"`
-    TopArtists   []TopArtist `json:"topArtists"`
-    TopTracks    []TopTrack  `json:"topTracks"`
-}
-
-type TopArtist struct {
-    Name  string `json:"name"`
-    Plays int    `json:"plays"`
-}
-
-type TopTrack struct {
-    Track  string `json:"track"`
-    Artist string `json:"artist"`
-    Plays  int    `json:"plays"`
+    Summary    *common.StatsSummary `json:"summary"`
+    TopArtists []*common.TopItem    `json:"topArtists"`
+    TopTracks  []*common.TopItem    `json:"topTracks"`
 }
 
 type MusicStats struct {
-    ID         uint64                         `gorm:"column:id;primaryKey;autoIncrement"`
-    OpenID     string                         `gorm:"column:open_id;type:varchar(64);index:uk_user_window,unique,priority:1"`
-    WindowType string                         `gorm:"column:window_type;type:enum('rolling_3d','rolling_7d','month_to_date','year_to_date','custom');index:uk_user_window,unique,priority:2"`
-    Tz         string                         `gorm:"column:tz;size:32;not null"`
-    StartTime  time.Time                      `gorm:"column:start_time;index:uk_user_window,unique,priority:3"`
-    EndTime    time.Time                      `gorm:"column:end_time;index:uk_user_window,unique,priority:4"`
+    ID         uint64                                `gorm:"column:id;primaryKey;autoIncrement"`
+    UserID     uint64                                `gorm:"column:user_id;index:uk_user_window,unique,priority:1"`
+    WindowType string                                `gorm:"column:window_type;type:enum('rolling_3d','rolling_7d','month_to_date','year_to_date','custom');index:uk_user_window,unique,priority:2"`
+    Tz         string                                `gorm:"column:tz;size:32;not null"`
+    StartTime  time.Time                             `gorm:"column:start_time;index:uk_user_window,unique,priority:3"`
+    EndTime    time.Time                             `gorm:"column:end_time;index:uk_user_window,unique,priority:4"`
     Stats      datatypes.JSONType[MusicStatsPayload] `gorm:"column:stats;type:json;not null"`
-    CreatedAt  time.Time                      `gorm:"column:created_at"`
-    UpdatedAt  time.Time                      `gorm:"column:updated_at"`
+    CreatedAt  time.Time                             `gorm:"column:created_at"`
+    UpdatedAt  time.Time                             `gorm:"column:updated_at"`
+}
+
+// =====================================
+// client_versions（客户端版本信息）
+// =====================================
+type ClientVersion struct {
+    ID          uint64    `gorm:"column:id;primaryKey;autoIncrement"`
+    Platform    string    `gorm:"column:platform;type:varchar(16);index:ix_platform"`
+    Version     string    `gorm:"column:version;type:varchar(32);not null"`
+    BuildNumber int       `gorm:"column:build_number;type:int;not null"`
+    DownloadUrl string    `gorm:"column:download_url;type:varchar(255);not null"`
+    ReleaseNote string    `gorm:"column:release_note;type:text"`
+    ForceUpdate bool      `gorm:"column:force_update;type:tinyint(1);not null;default:false"`
+    CreatedAt   time.Time `gorm:"column:created_at"`
+    UpdatedAt   time.Time `gorm:"column:updated_at"`
 }
 ```
 
-> **封面资源存储策略（统一更新）**：
-> - **仅存 base64**：`cover_assets.asset` 为 JSON，字段 `b64` 存 base64 字符串。
-> - **不再提供 content_type 与 size_bytes**：如需扩展，未来可在 `asset` JSON 增加其他字段。
+> **封面资源存储策略**：
+> - **JSON 格式存储**：`cover_assets.asset` 为 JSON，包含字段 `b64`（base64字符串）、`contentType`（MIME类型）、`size`（字节大小）、`uploadTime`（上传时间戳）、`storageType`（固定为"base64"）。
 > - **哈希去重**：`cover_hash` 为**解码后的字节**的 MD5，作为主键实现去重。
+> - **缓存策略**：通过 Redis 缓存资产信息（1小时）和存在性（5分钟），配合 CDN 提供快速访问。
 
 **读写示例（Typed JSON）**：
 
@@ -1081,824 +1067,107 @@ _ = db.Model(&CurrentState{}).Where("battery_pct > ?", 0.8).Order("music_artist 
 - 启用软件白名单后，音乐事件采集与解析仅对指定播放器生效，**CPU 与 I/O 降幅显著**（粗略估计 40–60%）。
 
 ## 18 部署与配置
-部署与配置
 
-**目标**：提供可直接落地的 Docker 与 Kubernetes（Helm）部署清单，覆盖后端（Golang）、前端（React+Nginx）、MySQL 8.0、Redis 的监控与告警。部署全程遵循隐私约束：**不收集 deviceId、appName、macOS、player、foreground**；音乐仅用 **title/artist/album**；封面仅用 **coverHash/coverB64（内部用途）**；模板变量**不暴露 coverHash**；日志对 `open_id` 等敏感标识**做哈希或脱敏**。
+**部署方式**：支持 **Docker Compose**（本地开发/小规模生产）与 **Kubernetes**（生产环境）两种方式。
 
-> **关键动作点**：
-> - **不要向仓库提交 .env 与任何密钥文件**；本地用 dotenv 管理，生产用 **Kubernetes Secret** 注入。
-> - **统一健康检查路径**：后端与 Nginx 均提供 `/healthz`；K8s 使用 **Readiness/Liveness probes**。
+**技术栈**：
+- 后端：Golang 1.25 + Alpine 3.22（多阶段构建）
+- 前端：Node 22 + pnpm + Vite + Nginx 1.25
+- 数据库：MySQL latest / Redis 7.4-alpine
+- 容器编排：Docker Compose / Kubernetes 原生 YAML
 
-### 18.1 Docker 部署方案
-#### 18.1.1 后端（Golang）Dockerfile：多阶段构建（go1.22-alpine → distroless 或 alpine 运行）
-```dockerfile
-# Dockerfile.api.distroless
-# 构建阶段：go1.22-alpine，CGO=0，静态编译
-FROM golang:1.22-alpine AS builder
-RUN apk add --no-cache ca-certificates tzdata
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-# 使用构建缓存加速；-trimpath/-ldflags减小体积
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
+> **关键原则**：
+> - **不要向仓库提交 .env 与任何密钥文件**
+> - **健康检查路径**：后端 `/healthz`，前端 `/`
+> - **非root用户运行**：所有容器使用非特权用户
+> - **配置管理**：本地用 `.env`，K8s 用 ConfigMap + Secret
 
-# 运行阶段：distroless（最小镜像，不含shell）
-FROM gcr.io/distroless/static-debian12 AS runtime
-USER 65532:65532   # non-root
-WORKDIR /app
-COPY --from=builder /out/api /app/api
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
-EXPOSE 8080
-# 注意：distroless 无法使用 curl/wget 设置 Docker HEALTHCHECK；在 Kubernetes 中以 probes 代替
-ENTRYPOINT ["/app/api"]
-```
+### 18.1 Docker Compose 部署
 
-```dockerfile
-# Dockerfile.api.alpine
-# 构建阶段：go1.22-alpine，CGO=0
-FROM golang:1.22-alpine AS builder
-RUN apk add --no-cache build-base ca-certificates tzdata upx
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api && upx /out/api || true
+**镜像构建**：
+- **后端**：Go 1.25-alpine 多阶段构建 → Alpine 3.22 运行（非root用户）
+- **前端**：Node 22 + pnpm + Vite 构建 → Nginx 1.25-alpine 运行
 
-# 运行阶段：alpine，提供 HEALTHCHECK 与非root用户
-FROM alpine:3.20 AS runtime
-RUN addgroup -S app && adduser -S -G app app
-WORKDIR /app
-COPY --from=builder /out/api /app/api
-RUN apk add --no-cache ca-certificates curl tzdata && chmod +x /app/api
-USER app
-EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
-ENTRYPOINT ["/app/api"]
-```
+**服务组成**（4个容器）：
+- **share-backend**：Go 后端服务（端口 8080）
+- **share-web**：Nginx + React 前端（端口 8888）
+- **mysql**：MySQL latest（端口 3306，数据持久化到 `./docker/data/mysql`）
+- **redis**：Redis 7.4-alpine（端口 6379，启用 AOF 持久化）
 
-#### 18.1.2 前端（React）Dockerfile 与 Nginx 配置（gzip/缓存头）
-```dockerfile
-# Dockerfile.web
-# 构建阶段：node:lts-alpine
-FROM node:lts-alpine AS build
-WORKDIR /app
-COPY web/package*.json ./
-RUN npm ci --legacy-peer-deps
-COPY web/ ./
-RUN npm run build
+**Nginx 配置**：
+- 静态资源服务（根路径 `/`）
+- API 反向代理（`/api`, `/s`, `/link`）
+- WebSocket 支持（`/api/v1/ws`，超时 600s）
 
-# 运行阶段：nginx:alpine 提供静态资源
-FROM nginx:alpine
-COPY deploy/nginx.conf /etc/nginx/nginx.conf
-COPY --from=build /app/build /usr/share/nginx/html
-EXPOSE 8081
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -q -O- http://127.0.0.1:8081/healthz || exit 1
-```
+**环境变量**（两个文件，不要提交仓库）：
+- `.env`：Docker Compose 变量（数据库密码、Redis密码、端口等）
+- `backend/.env`：后端应用配置（DB连接串、飞书凭证、日志、时区等）
 
-```nginx
-# deploy/nginx.conf
-worker_processes 1;
-events { worker_connections 1024; }
-http {
-  include       /etc/nginx/mime.types;
-  default_type  application/octet-stream;
-  sendfile      on;
-  keepalive_timeout 65;
-
-  gzip on;
-  gzip_comp_level 5;
-  gzip_types text/plain text/css application/json application/javascript application/octet-stream image/svg+xml;
-
-  server {
-    listen 8081;
-    server_name _;
-
-    location = /healthz { return 200 'ok'; add_header Content-Type text/plain; }
-
-    location / {
-      root   /usr/share/nginx/html;
-      try_files $uri /index.html;
-    }
-    location ~* \.(js|css|png|jpg|svg)$ {
-      expires 7d;
-      add_header Cache-Control "public, max-age=604800";
-    }
-  }
-}
-```
-
-#### 18.1.3 docker-compose.yml（开发/小规模部署）
-```yaml
-version: "3.9"
-services:
-  api:
-    # 任选一种运行镜像：alpine 更适合本地/Compose（有 HEALTHCHECK）；distroless 更小巧（K8s 建议）
-    build:
-      context: .
-      dockerfile: Dockerfile.api.alpine
-    image: share-my-status-api:latest
-    env_file:
-      - .env
-    environment:
-      HTTP_PORT: 8080
-      DEFAULT_TZ: ${DEFAULT_TZ}
-      DB_DSN: ${DB_DSN}
-      REDIS_URL: ${REDIS_URL}
-      SECRET_KEY: ${SECRET_KEY}
-      SHARING_KEY: ${SHARING_KEY}
-    ports:
-      - "8080:8080"
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-    networks:
-      - appnet
-
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
-    image: share-my-status-web:latest
-    ports:
-      - "8081:8081"
-    depends_on:
-      api:
-        condition: service_healthy
-    networks:
-      - appnet
-
-  mysql:
-    image: mysql:8.0
-    command: ["--default-authentication-plugin=mysql_native_password", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./db/init:/docker-entrypoint-initdb.d:ro
-    ports:
-      - "3306:3306"
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 30s
-      timeout: 5s
-      retries: 10
-    networks:
-      - appnet
-
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "no"]  # 默认不持久化；如需AOF改为 "yes"
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 3s
-      retries: 10
-    networks:
-      - appnet
-
-  redis-exporter:
-    image: oliver006/redis_exporter:latest
-    environment:
-      REDIS_ADDR: redis:6379
-    ports:
-      - "9121:9121"
-    depends_on:
-      - redis
-    networks:
-      - appnet
-
-  mysqld-exporter:
-    image: prom/mysqld-exporter:latest
-    environment:
-      DATA_SOURCE_NAME: ${MYSQL_USER}:${MYSQL_PASSWORD}@(mysql:3306)/${MYSQL_DATABASE}
-    ports:
-      - "9104:9104"
-    depends_on:
-      - mysql
-    networks:
-      - appnet
-
-networks:
-  appnet:
-    driver: bridge
-
-volumes:
-  mysql_data:
-```
-
-#### 18.1.4 .env 示例（不要提交到仓库）
-```
-# 应用
-APP_ENV=dev
-DEFAULT_TZ=Asia/Shanghai
-HTTP_PORT=8080
-
-# 密钥（本地开发示例，生产务必改为K8s Secret注入）
-SECRET_KEY=dev-secret-please-change
-SHARING_KEY=dev-sharing-please-change
-
-# 数据库
-MYSQL_ROOT_PASSWORD=dev-root-pass
-MYSQL_DATABASE=share_my_status
-MYSQL_USER=app
-MYSQL_PASSWORD=app-pass
-DB_DSN=app:app-pass@tcp(mysql:3306)/share_my_status?charset=utf8mb4&parseTime=True&loc=Local
-
-# Redis
-REDIS_URL=redis://redis:6379
-```
-
-#### 18.1.5 配置示例
-```yaml
-# 配置文件示例（占位）
-# 可根据需要添加应用配置
-```
-
-> **部署说明**：
-> - 默认管理账号配置请参考 .env 文件。
-> - 建议根据实际需求配置监控和告警。
-
-### 18.2 Kubernetes Helm 部署方案
-#### 18.2.1 Chart 目录结构（示例名：share-my-status）
-```
-share-my-status/
-  Chart.yaml
-  values.yaml
-  templates/
-    deployment-api.yaml
-    service-api.yaml
-    deployment-web.yaml
-    service-web.yaml
-    ingress-web.yaml
-    configmap-web-nginx.yaml
-    secret-app.yaml
-    statefulset-mysql.yaml
-    service-mysql.yaml
-    deployment-redis.yaml
-    service-redis.yaml
-    servicemonitor-api.yaml
-    alertingrules.yaml
-    hpa-api.yaml
-    pdb-api.yaml
-```
-
-#### 18.2.2 values.yaml 示例（核心配置）
-```yaml
-# values.yaml（摘要）
-global:
-  imagePullPolicy: IfNotPresent
-  monitoring:
-    enabled: true
-    monitoringOperator: true
-
-api:
-  image:
-    repository: share-my-status/api
-    tag: v0.1.0
-  service:
-    port: 8080
-  env:
-    HTTP_PORT: 8080
-    DEFAULT_TZ: Asia/Shanghai
-    REDIS_URL: redis://redis:6379
-    DB_DSN: app:app-pass@tcp(mysql:3306)/share_my_status?charset=utf8mb4&parseTime=True&loc=Local
-  secret:
-    SECRET_KEY: ""          # 以 Secret 注入
-    FEISHU_APP_ID: ""
-    FEISHU_APP_SECRET: ""
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 65532
-    readOnlyRootFilesystem: true
-  monitoring:
-    serviceMonitor:
-      enabled: true
-      path: /metrics
-
-web:
-  image:
-    repository: share-my-status/web
-    tag: v0.1.0
-  service:
-    port: 8081
-  ingress:
-    enabled: true
-    className: nginx
-    host: status.example.com
-    tls:
-      enabled: true
-      secretName: status-tls
-
-mysql:
-  enabled: true
-  image: mysql:8.0
-  persistence:
-    enabled: true
-    storageClass: ""
-    size: 20Gi
-  auth:
-    rootPassword: ""
-    database: share_my_status
-    username: app
-    password: ""
-  initSQL:
-    enabled: true
-    configMapName: mysql-init-sql
-
-redis:
-  image: redis:7-alpine
-  persistence:
-    enabled: false
-  auth:
-    passwordSecretName: redis-pass
-
-hpa:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 10
-  cpuTargetUtilizationPercentage: 70
-
-pdb:
-  enabled: true
-  maxUnavailable: 1
-```
-
-#### 18.2.3 后端 Deployment 与 Service（片段）
-```yaml
-# templates/deployment-api.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ include "sms.apiName" . }}
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: {{ include "sms.apiName" . }}
-  template:
-    metadata:
-      labels:
-        app: {{ include "sms.apiName" . }}
-    spec:
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 65532
-      containers:
-      - name: api
-        image: {{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}
-        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-        ports:
-        - name: http
-          containerPort: {{ .Values.api.service.port }}
-        env:
-        - name: HTTP_PORT
-          value: "{{ .Values.api.env.HTTP_PORT }}"
-        - name: DEFAULT_TZ
-          value: "{{ .Values.api.env.DEFAULT_TZ }}"
-        - name: REDIS_URL
-          value: "{{ .Values.api.env.REDIS_URL }}"
-        - name: DB_DSN
-          value: "{{ .Values.api.env.DB_DSN }}"
-        - name: SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: SECRET_KEY
-        - name: FEISHU_APP_ID
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: FEISHU_APP_ID
-        - name: FEISHU_APP_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: FEISHU_APP_SECRET
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: http
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: http
-          initialDelaySeconds: 15
-          periodSeconds: 20
-        resources:
-          requests:
-            cpu: {{ .Values.api.resources.requests.cpu }}
-            memory: {{ .Values.api.resources.requests.memory }}
-          limits:
-            cpu: {{ .Values.api.resources.limits.cpu }}
-            memory: {{ .Values.api.resources.limits.memory }}
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop: ["ALL"]
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "sms.apiName" . }}
-spec:
-  selector:
-    app: {{ include "sms.apiName" . }}
-  ports:
-  - name: http
-    port: {{ .Values.api.service.port }}
-    targetPort: http
-```
-
-#### 18.2.4 前端 Deployment 与 Nginx 配置（片段）
-```yaml
-# templates/deployment-web.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ include "sms.webName" . }}
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: {{ include "sms.webName" . }}
-  template:
-    metadata:
-      labels:
-        app: {{ include "sms.webName" . }}
-    spec:
-      containers:
-      - name: web
-        image: {{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}
-        ports:
-        - name: http
-          containerPort: {{ .Values.web.service.port }}
-        volumeMounts:
-        - name: nginx-conf
-          mountPath: /etc/nginx/nginx.conf
-          subPath: nginx.conf
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: http
-          initialDelaySeconds: 5
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: http
-          initialDelaySeconds: 15
-      volumes:
-      - name: nginx-conf
-        configMap:
-          name: web-nginx-conf
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: web-nginx-conf
-data:
-  nginx.conf: |
-    worker_processes 1;
-    events { worker_connections 1024; }
-    http {
-      include /etc/nginx/mime.types;
-      default_type application/octet-stream;
-      sendfile on;
-      keepalive_timeout 65;
-      gzip on;
-      gzip_comp_level 5;
-      gzip_types text/plain text/css application/json application/javascript application/octet-stream image/svg+xml;
-      server {
-        listen {{ .Values.web.service.port }};
-        server_name _;
-        location = /healthz { return 200 'ok'; add_header Content-Type text/plain; }
-        location / { root /usr/share/nginx/html; try_files $uri /index.html; }
-        location ~* \.(js|css|png|jpg|svg)$ { expires 7d; add_header Cache-Control "public, max-age=604800"; }
-      }
-    }
-```
-
-```yaml
-# templates/ingress-web.yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: {{ include "sms.webName" . }}
-  annotations:
-    kubernetes.io/ingress.class: {{ .Values.web.ingress.className | quote }}
-spec:
-  tls:
-  - hosts: [{{ .Values.web.ingress.host | quote }}]
-    secretName: {{ .Values.web.ingress.tls.secretName }}
-  rules:
-  - host: {{ .Values.web.ingress.host }}
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: {{ include "sms.webName" . }}
-            port:
-              number: {{ .Values.web.service.port }}
-```
-
-#### 18.2.5 数据库与缓存（MySQL StatefulSet + PVC、Redis）
-```yaml
-# templates/statefulset-mysql.yaml
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: {{ include "sms.mysqlName" . }}
-spec:
-  serviceName: {{ include "sms.mysqlName" . }}
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {{ include "sms.mysqlName" . }}
-  template:
-    metadata:
-      labels:
-        app: {{ include "sms.mysqlName" . }}
-    spec:
-      containers:
-      - name: mysql
-        image: {{ .Values.mysql.image }}
-        args: ["--default-authentication-plugin=mysql_native_password", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
-        ports:
-        - name: mysql
-          containerPort: 3306
-        env:
-        - name: MYSQL_ROOT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-auth
-              key: rootPassword
-        - name: MYSQL_DATABASE
-          value: {{ .Values.mysql.auth.database | quote }}
-        - name: MYSQL_USER
-          value: {{ .Values.mysql.auth.username | quote }}
-        - name: MYSQL_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-auth
-              key: password
-        volumeMounts:
-        - name: data
-          mountPath: /var/lib/mysql
-        - name: init-sql
-          mountPath: /docker-entrypoint-initdb.d
-        readinessProbe:
-          exec:
-            command: ["mysqladmin","ping","-h","127.0.0.1"]
-          initialDelaySeconds: 20
-      volumes:
-      - name: init-sql
-        configMap:
-          name: {{ .Values.mysql.initSQL.configMapName }}
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      storageClassName: {{ .Values.mysql.persistence.storageClass | quote }}
-      resources:
-        requests:
-          storage: {{ .Values.mysql.persistence.size | quote }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "sms.mysqlName" . }}
-spec:
-  selector:
-    app: {{ include "sms.mysqlName" . }}
-  ports:
-  - name: mysql
-    port: 3306
-    targetPort: mysql
-```
-
-```yaml
-# templates/deployment-redis.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ include "sms.redisName" . }}
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: {{ include "sms.redisName" . }}
-  template:
-    metadata:
-      labels:
-        app: {{ include "sms.redisName" . }}
-    spec:
-      containers:
-      - name: redis
-        image: {{ .Values.redis.image }}
-        args: ["--appendonly","no"]
-        ports:
-        - name: redis
-          containerPort: 6379
-        env:
-        - name: REDIS_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.redis.auth.passwordSecretName }}
-              key: password
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "sms.redisName" . }}
-spec:
-  selector:
-    app: {{ include "sms.redisName" . }}
-  ports:
-  - name: redis
-    port: 6379
-    targetPort: redis
-```
-
-#### 18.2.6 监控与告警（ServiceMonitor、AlertingRule）
-```yaml
-# templates/servicemonitor-api.yaml
-{{- if and .Values.global.monitoring.enabled .Values.api.monitoring.serviceMonitor.enabled -}}
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: {{ include "sms.apiName" . }}
-spec:
-  selector:
-    matchLabels:
-      app: {{ include "sms.apiName" . }}
-  endpoints:
-  - port: http
-    path: {{ .Values.api.monitoring.serviceMonitor.path }}
-    interval: 15s
-{{- end }}
-```
-
-```yaml
-# templates/alertingrules.yaml
-{{- if .Values.global.monitoring.enabled -}}
-apiVersion: monitoring.coreos.com/v1
-kind: AlertingRule
-metadata:
-  name: sms-rules
-spec:
-  groups:
-  - name: api.rules
-    rules:
-    - alert: ApiHighErrorRate
-      expr: (sum(rate(http_requests_total{service="api",status=~"5.."}[5m])) / sum(rate(http_requests_total{service="api"}[5m]))) > 0.05
-      for: 5m
-      labels: { severity: warning }
-      annotations: { summary: "API 5xx 错误率 > 5%", description: "检查发布与依赖" }
-    - alert: ApiHighLatencyP95
-      expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="api"}[5m])) by (le)) > 1.0
-      for: 5m
-      labels: { severity: warning }
-      annotations: { summary: "API P95 > 1s" }
-  - name: redis.rules
-    rules:
-    - alert: RedisDown
-      expr: redis_up == 0
-      for: 1m
-      labels: { severity: critical }
-      annotations: { summary: "Redis 不可用" }
-  - name: mysql.rules
-    rules:
-    - alert: MySQLSlowQueriesHigh
-      expr: increase(mysql_global_status_slow_queries[5m]) > 10
-      for: 5m
-      labels: { severity: warning }
-      annotations: { summary: "MySQL 慢查询偏高" }
-{{- end }}
-```
-
-#### 18.2.7 HPA 与 PDB（片段）
-```yaml
-# templates/hpa-api.yaml
-{{- if .Values.hpa.enabled -}}
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: {{ include "sms.apiName" . }}
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: {{ include "sms.apiName" . }}
-  minReplicas: {{ .Values.hpa.minReplicas }}
-  maxReplicas: {{ .Values.hpa.maxReplicas }}
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: {{ .Values.hpa.cpuTargetUtilizationPercentage }}
-{{- end }}
-```
-
-```yaml
-# templates/pdb-api.yaml
-{{- if .Values.pdb.enabled -}}
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: {{ include "sms.apiName" . }}
-spec:
-  maxUnavailable: {{ .Values.pdb.maxUnavailable }}
-  selector:
-    matchLabels:
-      app: {{ include "sms.apiName" . }}
-{{- end }}
-```
-
-#### 18.2.8 灰度与发布
+**快速启动**：
 ```bash
-# 安装（或升级）到命名空间 sms
-helm upgrade --install sms ./share-my-status -n sms \
-  -f values.yaml \
-  --create-namespace
-
-# 查看资源与探针状态
-kubectl -n sms get deploy,sts,svc,ingress,pdb,hpa
-kubectl -n sms describe deploy/sms-api
-
-# 回滚
-helm rollback sms 1 -n sms
+make setup      # 准备 .env 文件
+make dev-start  # 启动所有服务
+make dev-logs   # 查看日志
 ```
 
-> **节点调度与发布健康**：
-> - **滚动升级**：Deployment 默认 `maxUnavailable: 25%`；按需在 `strategy` 中调整。
-> - **节点亲和与污点容忍**：在 Pod `affinity` 与 `tolerations` 中指定（如API部署到无盘节点，MySQL到有盘节点）。
-> - **健康门槛**：在 `readinessProbe/livenessProbe` 中设置；PDB 保证有存活副本；必要时设置 `minReadySeconds`。
+### 18.2 Kubernetes 部署方案
 
-### 18.3 环境变量与密钥管理
-- **本地（开发）**：使用 `.env`（dotenv）管理，**不要提交到仓库**；Compose 通过 `env_file` 注入。
+**部署方式**：Kubernetes 原生 YAML 清单（位于 `k8s/` 目录）
 
-- **生产（集群）**：通过 **Kubernetes Secret** 注入（`secret-app.yaml`/`mysql-auth`/`redis-pass`），仅以环境变量在容器内可见；审计与轮转通过平台工具完成。
+**资源清单**（12个文件）：
+- `namespace.yaml` - 命名空间（share-my-status）
+- `configmap.yaml` - 应用配置（数据库连接、飞书凭证、日志等）
+- `backend-deployment.yaml` - 后端部署（1副本，镜像 v1.0.3）
+- `backend-service.yaml` - 后端服务（ClusterIP:8080）
+- `frontend-deployment.yaml` - 前端部署（1副本，镜像 v1.0.3）
+- `frontend-service.yaml` - 前端服务（ClusterIP:80）
+- `frontend-nginx-configmap.yaml` - 前端 Nginx 配置
+- `mysql-deployment.yaml` + `mysql-service.yaml` - MySQL 数据库
+- `redis-deployment.yaml` + `redis-service.yaml` - Redis 缓存
+- `ingress.yaml` - 路由配置（Higress + cert-manager + TLS）
 
-### 18.4 数据与存储策略
-- **MySQL 8.0**：使用 PVC（`storageClass` 可参数化）；初始化 SQL 挂载 `docker-entrypoint-initdb.d` 或 K8s `ConfigMap`；建议每日备份（**CronJob**）与保留策略（至少 7 天）。
+**Ingress 配置**：
+- **Controller**：Higress
+- **TLS**：cert-manager 自动签发（letsencrypt）
+- **域名**：lark.mjclouds.com、status-sharing.mjclouds.com
+- **路径路由**：
+  - `/api/v1/ws` → 后端（WebSocket）
+  - `/api`, `/s`, `/link` → 后端
+  - `/` → 前端
 
-- **Redis**：默认**不持久化**（AOF=off）；如需可靠队列或离线数据，开启 AOF 并设置 `persistence.enabled: true`；连接密码通过 Secret 注入。
+**资源配额**：
+- 后端：100m CPU / 128Mi 内存（请求），500m / 512Mi（限制）
+- 前端：50m CPU / 64Mi 内存（请求），300m / 256Mi（限制）
 
-- **监控持久化**：监控系统挂载数据卷；告警规则与路由配置以挂载文件管理。
+**部署命令**：
+```bash
+kubectl apply -f k8s/           # 一键部署
+kubectl -n share-my-status get all  # 查看状态
+```
 
-### 18.5 监控与报警清单（落地）
-- **采集**：API `/metrics`（HTTP 请求计数与耗时、WS 连接计数、Redis/MySQL客户端错误计数等）；`redis_exporter`；`mysqld_exporter`；（可选）`node_exporter`。
+### 18.3 Makefile 运维工具
 
-- **监控看板**：API 概览、DB 概览、Redis 概览（文件占位）；统一数据源配置。
+项目提供 `Makefile` 简化日常操作，主要命令：
+- `make setup` - 准备环境文件
+- `make dev-start` / `make dev-stop` - 启动/停止开发环境
+- `make deploy` - 部署到生产（拉取镜像并启动）
+- `make prod-rebuild-backend` - 重建后端服务
+- `make hz-update` - 从 IDL 更新代码
+- `make wire` - 生成依赖注入代码
 
-- **告警规则**：
-	- API：**错误率**、**延迟 P95**、**WS 断连率**。
-	- Redis：**redis_up**、连接数异常。
-	- MySQL：**慢查询**、**QPS 阈值**、（可选）**数据卷使用率**。
+### 18.4 快速启动
 
-### 18.6 可操作指引
-- **本地快速起服务**：
-	1. 在项目根目录准备 `.env`（避免提交仓库）。
-	2. 在 `db/init/` 放置初始化 SQL（文档中的 DDL）。
-	3. 执行 **docker-compose up -d**；等待 `mysql` 健康后 `api` 与 `web` 进入 `healthy`。
-	4. 访问 `http://localhost:8081`；后端健康检查 `http://localhost:8080/healthz`，指标 `http://localhost:8080/metrics`。
+**本地开发**：
+```bash
+make setup && make dev-start
+# 访问 http://localhost:8888
+```
 
-- **集群部署**：
-	1. 编辑 `values.yaml`，填充镜像、Secret、数据库与缓存连接、Ingress 域名与 TLS。
-	2. 执行 **helm upgrade --install** 安装到命名空间 `sms`。
-	3. 验证 Service、Ingress、`/healthz` 与 `/metrics`；配置监控看板并连接数据源。
-	4. 启用 HPA 与 PDB，观察滚动升级时的探针与副本健康；必要时回滚。
+**Kubernetes 部署**：
+```bash
+kubectl apply -f k8s/
+kubectl -n share-my-status get pods
+```
 
 ## 19 监控与告警
 **新增指标**：

@@ -1,17 +1,7 @@
-<div align="center">
+# Share My Status Plus
 
-  <svg width="100%" height="140" viewBox="0 0 1200 140" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Share My Status Plus">
-    <defs>
-      <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stop-color="#7c3aed"/>
-        <stop offset="50%" stop-color="#06b6d4"/>
-        <stop offset="100%" stop-color="#22c55e"/>
-      </linearGradient>
-    </defs>
-    <rect x="0" y="0" width="1200" height="140" fill="url(#g)" rx="16"/>
-    <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="44" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial" fill="#ffffff" font-weight="700">Share My Status Plus</text>
-    <text x="50%" y="80%" dominant-baseline="middle" text-anchor="middle" font-size="18" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial" fill="#e5e7eb">实时状态 · 推送 · 看板 · 跳转</text>
-  </svg>
+<div>
+<text x="50%" y="80%" dominant-baseline="middle" text-anchor="middle" font-size="18" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial" fill="#e5e7eb">实时状态 · 推送 · 看板 · 跳转</text>
 
   <p>
     <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" />
@@ -30,8 +20,6 @@
   </p>
 </div>
 
-# Share My Status Plus
-
 一个用于分享个人/团队实时状态的轻量级全栈项目，包含后端服务、Web 前端与 macOS 桌面客户端。支持实时推送、统计看板与便捷跳转，开箱即用，易于部署。
 
 ## 功能亮点
@@ -40,13 +28,6 @@
 - 封面与公共跳转服务（/s 路由）
 - macOS 桌面端快速更新状态
 - 支持 Docker Compose 与 Kubernetes 部署
-
-<div style="display:flex; gap:16px; flex-wrap:wrap; margin:8px 0 16px;">
-  <span style="background:#eef2ff; color:#4f46e5; padding:6px 10px; border-radius:999px; font-size:12px;">WebSocket</span>
-  <span style="background:#ecfeff; color:#0e7490; padding:6px 10px; border-radius:999px; font-size:12px;">Stats</span>
-  <span style="background:#f0fdf4; color:#15803d; padding:6px 10px; border-radius:999px; font-size:12px;">Redirect</span>
-  <span style="background:#f5f3ff; color:#6b21a8; padding:6px 10px; border-radius:999px; font-size:12px;">macOS Client</span>
-</div>
 
 ## 项目结构
 - backend/：Go 后端（Hertz + GORM + DI）
