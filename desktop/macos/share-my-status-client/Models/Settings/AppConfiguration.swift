@@ -18,7 +18,6 @@ struct ExportableConfiguration: Codable {
     var musicReportingEnabled: Bool
     var systemReportingEnabled: Bool
     var activityReportingEnabled: Bool
-    var musicStatsAuthorized: Bool
     var musicAppWhitelist: [String]
     var activityGroups: [ActivityGroup]
     var systemPollingInterval: TimeInterval
@@ -64,12 +63,6 @@ class AppConfiguration: ObservableObject {
         }
     }
     
-    // Statistics Authorization
-    @Published var musicStatsAuthorized: Bool {
-        didSet {
-            UserDefaults.standard.set(musicStatsAuthorized, forKey: "musicStatsAuthorized")
-        }
-    }
     
     // App Lists
     @Published var musicAppWhitelist: [String] {
@@ -112,9 +105,6 @@ class AppConfiguration: ObservableObject {
         self.systemReportingEnabled = UserDefaults.standard.object(forKey: "systemReportingEnabled") as? Bool ?? DefaultSettings.systemReportingEnabled
         self.activityReportingEnabled = UserDefaults.standard.object(forKey: "activityReportingEnabled") as? Bool ?? DefaultSettings.activityReportingEnabled
         
-        // Statistics authorization
-        self.musicStatsAuthorized = UserDefaults.standard.object(forKey: "musicStatsAuthorized") as? Bool ?? DefaultSettings.musicStatsAuthorized
-        
         // App lists
         self.musicAppWhitelist = UserDefaults.standard.stringArray(forKey: "musicAppWhitelist") ?? DefaultSettings.musicAppWhitelist
         
@@ -141,7 +131,7 @@ class AppConfiguration: ObservableObject {
         let keys = [
             "secretKey", "endpointURL",
             "musicReportingEnabled", "systemReportingEnabled", "activityReportingEnabled",
-            "musicStatsAuthorized", "musicAppWhitelist",
+            "musicAppWhitelist",
             "activityGroups",
             "systemPollingInterval", "activityPollingInterval"
         ]
@@ -154,7 +144,6 @@ class AppConfiguration: ObservableObject {
         self.musicReportingEnabled = DefaultSettings.musicReportingEnabled
         self.systemReportingEnabled = DefaultSettings.systemReportingEnabled
         self.activityReportingEnabled = DefaultSettings.activityReportingEnabled
-        self.musicStatsAuthorized = DefaultSettings.musicStatsAuthorized
         self.musicAppWhitelist = DefaultSettings.musicAppWhitelist
         self.activityGroups = DefaultSettings.activityGroups
         self.systemPollingInterval = DefaultSettings.systemPollingInterval
@@ -173,7 +162,7 @@ class AppConfiguration: ObservableObject {
             musicReportingEnabled: musicReportingEnabled,
             systemReportingEnabled: systemReportingEnabled,
             activityReportingEnabled: activityReportingEnabled,
-            musicStatsAuthorized: musicStatsAuthorized,
+            // removed: musicStatsAuthorized
             musicAppWhitelist: musicAppWhitelist,
             activityGroups: activityGroups,
             systemPollingInterval: systemPollingInterval,
@@ -229,7 +218,6 @@ class AppConfiguration: ObservableObject {
         self.musicReportingEnabled = config.musicReportingEnabled
         self.systemReportingEnabled = config.systemReportingEnabled
         self.activityReportingEnabled = config.activityReportingEnabled
-        self.musicStatsAuthorized = config.musicStatsAuthorized
         self.musicAppWhitelist = config.musicAppWhitelist
         self.activityGroups = config.activityGroups
         self.systemPollingInterval = config.systemPollingInterval

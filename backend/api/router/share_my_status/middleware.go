@@ -101,3 +101,11 @@ func _uploadstatusMw() []app.HandlerFunc {
 	// your code...
 	return nil
 }
+
+func _clientMw() []app.HandlerFunc {
+	return nil
+}
+
+func _checkclientversionMw() []app.HandlerFunc {
+	return nil
+}

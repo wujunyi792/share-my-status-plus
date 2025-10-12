@@ -4,7 +4,7 @@ metadata:
   name: share-my-status-ingress
   namespace: share-my-status
   annotations:
-    cert-manager.io/cluster-issuer: mjclouds-com
+    cert-manager.io/cluster-issuer: letsencrypt-mjclouds-com
 spec:
   ingressClassName: higress
   tls:
@@ -44,6 +44,13 @@ spec:
                 name: share-my-status-svc
                 port:
                   number: 8080
+          - path: /s
+            pathType: Prefix
+            backend:
+              service:
+                name: share-my-status-svc
+                port:
+                  number: 8080
           - path: /
             pathType: Prefix
             backend:
@@ -76,6 +83,13 @@ spec:
                 port:
                   number: 8080
           - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: share-my-status-svc
+                port:
+                  number: 8080
+          - path: /s
             pathType: Prefix
             backend:
               service:

@@ -47,6 +47,10 @@ export const apiClient = {
   async queryStats(request: StatsQueryRequest, sharingKey?: string): Promise<StatsQueryResponse> {
     const url = sharingKey ? `/api/v1/stats/query?sharingKey=${sharingKey}` : '/api/v1/stats/query';
     const response: StatsQueryResponse = await api.post(url, request);
+    // 对于未授权的音乐统计（403），不抛出错误，直接返回响应以便前端显示空状态
+    if (response.base.code === 403) {
+      return response;
+    }
     if (response.base.code !== 0) {
       throw new Error(response.base.message || 'Failed to query stats');
     }

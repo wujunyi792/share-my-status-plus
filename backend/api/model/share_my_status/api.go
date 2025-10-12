@@ -10,6 +10,7 @@ import (
 	"share-my-status/api/model/share_my_status/redirect"
 	"share-my-status/api/model/share_my_status/state"
 	"share-my-status/api/model/share_my_status/stats"
+	"share-my-status/api/model/share_my_status/version"
 	"share-my-status/api/model/share_my_status/websocket"
 )
 
@@ -31,6 +32,8 @@ type ShareMyStatus interface {
 	Connect(ctx context.Context, req *websocket.WSConnectRequest) (r *websocket.WSConnectResponse, err error)
 	// 连接跳转
 	Redirect(ctx context.Context, req *redirect.RedirectRequest) (r *redirect.RedirectResponse, err error)
+	// 客户端版本查询
+	CheckClientVersion(ctx context.Context, req *version.CheckClientVersionRequest) (r *version.CheckClientVersionResponse, err error)
 }
 
 type ShareMyStatusClient struct {
@@ -131,6 +134,15 @@ func (p *ShareMyStatusClient) Redirect(ctx context.Context, req *redirect.Redire
 	}
 	return _result.GetSuccess(), nil
 }
+func (p *ShareMyStatusClient) CheckClientVersion(ctx context.Context, req *version.CheckClientVersionRequest) (r *version.CheckClientVersionResponse, err error) {
+	var _args ShareMyStatusCheckClientVersionArgs
+	_args.Req = req
+	var _result ShareMyStatusCheckClientVersionResult
+	if err = p.Client_().Call(ctx, "CheckClientVersion", &_args, &_result); err != nil {
+		return
+	}
+	return _result.GetSuccess(), nil
+}
 
 type ShareMyStatusProcessor struct {
 	processorMap map[string]thrift.TProcessorFunction
@@ -160,6 +172,7 @@ func NewShareMyStatusProcessor(handler ShareMyStatus) *ShareMyStatusProcessor {
 	self.AddToProcessorMap("QueryStats", &shareMyStatusProcessorQueryStats{handler: handler})
 	self.AddToProcessorMap("Connect", &shareMyStatusProcessorConnect{handler: handler})
 	self.AddToProcessorMap("Redirect", &shareMyStatusProcessorRedirect{handler: handler})
+	self.AddToProcessorMap("CheckClientVersion", &shareMyStatusProcessorCheckClientVersion{handler: handler})
 	return self
 }
 func (p *ShareMyStatusProcessor) Process(ctx context.Context, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
@@ -547,6 +560,54 @@ func (p *shareMyStatusProcessorRedirect) Process(ctx context.Context, seqId int3
 		result.Success = retval
 	}
 	if err2 = oprot.WriteMessageBegin("Redirect", thrift.REPLY, seqId); err2 != nil {
+		err = err2
+	}
+	if err2 = result.Write(oprot); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.WriteMessageEnd(); err == nil && err2 != nil {
+		err = err2
+	}
+	if err2 = oprot.Flush(ctx); err == nil && err2 != nil {
+		err = err2
+	}
+	if err != nil {
+		return
+	}
+	return true, err
+}
+
+type shareMyStatusProcessorCheckClientVersion struct {
+	handler ShareMyStatus
+}
+
+func (p *shareMyStatusProcessorCheckClientVersion) Process(ctx context.Context, seqId int32, iprot, oprot thrift.TProtocol) (success bool, err thrift.TException) {
+	args := ShareMyStatusCheckClientVersionArgs{}
+	if err = args.Read(iprot); err != nil {
+		iprot.ReadMessageEnd()
+		x := thrift.NewTApplicationException(thrift.PROTOCOL_ERROR, err.Error())
+		oprot.WriteMessageBegin("CheckClientVersion", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return false, err
+	}
+
+	iprot.ReadMessageEnd()
+	var err2 error
+	result := ShareMyStatusCheckClientVersionResult{}
+	var retval *version.CheckClientVersionResponse
+	if retval, err2 = p.handler.CheckClientVersion(ctx, args.Req); err2 != nil {
+		x := thrift.NewTApplicationException(thrift.INTERNAL_ERROR, "Internal error processing CheckClientVersion: "+err2.Error())
+		oprot.WriteMessageBegin("CheckClientVersion", thrift.EXCEPTION, seqId)
+		x.Write(oprot)
+		oprot.WriteMessageEnd()
+		oprot.Flush(ctx)
+		return true, err2
+	} else {
+		result.Success = retval
+	}
+	if err2 = oprot.WriteMessageBegin("CheckClientVersion", thrift.REPLY, seqId); err2 != nil {
 		err = err2
 	}
 	if err2 = result.Write(oprot); err == nil && err2 != nil {
@@ -2897,5 +2958,297 @@ func (p *ShareMyStatusRedirectResult) String() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("ShareMyStatusRedirectResult(%+v)", *p)
+
+}
+
+type ShareMyStatusCheckClientVersionArgs struct {
+	Req *version.CheckClientVersionRequest `thrift:"req,1"`
+}
+
+func NewShareMyStatusCheckClientVersionArgs() *ShareMyStatusCheckClientVersionArgs {
+	return &ShareMyStatusCheckClientVersionArgs{}
+}
+
+func (p *ShareMyStatusCheckClientVersionArgs) InitDefault() {
+}
+
+var ShareMyStatusCheckClientVersionArgs_Req_DEFAULT *version.CheckClientVersionRequest
+
+func (p *ShareMyStatusCheckClientVersionArgs) GetReq() (v *version.CheckClientVersionRequest) {
+	if !p.IsSetReq() {
+		return ShareMyStatusCheckClientVersionArgs_Req_DEFAULT
+	}
+	return p.Req
+}
+
+var fieldIDToName_ShareMyStatusCheckClientVersionArgs = map[int16]string{
+	1: "req",
+}
+
+func (p *ShareMyStatusCheckClientVersionArgs) IsSetReq() bool {
+	return p.Req != nil
+}
+
+func (p *ShareMyStatusCheckClientVersionArgs) Read(iprot thrift.TProtocol) (err error) {
+	var fieldTypeId thrift.TType
+	var fieldId int16
+
+	if _, err = iprot.ReadStructBegin(); err != nil {
+		goto ReadStructBeginError
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err = iprot.ReadFieldBegin()
+		if err != nil {
+			goto ReadFieldBeginError
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+
+		switch fieldId {
+		case 1:
+			if fieldTypeId == thrift.STRUCT {
+				if err = p.ReadField1(iprot); err != nil {
+					goto ReadFieldError
+				}
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		default:
+			if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		}
+		if err = iprot.ReadFieldEnd(); err != nil {
+			goto ReadFieldEndError
+		}
+	}
+	if err = iprot.ReadStructEnd(); err != nil {
+		goto ReadStructEndError
+	}
+
+	return nil
+ReadStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct begin error: ", p), err)
+ReadFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d begin error: ", p, fieldId), err)
+ReadFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d '%s' error: ", p, fieldId, fieldIDToName_ShareMyStatusCheckClientVersionArgs[fieldId]), err)
+SkipFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T field %d skip type %d error: ", p, fieldId, fieldTypeId), err)
+
+ReadFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read field end error", p), err)
+ReadStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusCheckClientVersionArgs) ReadField1(iprot thrift.TProtocol) error {
+	_field := version.NewCheckClientVersionRequest()
+	if err := _field.Read(iprot); err != nil {
+		return err
+	}
+	p.Req = _field
+	return nil
+}
+
+func (p *ShareMyStatusCheckClientVersionArgs) Write(oprot thrift.TProtocol) (err error) {
+	var fieldId int16
+	if err = oprot.WriteStructBegin("CheckClientVersion_args"); err != nil {
+		goto WriteStructBeginError
+	}
+	if p != nil {
+		if err = p.writeField1(oprot); err != nil {
+			fieldId = 1
+			goto WriteFieldError
+		}
+	}
+	if err = oprot.WriteFieldStop(); err != nil {
+		goto WriteFieldStopError
+	}
+	if err = oprot.WriteStructEnd(); err != nil {
+		goto WriteStructEndError
+	}
+	return nil
+WriteStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+WriteFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T write field %d error: ", p, fieldId), err)
+WriteFieldStopError:
+	return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", p), err)
+WriteStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusCheckClientVersionArgs) writeField1(oprot thrift.TProtocol) (err error) {
+	if err = oprot.WriteFieldBegin("req", thrift.STRUCT, 1); err != nil {
+		goto WriteFieldBeginError
+	}
+	if err := p.Req.Write(oprot); err != nil {
+		return err
+	}
+	if err = oprot.WriteFieldEnd(); err != nil {
+		goto WriteFieldEndError
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 1 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 1 end error: ", p), err)
+}
+
+func (p *ShareMyStatusCheckClientVersionArgs) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("ShareMyStatusCheckClientVersionArgs(%+v)", *p)
+
+}
+
+type ShareMyStatusCheckClientVersionResult struct {
+	Success *version.CheckClientVersionResponse `thrift:"success,0,optional"`
+}
+
+func NewShareMyStatusCheckClientVersionResult() *ShareMyStatusCheckClientVersionResult {
+	return &ShareMyStatusCheckClientVersionResult{}
+}
+
+func (p *ShareMyStatusCheckClientVersionResult) InitDefault() {
+}
+
+var ShareMyStatusCheckClientVersionResult_Success_DEFAULT *version.CheckClientVersionResponse
+
+func (p *ShareMyStatusCheckClientVersionResult) GetSuccess() (v *version.CheckClientVersionResponse) {
+	if !p.IsSetSuccess() {
+		return ShareMyStatusCheckClientVersionResult_Success_DEFAULT
+	}
+	return p.Success
+}
+
+var fieldIDToName_ShareMyStatusCheckClientVersionResult = map[int16]string{
+	0: "success",
+}
+
+func (p *ShareMyStatusCheckClientVersionResult) IsSetSuccess() bool {
+	return p.Success != nil
+}
+
+func (p *ShareMyStatusCheckClientVersionResult) Read(iprot thrift.TProtocol) (err error) {
+	var fieldTypeId thrift.TType
+	var fieldId int16
+
+	if _, err = iprot.ReadStructBegin(); err != nil {
+		goto ReadStructBeginError
+	}
+
+	for {
+		_, fieldTypeId, fieldId, err = iprot.ReadFieldBegin()
+		if err != nil {
+			goto ReadFieldBeginError
+		}
+		if fieldTypeId == thrift.STOP {
+			break
+		}
+
+		switch fieldId {
+		case 0:
+			if fieldTypeId == thrift.STRUCT {
+				if err = p.ReadField0(iprot); err != nil {
+					goto ReadFieldError
+				}
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		default:
+			if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		}
+		if err = iprot.ReadFieldEnd(); err != nil {
+			goto ReadFieldEndError
+		}
+	}
+	if err = iprot.ReadStructEnd(); err != nil {
+		goto ReadStructEndError
+	}
+
+	return nil
+ReadStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct begin error: ", p), err)
+ReadFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d begin error: ", p, fieldId), err)
+ReadFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T read field %d '%s' error: ", p, fieldId, fieldIDToName_ShareMyStatusCheckClientVersionResult[fieldId]), err)
+SkipFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T field %d skip type %d error: ", p, fieldId, fieldTypeId), err)
+
+ReadFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read field end error", p), err)
+ReadStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusCheckClientVersionResult) ReadField0(iprot thrift.TProtocol) error {
+	_field := version.NewCheckClientVersionResponse()
+	if err := _field.Read(iprot); err != nil {
+		return err
+	}
+	p.Success = _field
+	return nil
+}
+
+func (p *ShareMyStatusCheckClientVersionResult) Write(oprot thrift.TProtocol) (err error) {
+	var fieldId int16
+	if err = oprot.WriteStructBegin("CheckClientVersion_result"); err != nil {
+		goto WriteStructBeginError
+	}
+	if p != nil {
+		if err = p.writeField0(oprot); err != nil {
+			fieldId = 0
+			goto WriteFieldError
+		}
+	}
+	if err = oprot.WriteFieldStop(); err != nil {
+		goto WriteFieldStopError
+	}
+	if err = oprot.WriteStructEnd(); err != nil {
+		goto WriteStructEndError
+	}
+	return nil
+WriteStructBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", p), err)
+WriteFieldError:
+	return thrift.PrependError(fmt.Sprintf("%T write field %d error: ", p, fieldId), err)
+WriteFieldStopError:
+	return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", p), err)
+WriteStructEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", p), err)
+}
+
+func (p *ShareMyStatusCheckClientVersionResult) writeField0(oprot thrift.TProtocol) (err error) {
+	if p.IsSetSuccess() {
+		if err = oprot.WriteFieldBegin("success", thrift.STRUCT, 0); err != nil {
+			goto WriteFieldBeginError
+		}
+		if err := p.Success.Write(oprot); err != nil {
+			return err
+		}
+		if err = oprot.WriteFieldEnd(); err != nil {
+			goto WriteFieldEndError
+		}
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 0 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 0 end error: ", p), err)
+}
+
+func (p *ShareMyStatusCheckClientVersionResult) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("ShareMyStatusCheckClientVersionResult(%+v)", *p)
 
 }

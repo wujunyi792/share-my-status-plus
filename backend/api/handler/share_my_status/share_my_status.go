@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"share-my-status/api/model/share_my_status/redirect"
+	version "share-my-status/api/model/share_my_status/version"
 	"share-my-status/model"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	websocket "share-my-status/api/model/share_my_status/websocket"
 	"share-my-status/infra"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/sirupsen/logrus"
@@ -365,4 +367,81 @@ func Redirect(ctx context.Context, c *app.RequestContext) {
 
 	// 进行 302 重定向
 	c.Redirect(consts.StatusFound, []byte(redirectURL))
+}
+
+// CheckClientVersion 客户端版本查询
+// @router /api/v1/client/check-version [GET]
+func CheckClientVersion(ctx context.Context, c *app.RequestContext) {
+	responseHelper := NewResponseHelper()
+
+	var req version.CheckClientVersionRequest
+	if err := c.BindAndValidate(&req); err != nil {
+		responseHelper.SendErrorResponse(c, &version.CheckClientVersionResponse{}, 400, "Invalid request: "+err.Error())
+		return
+	}
+
+	platform := strings.ToLower(strings.TrimSpace(req.Platform))
+	if platform != "windows" && platform != "macos" {
+		responseHelper.SendErrorResponse(c, &version.CheckClientVersionResponse{}, 400, "Invalid platform")
+		return
+	}
+
+	db := infra.GetGlobalAppDependencies().DB
+	var latest model.ClientVersion
+	if err := db.Where("platform = ?", platform).Order("build_number DESC").Order("updated_at DESC").Limit(1).Find(&latest).Error; err != nil {
+		logrus.Errorf("Failed to query latest client version: %v", err)
+		responseHelper.SendErrorResponse(c, &version.CheckClientVersionResponse{}, 500, "Internal server error")
+		return
+	}
+
+	// 若无服务端记录，则认为无需更新
+	if latest.ID == 0 {
+		responseHelper.SendSuccessResponse(c, &version.CheckClientVersionResponse{})
+		return
+	}
+
+	clientVerStr := strings.TrimSpace(req.Version)
+	serverVerStr := strings.TrimSpace(latest.Version)
+
+	var needUpdate bool
+
+	// 语义化版本比较
+	var clientSem, serverSem *semver.Version
+	if v, err := semver.NewVersion(clientVerStr); err == nil {
+		clientSem = v
+	}
+	if v, err := semver.NewVersion(serverVerStr); err == nil {
+		serverSem = v
+	}
+	if clientSem != nil && serverSem != nil && serverSem.GreaterThan(clientSem) {
+		needUpdate = true
+	}
+
+	// 构建号比较（更优先）
+	if int(req.Build) < latest.BuildNumber {
+		needUpdate = true
+	}
+
+	if !needUpdate {
+		// 无需更新
+		responseHelper.SendSuccessResponse(c, &version.CheckClientVersionResponse{})
+		return
+	}
+
+	// 有更新，返回最新版本信息
+	build := int32(latest.BuildNumber)
+	isLatestRelease := true
+	resp := &version.CheckClientVersionResponse{
+		Latest: &version.ClientVersionInfo{
+			Platform:    &latest.Platform,
+			Version:     &latest.Version,
+			BuildNumber: &build,
+			DownloadUrl: &latest.DownloadUrl,
+			ReleaseNote: &latest.ReleaseNote,
+			ForceUpdate: &latest.ForceUpdate,
+			Latest:      &isLatestRelease,
+		},
+	}
+
+	responseHelper.SendSuccessResponse(c, resp)
 }

@@ -3,6 +3,7 @@ include "./stats_service.thrift"
 include "./cover_service.thrift"
 include "./websocket_service.thrift"
 include "./redirect_service.thrift"
+include "./version_service.thrift"
 
 namespace go share_my_status
 
@@ -32,4 +33,6 @@ service ShareMyStatus {
     // 连接跳转
     redirect_service.RedirectResponse Redirect(1: redirect_service.RedirectRequest req) (api.get="/s/:sharingKey");
 
+    // 客户端版本查询
+    version_service.CheckClientVersionResponse CheckClientVersion(1: version_service.CheckClientVersionRequest req) (api.get="/api/v1/client/check-version");
 }

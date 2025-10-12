@@ -15,7 +15,7 @@ struct CustomLinkView: View {
     
     @State private var baseUrl: String = ""
     @State private var redirectUrl: String = ""
-    @State private var displayFormat: String = "{artist}的{title}"
+    @State private var displayFormat: String = "正在听{artist}-{title}"
     @State private var customizedUrl: String = ""
     @State private var previewText: String = ""
     @State private var showCopySuccess: Bool = false
@@ -316,7 +316,7 @@ struct CustomLinkView: View {
                                 Label("清空", systemImage: "trash")
                             }
                             .buttonStyle(.bordered)
-                            .disabled(baseUrl.isEmpty && redirectUrl.isEmpty && displayFormat == "{artist}的{title}")
+                            .disabled(baseUrl.isEmpty && redirectUrl.isEmpty && displayFormat == "正在听{artist}-{title}")
                         }
                         
                         if showCopySuccess {
@@ -369,6 +369,11 @@ struct CustomLinkView: View {
         guard !url.isEmpty else { return }
         
         if let parsed = LinkUtility.parseCustomizedUrl(url) {
+            // Normalize base URL to /s/{sharingKey} format if needed
+            if parsed.baseUrl != url {
+                baseUrl = parsed.baseUrl
+            }
+            
             if let redirect = parsed.redirectUrl {
                 redirectUrl = redirect
             }
@@ -448,7 +453,7 @@ struct CustomLinkView: View {
     private func clearFields() {
         baseUrl = ""
         redirectUrl = ""
-        displayFormat = "{artist}的{title}"
+        displayFormat = "正在听{artist}-{title}"
         customizedUrl = ""
         updatePreview()
     }

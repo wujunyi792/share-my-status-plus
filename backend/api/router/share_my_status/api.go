@@ -23,6 +23,10 @@ func Register(r *server.Hertz) {
 			_v1 := _api.Group("/v1", _v1Mw()...)
 			_v1.GET("/ws", append(_connectMw(), share_my_status.Connect)...)
 			{
+				_client := _v1.Group("/client", _clientMw()...)
+				_client.GET("/check-version", append(_checkclientversionMw(), share_my_status.CheckClientVersion)...)
+			}
+			{
 				_cover := _v1.Group("/cover", _coverMw()...)
 				_cover.GET("/exists", append(_checkexistsMw(), share_my_status.CheckExists)...)
 				_cover.GET("/:hash", append(_getMw(), share_my_status.Get)...)

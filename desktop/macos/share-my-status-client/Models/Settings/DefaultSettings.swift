@@ -31,8 +31,6 @@ enum DefaultSettings {
     
     // Statistics Authorization
     
-    /// Default music statistics authorization state
-    static let musicStatsAuthorized = false
     
     // App Lists
     
@@ -62,7 +60,7 @@ enum DefaultSettings {
     static let systemPollingIntervalStep: TimeInterval = 5
     
     /// Activity polling interval range (min...max)
-    static let activityPollingIntervalRange: ClosedRange<TimeInterval> = 1...30
+    static let activityPollingIntervalRange: ClosedRange<TimeInterval> = 5...60
     
     /// Activity polling interval step
     static let activityPollingIntervalStep: TimeInterval = 1

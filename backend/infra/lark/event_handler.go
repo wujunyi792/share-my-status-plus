@@ -68,6 +68,25 @@ func (h *EventHandler) OnP2MessageReceiveV1(ctx context.Context, event *larkim.P
 		}
 	}
 
+	// 特殊命令：/config 或 推荐配置 使用富文本(Post)回复
+	if command.Action == "config" && len(command.Params) == 0 {
+		cfgJSON := h.buildRecommendedConfigJSON(user, &h.config.App)
+
+		var content [][]map[string]any
+		content = append(content, []map[string]any{
+			{"tag": "code_block", "language": "JSON", "text": cfgJSON},
+		})
+
+		post := map[string]any{
+			"zh_cn": map[string]any{
+				"title":   "推荐配置",
+				"content": content,
+			},
+		}
+
+		return h.replyPostMessage(ctx, messageID, post)
+	}
+
 	// 执行命令
 	response, err := h.executeCommand(ctx, user, command)
 	if err != nil {
@@ -103,6 +122,9 @@ func (h *EventHandler) OnP2CardURLPreviewGet(ctx context.Context, event *callbac
 	if key == "" {
 		// 旧版兼容
 		openIDEncoded := parsedURL.Query().Get("u")
+		if openIDEncoded == "" {
+			return urlPreview, nil
+		}
 		key, err = crypto.Decode(openIDEncoded, h.config.LegacyCrypto.Key, h.config.LegacyCrypto.IV)
 		if err != nil {
 			logrus.Errorf("Failed to decode openID: %v", err)
@@ -170,20 +192,46 @@ type Command struct {
 
 // parseCommand 解析命令
 func (h *EventHandler) parseCommand(message string) *Command {
-	message = strings.TrimSpace(gjson.Get(message, "text").String())
-
-	parts := strings.Fields(message)
-	if len(parts) < 1 {
+	text := strings.TrimSpace(gjson.Get(message, "text").String())
+	if text == "" {
 		return nil
 	}
 
-	// 移除前缀斜杠
-	action := strings.TrimPrefix(parts[0], "/")
+	lower := strings.ToLower(text)
 
-	return &Command{
-		Action: action,
-		Params: parts[1:],
+	// 以斜杠开头的命令（例如 /public on）
+	if strings.HasPrefix(text, "/") {
+		parts := strings.Fields(lower)
+		if len(parts) < 1 {
+			return nil
+		}
+		action := strings.TrimPrefix(parts[0], "/")
+		return &Command{Action: action, Params: parts[1:]}
 	}
+
+	// 中文别名命令映射
+	alias := map[string]*Command{
+		"开启公开访问":   {Action: "public", Params: []string{"on"}},
+		"关闭公开访问":   {Action: "public", Params: []string{"off"}},
+		"授权音乐统计":   {Action: "stat", Params: []string{"on"}},
+		"取消授权音乐统计": {Action: "stat", Params: []string{"off"}},
+		"查看我的信息":   {Action: "info", Params: []string{}},
+		"轮转数据上报密钥": {Action: "rotate", Params: []string{"secret-key"}},
+		"轮转分享链接":   {Action: "rotate", Params: []string{"sharing-key"}},
+		"帮助":       {Action: "help", Params: []string{}},
+		"推荐配置":     {Action: "config", Params: []string{}},
+	}
+
+	if cmd, ok := alias[text]; ok {
+		return cmd
+	}
+
+	// 英文 help
+	if lower == "help" {
+		return &Command{Action: "help", Params: []string{}}
+	}
+
+	return nil
 }
 
 // executeCommand 执行命令
@@ -199,8 +247,10 @@ func (h *EventHandler) executeCommand(ctx context.Context, user *model.User, com
 		return h.executeInfoCommand(ctx, user, userService)
 	case "rotate":
 		return h.executeRotateCommand(ctx, user, userService, command.Params)
+	case "help":
+		return "ℹ️ 帮助：\n• `/public on` - 开启公开访问\n• `/public off` - 关闭公开访问\n• `/stat on` - 授权音乐统计\n• `/stat off` - 取消授权音乐统计\n• `/info` - 查看我的信息\n• `/rotate secret-key` - 轮转数据上报密钥\n• `/rotate sharing-key` - 轮转分享链接\n• `/config` - 返回推荐配置 JSON\n• `/help` - 帮助\n\n中文别名也支持：\n• 开启公开访问\n• 关闭公开访问\n• 授权音乐统计\n• 取消授权音乐统计\n• 查看我的信息\n• 轮转数据上报密钥\n• 轮转分享链接\n• 推荐配置\n• 帮助", nil
 	default:
-		return "❓ 未知命令。支持的命令：\n• `/public on` - 开启公开访问\n• `/public off` - 关闭公开访问\n• `/stat on` - 开启音乐统计授权\n• `/stat off` - 关闭音乐统计授权\n• `/info` - 查看账户信息\n• `/rotate secret-key` - 轮转客户端密钥\n• `/rotate sharing-key` - 轮转分享链接密钥", nil
+		return "❓ 未知命令。支持的命令：\n• `/public on` - 开启公开访问\n• `/public off` - 关闭公开访问\n• `/stat on` - 授权音乐统计\n• `/stat off` - 取消授权音乐统计\n• `/info` - 查看我的信息\n• `/rotate secret-key` - 轮转数据上报密钥\n• `/rotate sharing-key` - 轮转分享链接\n• `/config` - 返回推荐配置 JSON\n• `/help` - 帮助\n\n中文别名也支持：\n• 开启公开访问\n• 关闭公开访问\n• 授权音乐统计\n• 取消授权音乐统计\n• 查看我的信息\n• 轮转数据上报密钥\n• 轮转分享链接\n• 推荐配置\n• 帮助", nil
 	}
 }
 
@@ -242,7 +292,7 @@ func (h *EventHandler) executePublicCommand(ctx context.Context, user *model.Use
 // executeStatCommand 执行音乐统计授权命令
 func (h *EventHandler) executeStatCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (string, error) {
 	if len(params) != 1 {
-		return "❌ 用法错误，请使用：\n• `/stat on` - 开启音乐统计授权\n• `/stat off` - 关闭音乐统计授权", nil
+		return "❌ 用法错误，请使用：\n• `/stat on` - 授权音乐统计\n• `/stat off` - 取消授权音乐统计", nil
 	}
 
 	enable := params[0] == "on"
@@ -589,6 +639,178 @@ func (h *EventHandler) replyMessage(ctx context.Context, messageID, content stri
 	_, err := client.Im.Message.Reply(ctx, req)
 	if err != nil {
 		logrus.Errorf("Failed to send message: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// 构建推荐配置 JSON
+func (h *EventHandler) buildRecommendedConfigJSON(user *model.User, cfg *config.AppConfig) string {
+	activityGroups := []map[string]any{
+		{
+			"bundleIds": []string{
+				"com.apple.iWork.Pages",
+				"com.apple.iWork.Numbers",
+				"com.apple.iWork.Keynote",
+				"com.microsoft.Word",
+				"com.microsoft.Excel",
+				"com.microsoft.Powerpoint",
+				"com.microsoft.onenote.mac",
+				"com.microsoft.Outlook",
+				"com.microsoft.teams",
+				"com.electron.lark",
+				"com.volcengine.corplink",
+				"com.raycast.macos",
+				"com.share-my-status.client",
+				"cn.trae.app",
+				"com.trae.app",
+				"com.microsoft.OneDrive",
+			},
+			"isEnabled": true,
+			"name":      "在工作&研究",
+		},
+		{
+			"bundleIds": []string{
+				"com.microsoft.VSCode",
+				"com.sublimetext.3",
+				"com.apple.dt.Xcode",
+				"com.SweetScape.010Editor",
+				"me.qii404.another-redis-desktop-manager",
+				"cn.apifox.app",
+				"com.todesktop.230313mzl4w4u92",
+				"com.jetbrains.goland",
+				"com.jetbrains.toolbox",
+				"com.mongodb.compass",
+				"com.electron.ollama",
+				"io.podmandesktop.PodmanDesktop",
+				"com.postmanlabs.mac",
+			},
+			"isEnabled": true,
+			"name":      "在搞研发",
+		},
+		{
+			"bundleIds": []string{
+				"com.bohemiancoding.sketch3",
+				"com.figma.Desktop",
+				"com.adobe.Photoshop",
+			},
+			"isEnabled": true,
+			"name":      "在设计",
+		},
+		{
+			"bundleIds": []string{
+				"us.zoom.xos",
+				"com.tinyspeck.slackmacgap",
+			},
+			"isEnabled": true,
+			"name":      "在开会",
+		},
+		{
+			"bundleIds": []string{
+				"com.apple.Safari",
+				"com.google.Chrome",
+				"org.mozilla.firefox",
+				"com.brave.Browser",
+				"com.operasoftware.Opera",
+				"company.thebrowser.Browser",
+				"com.microsoft.edgemac",
+				"com.vivaldi.Vivaldi",
+			},
+			"isEnabled": true,
+			"name":      "在浏览",
+		},
+		{
+			"bundleIds": []string{
+				"com.apple.Terminal",
+				"com.googlecode.iterm2",
+				"com.googlecode.iterm2.iTermAI",
+				"com.termius-dmg.mac",
+			},
+			"isEnabled": true,
+			"name":      "在终端",
+		},
+		{
+			"bundleIds": []string{
+				"com.bytedance.douyin.desktop",
+				"com.soda.music",
+				"com.xingin.discover",
+				"com.meituan.imovie",
+				"com.netease.163music",
+				"com.tencent.QQMusicMac",
+			},
+			"isEnabled": true,
+			"name":      "在娱乐",
+		},
+		{
+			"bundleIds": []string{
+				"com.apple.iChat",
+				"com.tencent.xinWeChat",
+				"com.apple.MobileSMS",
+				"com.apple.facetime",
+				"com.apple.Messages",
+				"com.tencent.qq",
+			},
+			"isEnabled": true,
+			"name":      "在社交",
+		},
+	}
+
+	musicAppWhitelist := []string{
+		"com.apple.Music",
+		"com.spotify.client",
+		"com.netease.163music",
+		"com.tencent.QQMusicMac",
+		"com.soda.music",
+	}
+
+	config := map[string]any{
+		"activityGroups":           activityGroups,
+		"activityPollingInterval":  5,
+		"activityReportingEnabled": false,
+		"endpointURL":              cfg.Endpoint + "/api/v1/state/report",
+		"isReportingEnabled":       true,
+		"musicAppWhitelist":        musicAppWhitelist,
+		"musicReportingEnabled":    true,
+		"secretKey":                user.SecretKey,
+		"systemPollingInterval":    5,
+		"systemReportingEnabled":   true,
+		"version":                  "1.0",
+	}
+
+	b, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		logrus.Errorf("Failed to marshal recommended config: %v", err)
+		return "{}"
+	}
+	return string(b)
+}
+
+// 以富文本(Post)回复消息
+func (h *EventHandler) replyPostMessage(ctx context.Context, messageID string, post map[string]any) error {
+	client := h.larkClient
+	if client == nil {
+		return fmt.Errorf("lark client not initialized")
+	}
+
+	data, err := json.Marshal(post)
+	if err != nil {
+		logrus.Errorf("Failed to marshal post content: %v", err)
+		return err
+	}
+
+	req := larkim.NewReplyMessageReqBuilder().
+		MessageId(messageID).
+		Body(larkim.NewReplyMessageReqBodyBuilder().
+			MsgType("post").
+			Content(string(data)).
+			Uuid(fmt.Sprintf("%d", time.Now().UnixNano())).
+			Build()).
+		Build()
+
+	_, err = client.Im.Message.Reply(ctx, req)
+	if err != nil {
+		logrus.Errorf("Failed to send post message: %v", err)
 		return err
 	}
 

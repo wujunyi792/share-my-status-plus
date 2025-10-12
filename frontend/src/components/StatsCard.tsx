@@ -276,7 +276,17 @@ export function StatsCard({ className, sharingKey }: StatsCardProps) {
           </div>
         )}
 
-        {!isLoading && !error && stats && (
+        {/* 未授权提示（非错误） */}
+        {!isLoading && !error && stats?.base?.code === 403 && (
+          <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <Music className="w-4 h-4 text-gray-500" />
+              <span>音乐统计未授权，暂不展示统计数据</span>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !error && stats && stats.base?.code === 0 && (
           <div className="space-y-4">
             {/* 统计摘要 */}
             {stats.summary && (
@@ -365,7 +375,7 @@ export function StatsCard({ className, sharingKey }: StatsCardProps) {
               </div>
             )}
 
-            {/* 空状态 */}
+            {/* 空状态（仅在授权且无数据时显示） */}
             {!stats.summary && !stats.topArtists && !stats.topTracks && !stats.topAlbums && (
               <div className="text-center py-8 text-gray-500">
                 <BarChart3 className="w-12 h-12 mx-auto mb-3 text-gray-300" />

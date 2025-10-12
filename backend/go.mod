@@ -5,6 +5,7 @@ go 1.25.1
 replace github.com/apache/thrift => github.com/apache/thrift v0.13.0
 
 require (
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/apache/thrift v0.0.0-00010101000000-000000000000
 	github.com/bytedance/gg v1.1.0
 	github.com/cloudwego/hertz v0.10.2

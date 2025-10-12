@@ -97,6 +97,26 @@ type MusicStatsPayload struct {
 	TopTracks  []*common.TopItem    `json:"topTracks"`
 }
 
+// ClientVersion 客户端版本信息表
+// 用于存储不同平台最新版本信息
+// 平台取值：windows、macos
+type ClientVersion struct {
+	ID          uint64    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	Platform    string    `gorm:"column:platform;type:varchar(16);index:ix_platform" json:"platform"`
+	Version     string    `gorm:"column:version;type:varchar(32);not null" json:"version"`
+	BuildNumber int       `gorm:"column:build_number;type:int;not null" json:"buildNumber"`
+	DownloadUrl string    `gorm:"column:download_url;type:varchar(255);not null" json:"downloadUrl"`
+	ReleaseNote string    `gorm:"column:release_note;type:text" json:"releaseNote"`
+	ForceUpdate bool      `gorm:"column:force_update;type:tinyint(1);not null;default:false" json:"forceUpdate"`
+	CreatedAt   time.Time `gorm:"column:created_at" json:"createdAt"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updatedAt"`
+}
+
+// TableName 指定表名
+func (ClientVersion) TableName() string {
+	return "client_versions"
+}
+
 // CreateTables 创建数据库表
 func CreateTables(db *gorm.DB) error {
 	return db.AutoMigrate(
@@ -105,5 +125,6 @@ func CreateTables(db *gorm.DB) error {
 		&CurrentState{},
 		&StateHistory{},
 		&CoverAsset{},
+		&ClientVersion{},
 	)
 }

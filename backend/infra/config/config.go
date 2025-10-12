@@ -35,6 +35,7 @@ type AppConfig struct {
 	Port        int    `json:"port"`
 	Debug       bool   `json:"debug"`
 	DefaultTZ   string `json:"defaultTz"`
+	Endpoint    string `json:"endpoint"`
 }
 
 // DatabaseConfig 数据库配置
@@ -89,6 +90,7 @@ func Init() (*Config, error) {
 			Port:      getEnvAsInt("HTTP_PORT", 8080),
 			Debug:     getEnvAsBool("DEBUG", false),
 			DefaultTZ: getEnv("DEFAULT_TZ", "Asia/Shanghai"),
+			Endpoint:  getEnv("ENDPOINT", "https://example.com"),
 		},
 		Database: DatabaseConfig{
 			DSN:             getEnv("DB_DSN", ""),

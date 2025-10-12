@@ -256,6 +256,18 @@ class LinkUtility {
         let displayFormat: String?
     }
     
+    /// Extract sharing key from URLComponents supporting /status/{key} or /s/{key}
+    private static func extractSharingKey(from components: URLComponents) -> String? {
+        let segments = components.path.split(separator: "/").map(String.init)
+        if let statusIdx = segments.firstIndex(of: "status"), statusIdx + 1 < segments.count {
+            return segments[statusIdx + 1]
+        }
+        if let sIdx = segments.firstIndex(of: "s"), sIdx + 1 < segments.count {
+            return segments[sIdx + 1]
+        }
+        return nil
+    }
+    
     /// Attempts to parse a customized URL and extract its components
     /// - Parameter url: The customized URL to parse
     /// - Returns: A ParsedUrl struct containing the base URL, redirect URL, and display format
@@ -276,6 +288,11 @@ class LinkUtility {
         // Remove r and m parameters to get the base URL
         var baseUrlComponents = urlComponents
         baseUrlComponents.queryItems = queryItems.filter { $0.name != "r" && $0.name != "m" }
+        
+        // Normalize path to /s/{sharingKey} if base path contains /status/{sharingKey} or /s/{sharingKey}
+        if let sharingKey = extractSharingKey(from: baseUrlComponents) {
+            baseUrlComponents.path = "/s/\(sharingKey)"
+        }
         
         guard let baseUrl = baseUrlComponents.url?.absoluteString else {
             return nil
