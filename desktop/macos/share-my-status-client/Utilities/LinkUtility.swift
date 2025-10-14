@@ -141,19 +141,19 @@ class LinkUtility {
         
         // Replace system variables
         if let batteryPct = variables.batteryPct {
-            result = result.replacingOccurrences(of: "{batteryPct}", with: String(format: "%.2f", batteryPct))
+            result = result.replacingOccurrences(of: "{batteryPct}%", with: String(format: "%.2f", batteryPct))
         } else {
             result = result.replacingOccurrences(of: "{batteryPct}", with: "N/A")
         }
         
         if let cpuPct = variables.cpuPct {
-            result = result.replacingOccurrences(of: "{cpuPct}", with: String(format: "%.2f", cpuPct))
+            result = result.replacingOccurrences(of: "{cpuPct}%", with: String(format: "%.2f", cpuPct))
         } else {
             result = result.replacingOccurrences(of: "{cpuPct}", with: "N/A")
         }
         
         if let memoryPct = variables.memoryPct {
-            result = result.replacingOccurrences(of: "{memoryPct}", with: String(format: "%.2f", memoryPct))
+            result = result.replacingOccurrences(of: "{memoryPct}%", with: String(format: "%.2f", memoryPct))
         } else {
             result = result.replacingOccurrences(of: "{memoryPct}", with: "N/A")
         }
@@ -163,19 +163,19 @@ class LinkUtility {
         
         // Replace derived display variables
         if let batteryPctRounded = variables.batteryPctRounded {
-            result = result.replacingOccurrences(of: "{batteryPctRounded}", with: "\(batteryPctRounded)")
+            result = result.replacingOccurrences(of: "{batteryPctRounded}%", with: "\(batteryPctRounded)")
         } else {
             result = result.replacingOccurrences(of: "{batteryPctRounded}", with: "N/A")
         }
         
         if let cpuPctRounded = variables.cpuPctRounded {
-            result = result.replacingOccurrences(of: "{cpuPctRounded}", with: "\(cpuPctRounded)")
+            result = result.replacingOccurrences(of: "{cpuPctRounded}%", with: "\(cpuPctRounded)")
         } else {
             result = result.replacingOccurrences(of: "{cpuPctRounded}", with: "N/A")
         }
         
         if let memoryPctRounded = variables.memoryPctRounded {
-            result = result.replacingOccurrences(of: "{memoryPctRounded}", with: "\(memoryPctRounded)")
+            result = result.replacingOccurrences(of: "{memoryPctRounded}%", with: "\(memoryPctRounded)")
         } else {
             result = result.replacingOccurrences(of: "{memoryPctRounded}", with: "N/A")
         }
