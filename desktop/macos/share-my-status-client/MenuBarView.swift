@@ -224,11 +224,36 @@ struct MenuBarView: View {
     }
     
     private func openMainWindow() {
-        // Try open by window id first
-        if #available(macOS 13.0, *) {
-            openWindow(id: "main")
+        // Find existing main window (exclude status bar and panels)
+        let existingWindow = NSApplication.shared.windows.first { window in
+            // Exclude NSPanel (status bar popup)
+            guard !window.isKind(of: NSPanel.self) else { return false }
+            
+            // Exclude NSStatusBarWindow explicitly
+            let className = NSStringFromClass(type(of: window))
+            guard !className.contains("StatusBar") else { return false }
+            
+            // Must have content and be regular window
+            return window.contentView != nil && window.canBecomeKey
+        }
+        
+        if let window = existingWindow {
+            // Found existing window, bring it to front
+            NSApplication.shared.setActivationPolicy(.regular)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
         } else {
-            createMainWindowManually()
+            // No existing window, create new one
+            NSApplication.shared.setActivationPolicy(.regular)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            
+            if #available(macOS 14.0, *) {
+                openWindow(id: "main")
+            } else {
+                // Fallback for macOS 13.x
+                createMainWindowManually()
+            }
         }
     }
     

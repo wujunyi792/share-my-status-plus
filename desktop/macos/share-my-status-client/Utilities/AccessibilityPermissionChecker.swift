@@ -42,7 +42,7 @@ class AccessibilityPermissionChecker {
         5. 找到并选择"Share My Status"应用
         6. 点击"打开"按钮添加应用
         7. 确保应用旁边的复选框已勾选
-        8. 返回本应用点击刷新按钮验证权限
+        8. 返回本应用，在「设置-权限状态-辅助功能」右上角点击刷新按钮验证权限
         
         提示：应用通常位于 /Applications（应用程序）文件夹
         """

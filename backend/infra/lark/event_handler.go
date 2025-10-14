@@ -79,7 +79,7 @@ func (h *EventHandler) OnP2MessageReceiveV1(ctx context.Context, event *larkim.P
 
 		post := map[string]any{
 			"zh_cn": map[string]any{
-				"title":   "推荐配置",
+				"title":   "以下为推荐配置，请复制完整JSON，粘贴进客户端「设置」最下方「配置管理」-「导入」中",
 				"content": content,
 			},
 		}
@@ -226,12 +226,7 @@ func (h *EventHandler) parseCommand(message string) *Command {
 		return cmd
 	}
 
-	// 英文 help
-	if lower == "help" {
-		return &Command{Action: "help", Params: []string{}}
-	}
-
-	return nil
+	return &Command{Action: "help", Params: []string{}}
 }
 
 // executeCommand 执行命令
@@ -248,9 +243,9 @@ func (h *EventHandler) executeCommand(ctx context.Context, user *model.User, com
 	case "rotate":
 		return h.executeRotateCommand(ctx, user, userService, command.Params)
 	case "help":
-		return "ℹ️ 帮助：\n• `/public on` - 开启公开访问\n• `/public off` - 关闭公开访问\n• `/stat on` - 授权音乐统计\n• `/stat off` - 取消授权音乐统计\n• `/info` - 查看我的信息\n• `/rotate secret-key` - 轮转数据上报密钥\n• `/rotate sharing-key` - 轮转分享链接\n• `/config` - 返回推荐配置 JSON\n• `/help` - 帮助\n\n中文别名也支持：\n• 开启公开访问\n• 关闭公开访问\n• 授权音乐统计\n• 取消授权音乐统计\n• 查看我的信息\n• 轮转数据上报密钥\n• 轮转分享链接\n• 推荐配置\n• 帮助", nil
+		return "ℹ️ 帮助：\n• `/public on` - 开启公开访问\n• `/public off` - 关闭公开访问\n• `/stat on` - 授权音乐统计（云端会开始存储音乐上报信息）\n• `/stat off` - 取消授权音乐统计（立即删除云端存储所有音乐上报信息）\n• `/info` - 查看我的信息\n• `/rotate secret-key` - 轮转数据上报密钥\n• `/rotate sharing-key` - 轮转分享链接\n• `/config` - 返回推荐配置 JSON\n• `/help` - 帮助\n\n中文别名也支持：\n• 开启公开访问\n• 关闭公开访问\n• 授权音乐统计\n• 取消授权音乐统计\n• 查看我的信息\n• 轮转数据上报密钥\n• 轮转分享链接\n• 推荐配置\n• 帮助", nil
 	default:
-		return "❓ 未知命令。支持的命令：\n• `/public on` - 开启公开访问\n• `/public off` - 关闭公开访问\n• `/stat on` - 授权音乐统计\n• `/stat off` - 取消授权音乐统计\n• `/info` - 查看我的信息\n• `/rotate secret-key` - 轮转数据上报密钥\n• `/rotate sharing-key` - 轮转分享链接\n• `/config` - 返回推荐配置 JSON\n• `/help` - 帮助\n\n中文别名也支持：\n• 开启公开访问\n• 关闭公开访问\n• 授权音乐统计\n• 取消授权音乐统计\n• 查看我的信息\n• 轮转数据上报密钥\n• 轮转分享链接\n• 推荐配置\n• 帮助", nil
+		return "❓ 未知命令，输入 help 查看帮助", nil
 	}
 }
 
@@ -280,10 +275,10 @@ func (h *EventHandler) executePublicCommand(ctx context.Context, user *model.Use
 		return "", fmt.Errorf("failed to update settings: %w", err)
 	}
 
-	status := "✅ 公开访问已关闭"
+	status := "✅ 公开访问已关闭，无法使用Web链接访问状态更新，但是飞书签名仍然可用"
 	if enable {
 		sharingURL := h.buildSharingURL(user.SharingKey)
-		status = fmt.Sprintf("✅ 公开访问已开启\n🔗 分享链接: %s", sharingURL)
+		status = fmt.Sprintf("✅ 公开访问已开启\n🔗 现可用以下Web链接实时查看状态更新: %s", sharingURL)
 	}
 
 	return status, nil
@@ -292,7 +287,7 @@ func (h *EventHandler) executePublicCommand(ctx context.Context, user *model.Use
 // executeStatCommand 执行音乐统计授权命令
 func (h *EventHandler) executeStatCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (string, error) {
 	if len(params) != 1 {
-		return "❌ 用法错误，请使用：\n• `/stat on` - 授权音乐统计\n• `/stat off` - 取消授权音乐统计", nil
+		return "❌ 用法错误，请使用：\n• `/stat on` - 授权音乐统计（云端会开始存储音乐上报信息）\n• `/stat off` - 取消授权音乐统计（立即删除云端存储所有音乐上报信息）", nil
 	}
 
 	enable := params[0] == "on"
@@ -315,12 +310,12 @@ func (h *EventHandler) executeStatCommand(ctx context.Context, user *model.User,
 		return "", fmt.Errorf("failed to update settings: %w", err)
 	}
 
-	status := "关闭"
+	sharingURL := h.buildSharingURL(user.SharingKey)
 	if enable {
-		status = "开启"
+		return fmt.Sprintf("✅ 音乐统计授权已开启，云端会开始存储音乐上报信息。\n🔗 统计数据每小时整点刷新，你可以使用以下链接查看实时状态更新: %s", sharingURL), nil
+	} else {
+		return "✅ 音乐统计授权已关闭，云端所有历史记录已清空", nil
 	}
-
-	return fmt.Sprintf("✅ 音乐统计授权已%s", status), nil
 }
 
 // executeRotateCommand 执行轮转命令
@@ -347,8 +342,7 @@ func (h *EventHandler) executeRotateCommand(ctx context.Context, user *model.Use
 			return "", fmt.Errorf("failed to rotate sharing key: %w", err)
 		}
 		sharingURL := h.buildSharingURL(newSharingKey)
-		return fmt.Sprintf("✅ Sharing Key已轮转\n🔗 新链接: %s\n⚠️ 请更新您的分享链接", sharingURL), nil
-
+		return fmt.Sprintf("✅ Sharing Key已轮转\n🔗 新链接: %s\n⚠️ 请更新您的分享链接和飞书签名", sharingURL), nil
 	default:
 		return "❌ 无效的密钥类型，请使用：\n• `/rotate secret-key` - 轮转客户端密钥\n• `/rotate sharing-key` - 轮转分享链接密钥", nil
 	}
