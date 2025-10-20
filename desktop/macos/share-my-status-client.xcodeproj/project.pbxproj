@@ -335,7 +335,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.share-my-status.client";
 				PRODUCT_NAME = "Share My Status";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -377,7 +377,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.share-my-status.client";
 				PRODUCT_NAME = "Share My Status";
 				PROVISIONING_PROFILE_SPECIFIER = "";

@@ -163,17 +163,17 @@ actor SystemMonitorService: PollingMonitoringService {
             vm_deallocate(mach_task_self_, vm_address_t(bitPattern: cpuInfo), vm_size_t(numCpuInfo))
         }
         
-        var totalUser: UInt32 = 0
-        var totalSystem: UInt32 = 0
-        var totalIdle: UInt32 = 0
-        var totalNice: UInt32 = 0
+        var totalUser: UInt64 = 0
+        var totalSystem: UInt64 = 0
+        var totalIdle: UInt64 = 0
+        var totalNice: UInt64 = 0
         
         for i in 0..<Int(numCpus) {
             let cpuLoadInfo = cpuInfo.advanced(by: Int(CPU_STATE_MAX) * i)
-            totalUser += UInt32(cpuLoadInfo[Int(CPU_STATE_USER)])
-            totalSystem += UInt32(cpuLoadInfo[Int(CPU_STATE_SYSTEM)])
-            totalIdle += UInt32(cpuLoadInfo[Int(CPU_STATE_IDLE)])
-            totalNice += UInt32(cpuLoadInfo[Int(CPU_STATE_NICE)])
+            totalUser += UInt64(cpuLoadInfo[Int(CPU_STATE_USER)])
+            totalSystem += UInt64(cpuLoadInfo[Int(CPU_STATE_SYSTEM)])
+            totalIdle += UInt64(cpuLoadInfo[Int(CPU_STATE_IDLE)])
+            totalNice += UInt64(cpuLoadInfo[Int(CPU_STATE_NICE)])
         }
         
         let totalTicks = totalUser + totalSystem + totalIdle + totalNice
