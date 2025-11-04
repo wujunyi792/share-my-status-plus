@@ -1,0 +1,136 @@
+.system-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  padding: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s;
+  overflow: hidden;
+}
+
+.system-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.system-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  padding: 6px;
+}
+
+.system-empty {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  color: #9ca3af;
+}
+
+.system-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.system-item-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.system-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.system-label-text {
+  font-size: 11px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.system-item-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.system-value-text {
+  font-size: 11px;
+  font-family: monospace;
+}
+
+.system-status {
+  margin-top: 6px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.system-status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.system-status-text {
+  font-size: 11px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.system-status-charging {
+  color: #16a34a;
+}
+
+.system-charging-icon {
+  font-size: 10px;
+}
+
+.system-charging-text {
+  font-size: 10px;
+}
+
+.system-footer {
+  margin-top: 4px;
+  padding: 0 6px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #6b7280;
+}
+
+.system-footer-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.system-footer-icon {
+  font-size: 9px;
+}
+
+.system-footer-text {
+  font-size: 9px;
+}
+
+.system-footer-active {
+  color: #2563eb;
+}
+
+.system-footer-active-text {
+  font-size: 9px;
+}
+

@@ -1,0 +1,459 @@
+/* 基础样式 */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f9fafb;
+  color: #111827;
+}
+
+/* 工具类 */
+.color-green { color: #16a34a; }
+.color-yellow { color: #d97706; }
+.color-red { color: #dc2626; }
+.color-gray { color: #6b7280; }
+.color-blue { color: #2563eb; }
+.color-purple { color: #9333ea; }
+
+/* 脉冲动画 */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.system-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.system-pulse-green {
+  background-color: #16a34a;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.system-pulse-blue {
+  background-color: #2563eb;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.system-pulse-purple {
+  background-color: #9333ea;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* 应用容器 */
+.app-container {
+  padding: 8px;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: auto;
+  overflow-y: auto; /* 允许垂直滚动 */
+  overflow-x: hidden;
+  /* 隐藏滚动条但保持滚动功能 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+#root {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* 输入界面 */
+.input-container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.input-header {
+  margin-bottom: 12px;
+}
+
+.input-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.input-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  color: #111827;
+}
+
+.input-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.input-docs-link {
+  padding: 4px 8px;
+  background: transparent;
+  color: #3b82f6;
+  border: 1px solid #3b82f6;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.input-docs-link:hover {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.input-form {
+  margin-bottom: 12px;
+}
+
+.input-group {
+  margin-bottom: 12px;
+}
+
+.input-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.input-field {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input-field.input-error {
+  border-color: #dc2626;
+}
+
+.input-error-text {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #dc2626;
+}
+
+.input-submit {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.input-submit:hover {
+  background-color: #2563eb;
+}
+
+.input-help {
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.input-help-title {
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.input-help-list {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.input-help-list li {
+  margin-bottom: 2px;
+}
+
+.display-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.display-option-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  user-select: none;
+}
+
+.display-option-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #2563eb;
+}
+
+.display-option-item span {
+  font-weight: 500;
+}
+
+/* 应用底部 */
+.app-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  background: white;
+  border-top: 1px solid #e5e7eb;
+  border-radius: 0 0 6px 6px;
+  margin-top: 8px;
+}
+
+.app-footer-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 1px 0;
+  color: #111827;
+}
+
+.app-subtitle {
+  font-size: 10px;
+  color: #6b7280;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.app-help-btn,
+.app-clear-btn {
+  padding: 2px 8px;
+  background: transparent;
+  color: #6b7280;
+  border: none;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s;
+  text-decoration: none;
+}
+
+.app-help-btn:hover,
+.app-clear-btn:hover {
+  color: #374151;
+  background-color: #f3f4f6;
+}
+
+/* 没有编辑权限时的"我也要用"按钮 - 通过文字样式突出显示 */
+.app-need-help-btn {
+  padding: 2px 8px;
+  background: transparent;
+  color: #6b7280;
+  border: none;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  text-decoration: none;
+  /* 渐变文字颜色 */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  /* 文字闪烁动画 */
+  animation: textShine 2s ease-in-out infinite;
+}
+
+.app-need-help-btn:hover {
+  opacity: 0.8;
+  /* hover时增强渐变效果 */
+  background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.app-need-help-btn:active {
+  opacity: 0.6;
+}
+
+@keyframes textShine {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.3);
+  }
+}
+
+/* 应用内容 */
+.app-content {
+  padding: 0;
+}
+
+.app-error {
+  margin-bottom: 8px;
+}
+
+.app-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-cards-grid {
+  display: grid;
+  gap: 8px;
+}
+
+/* 默认布局：音乐 + 系统/状态 */
+.app-cards-grid {
+  grid-template-columns: 2fr 1fr;
+}
+
+.app-card-music {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.app-card-system-activity {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-card-system {
+  margin-bottom: 8px;
+}
+
+/* 只展示音乐：宽度拉满 */
+.app-cards-grid.music-only {
+  grid-template-columns: 1fr;
+}
+
+.app-cards-grid.music-only .app-card-music {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+/* 音乐 + 系统/状态之一：系统/状态卡片高度撑满 */
+.app-cards-grid.music-with-single {
+  grid-template-columns: 2fr 1fr;
+}
+
+.app-cards-grid.music-with-single .app-card-system-activity {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.app-cards-grid.music-with-single .app-card-system,
+.app-cards-grid.music-with-single .app-card-activity {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 不展示音乐：系统/状态卡片宽度撑满 */
+.app-cards-grid.no-music {
+  grid-template-columns: 1fr;
+}
+
+.app-cards-grid.no-music .app-card-system-activity {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 音乐 + 系统 + 状态：正常布局 */
+.app-cards-grid.music-system-activity {
+  grid-template-columns: 2fr 1fr;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .app-cards-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .app-card-music {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  
+  .app-card-system-activity {
+    grid-column: 1;
+    grid-row: 2;
+    height: auto !important;
+  }
+  
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}

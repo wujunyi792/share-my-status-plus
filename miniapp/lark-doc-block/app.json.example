@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 1,
+  "appID": "cli_change-me",
+  "appType": "docs-addon",
+  "blockTypeID": "blk_change-me",
+  "projectName": "lark-doc-block",
+  "contributes": {
+    "addPanel": {
+      "initialHeight": 200,
+      "view": "index.html",
+      "resizeType": "horizontal"
+    }
+  },
+  "url": "change-me"
+}

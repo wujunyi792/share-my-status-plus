@@ -1,0 +1,133 @@
+.activity-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  padding: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: all 0.2s;
+  overflow: hidden;
+}
+
+.activity-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.activity-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  padding: 6px 6px 0;
+}
+
+.activity-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  border: 2px solid;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.activity-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-label {
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+}
+
+.activity-footer {
+  margin-top: 0;
+  padding: 0 6px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #6b7280;
+  gap: 8px;
+}
+
+.activity-footer-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.activity-footer-icon {
+  font-size: 9px;
+}
+
+.activity-footer-text {
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+.activity-footer-active {
+  color: #9333ea;
+  flex-shrink: 0;
+}
+
+.activity-footer-active-text {
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+/* Activity colors */
+.activity-green { color: #16a34a; }
+.activity-blue { color: #2563eb; }
+.activity-pink { color: #db2777; }
+.activity-orange { color: #ea580c; }
+.activity-cyan { color: #0891b2; }
+.activity-slate { color: #475569; }
+.activity-purple { color: #9333ea; }
+.activity-emerald { color: #10b981; }
+.activity-amber { color: #d97706; }
+.activity-indigo { color: #6366f1; }
+.activity-gray { color: #9ca3af; }
+
+.activity-bg-green { background-color: #dcfce7; }
+.activity-bg-blue { background-color: #dbeafe; }
+.activity-bg-pink { background-color: #fce7f3; }
+.activity-bg-orange { background-color: #ffedd5; }
+.activity-bg-cyan { background-color: #cffafe; }
+.activity-bg-slate { background-color: #f1f5f9; }
+.activity-bg-purple { background-color: #f3e8ff; }
+.activity-bg-emerald { background-color: #d1fae5; }
+.activity-bg-amber { background-color: #fef3c7; }
+.activity-bg-indigo { background-color: #e0e7ff; }
+.activity-bg-gray { background-color: #f3f4f6; }
+
+.activity-border-green { border-color: #bbf7d0; }
+.activity-border-blue { border-color: #bfdbfe; }
+.activity-border-pink { border-color: #fbcfe8; }
+.activity-border-orange { border-color: #fed7aa; }
+.activity-border-cyan { border-color: #a5f3fc; }
+.activity-border-slate { border-color: #cbd5e1; }
+.activity-border-purple { border-color: #e9d5ff; }
+.activity-border-emerald { border-color: #a7f3d0; }
+.activity-border-amber { border-color: #fde68a; }
+.activity-border-indigo { border-color: #c7d2fe; }
+.activity-border-gray { border-color: #e5e7eb; }
+

@@ -80,6 +80,7 @@ type CoverAssetPayload struct {
 // CoverAsset 封面资源表
 type CoverAsset struct {
 	CoverHash string                                `gorm:"column:cover_hash;type:char(32);primaryKey" json:"coverHash"`
+	LarkKey   string                                `gorm:"column:lark_key;type:varchar(64);" json:"larkKey"`
 	Asset     datatypes.JSONType[CoverAssetPayload] `gorm:"column:asset;type:json;not null" json:"asset"`
 	CreatedAt time.Time                             `gorm:"column:created_at" json:"createdAt"`
 	UpdatedAt time.Time                             `gorm:"column:updated_at" json:"updatedAt"`
