@@ -599,8 +599,9 @@ actor MediaRemoteService {
     private func handleStreamTermination(exitCode: Int32) {
         logger.info("MediaRemote stream terminated with code \(exitCode)")
         
-        // Reset state
         songChangeState = .idle
+        streamConsumerTask?.cancel()
+        streamConsumerTask = nil
         
         isStreaming = false
         streamProcess = nil
@@ -609,8 +610,6 @@ actor MediaRemoteService {
         
         if exitCode != 0 {
             logger.error("MediaRemote stream terminated abnormally with code \(exitCode)")
-        } else {
-            logger.info("MediaRemote stream terminated normally")
         }
     }
     

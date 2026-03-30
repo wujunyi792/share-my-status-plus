@@ -282,6 +282,9 @@ struct MenuBarView: View {
     
     private func setupWindowCloseHandler(_ window: NSWindow) {
         let delegate = WindowCloseDelegate()
+        // Store the delegate via associated object so it lives as long as the window.
+        // NSWindow.delegate is weak, so a local var would be deallocated immediately.
+        objc_setAssociatedObject(window, &WindowCloseDelegate.associatedKey, delegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         window.delegate = delegate
     }
 }
@@ -334,6 +337,8 @@ private struct MenuBarUpdateBanner: View {
 
 /// Delegate to handle window close events
 class WindowCloseDelegate: NSObject, NSWindowDelegate {
+    fileprivate static var associatedKey: UInt8 = 0
+    
     func windowWillClose(_ notification: Notification) {
         // When window closes, switch back to accessory mode (hide from Dock)
         DispatchQueue.main.async {

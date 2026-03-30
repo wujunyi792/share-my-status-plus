@@ -23,22 +23,21 @@ extension Process {
             process.standardOutput = outputPipe
             process.standardError = errorPipe
             
-            // Atomic flag to ensure continuation is resumed exactly once
             let resumeGuard = UnfairLockFlag()
-            var outputData = Data()
+            let outputBuffer = LockedData()
             
             process.terminationHandler = { proc in
                 outputPipe.fileHandleForReading.readabilityHandler = nil
                 
                 if resumeGuard.trySet() {
-                    continuation.resume(returning: (outputData, proc.terminationStatus))
+                    continuation.resume(returning: (outputBuffer.copy(), proc.terminationStatus))
                 }
             }
             
             outputPipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
                 if !data.isEmpty {
-                    outputData.append(data)
+                    outputBuffer.append(data)
                 }
             }
             
@@ -104,6 +103,25 @@ enum ProcessError: LocalizedError {
         case .nonZeroExit(let code):
             return "Process exited with code \(code)"
         }
+    }
+}
+
+/// Thread-safe mutable Data buffer.
+final class LockedData: @unchecked Sendable {
+    private var _lock = os_unfair_lock()
+    private var _data = Data()
+    
+    func append(_ chunk: Data) {
+        os_unfair_lock_lock(&_lock)
+        _data.append(chunk)
+        os_unfair_lock_unlock(&_lock)
+    }
+    
+    func copy() -> Data {
+        os_unfair_lock_lock(&_lock)
+        let result = _data
+        os_unfair_lock_unlock(&_lock)
+        return result
     }
 }
 

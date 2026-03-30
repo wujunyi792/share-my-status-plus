@@ -15,8 +15,9 @@ actor CoverService {
     private var baseURL: String = ""
     private var secretKey: String = ""
     
-    // Cache for uploaded covers (MD5 -> coverHash)
+    // Cache for uploaded covers (MD5 -> coverHash), bounded to prevent unbounded growth
     private var uploadedCovers: [String: String] = [:]
+    private static let maxCacheEntries = 100
     
     // Initialization
     init() {
@@ -44,29 +45,32 @@ actor CoverService {
     
     // Check and Upload Cover
     func checkAndUploadCover(artworkData: Data) async throws -> String? {
-        // Compute MD5 hash
         let md5 = artworkData.md5Hash
         
-        // Check cache first
         if let cachedHash = uploadedCovers[md5] {
             logger.debug("Cover found in cache: \(cachedHash)")
             return cachedHash
         }
         
-        // Check if exists on server
         let exists = try await checkCoverExists(md5: md5)
         if exists {
             logger.debug("Cover already exists on server: \(md5)")
-            uploadedCovers[md5] = md5
+            cacheInsert(md5: md5, hash: md5)
             return md5
         }
         
-        // Upload cover
         logger.info("Uploading new cover: \(md5)")
         let coverHash = try await uploadCover(artworkData: artworkData)
-        uploadedCovers[md5] = coverHash
+        cacheInsert(md5: md5, hash: coverHash)
         
         return coverHash
+    }
+    
+    private func cacheInsert(md5: String, hash: String) {
+        if uploadedCovers.count >= Self.maxCacheEntries {
+            uploadedCovers.removeAll(keepingCapacity: true)
+        }
+        uploadedCovers[md5] = hash
     }
     
     // Check Cover Exists
