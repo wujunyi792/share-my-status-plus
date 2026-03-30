@@ -23,16 +23,18 @@ extension Process {
             process.standardOutput = outputPipe
             process.standardError = errorPipe
             
-            var isFinished = false
+            // Atomic flag to ensure continuation is resumed exactly once
+            let resumeGuard = UnfairLockFlag()
             var outputData = Data()
             
-            process.terminationHandler = { process in
-                isFinished = true
-                let exitCode = process.terminationStatus
-                continuation.resume(returning: (outputData, exitCode))
+            process.terminationHandler = { proc in
+                outputPipe.fileHandleForReading.readabilityHandler = nil
+                
+                if resumeGuard.trySet() {
+                    continuation.resume(returning: (outputData, proc.terminationStatus))
+                }
             }
             
-            // Start reading output
             outputPipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
                 if !data.isEmpty {
@@ -43,16 +45,17 @@ extension Process {
             do {
                 try process.run()
                 
-                // Setup timeout
                 Task {
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    if !isFinished {
+                    if resumeGuard.trySet() {
                         process.terminate()
                         continuation.resume(throwing: ProcessError.timeout)
                     }
                 }
             } catch {
-                continuation.resume(throwing: ProcessError.launchFailed(error))
+                if resumeGuard.trySet() {
+                    continuation.resume(throwing: ProcessError.launchFailed(error))
+                }
             }
         }
     }
@@ -101,6 +104,21 @@ enum ProcessError: LocalizedError {
         case .nonZeroExit(let code):
             return "Process exited with code \(code)"
         }
+    }
+}
+
+/// Atomic once-flag using os_unfair_lock (available macOS 10.12+)
+final class UnfairLockFlag: @unchecked Sendable {
+    private var _lock = os_unfair_lock()
+    private var _set = false
+    
+    /// Atomically sets the flag. Returns `true` if this call set it (first time), `false` if already set.
+    func trySet() -> Bool {
+        os_unfair_lock_lock(&_lock)
+        defer { os_unfair_lock_unlock(&_lock) }
+        if _set { return false }
+        _set = true
+        return true
     }
 }
 

@@ -53,9 +53,9 @@ class StatusReporter: ObservableObject {
     }
     private var previousConfigSnapshot: ConfigSnapshot?
     
-    // Report Timers (for polling services)
-    private var systemReportTimer: Timer?
-    private var activityReportTimer: Timer?
+    // Report tasks (consolidates polling + reporting into a single loop per service)
+    private var systemReportTask: Task<Void, Never>?
+    private var activityReportTask: Task<Void, Never>?
     
     // Initialization
     init() {
@@ -69,12 +69,8 @@ class StatusReporter: ObservableObject {
     }
     
     deinit {
-        // Clean up timers
-        systemReportTimer?.invalidate()
-        activityReportTimer?.invalidate()
-        
-        // Note: Cannot call async stopReporting() from deinit
-        // Services will clean up themselves via their own deinit
+        systemReportTask?.cancel()
+        activityReportTask?.cancel()
     }
     
     // Track if configuration update is in progress
@@ -368,11 +364,21 @@ class StatusReporter: ObservableObject {
         do {
             await systemService.updatePollingInterval(config.systemPollingInterval)
             try await systemService.start()
-            await setupSystemReportTimer(interval: config.systemPollingInterval)
             
-            // Immediately report once instead of waiting for first timer interval
+            // Immediately report once
             logger.info("Triggering immediate system status report...")
             await reportSystemStatus()
+            
+            // Single periodic report task (replaces the old separate Timer)
+            let interval = config.systemPollingInterval
+            systemReportTask?.cancel()
+            systemReportTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                    guard !Task.isCancelled else { break }
+                    await self?.reportSystemStatus()
+                }
+            }
             
             logger.info("System service started")
         } catch {
@@ -384,8 +390,8 @@ class StatusReporter: ObservableObject {
     private func stopSystemService() async {
         logger.info("Stopping system service...")
         await systemService.stop()
-        systemReportTimer?.invalidate()
-        systemReportTimer = nil
+        systemReportTask?.cancel()
+        systemReportTask = nil
         currentSystem = nil
     }
     
@@ -397,11 +403,21 @@ class StatusReporter: ObservableObject {
         do {
             await activityService.updatePollingInterval(config.activityPollingInterval)
             try await activityService.start()
-            await setupActivityReportTimer(interval: config.activityPollingInterval)
             
-            // Immediately report once instead of waiting for first timer interval
+            // Immediately report once
             logger.info("Triggering immediate activity status report...")
             await reportActivityStatus()
+            
+            // Single periodic report task (replaces the old separate Timer)
+            let interval = config.activityPollingInterval
+            activityReportTask?.cancel()
+            activityReportTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                    guard !Task.isCancelled else { break }
+                    await self?.reportActivityStatus()
+                }
+            }
             
             logger.info("Activity service started")
         } catch {
@@ -413,40 +429,10 @@ class StatusReporter: ObservableObject {
     private func stopActivityService() async {
         logger.info("Stopping activity service...")
         await activityService.stop()
-        activityReportTimer?.invalidate()
-        activityReportTimer = nil
+        activityReportTask?.cancel()
+        activityReportTask = nil
         currentActivity = nil
-        
-        // Clear cached label when stopping service
         lastReportedActivityLabel = nil
-    }
-    
-    // Report Timers
-    
-    /// Setup system monitoring report timer (polling-based)
-    private func setupSystemReportTimer(interval: TimeInterval) async {
-        systemReportTimer?.invalidate()
-        
-        systemReportTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.reportSystemStatus()
-            }
-        }
-        
-        logger.info("System report timer set to \(interval) seconds")
-    }
-    
-    /// Setup activity detection report timer (polling-based)
-    private func setupActivityReportTimer(interval: TimeInterval) async {
-        activityReportTimer?.invalidate()
-        
-        activityReportTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.reportActivityStatus()
-            }
-        }
-        
-        logger.info("Activity report timer set to \(interval) seconds")
     }
     
     // Report Methods

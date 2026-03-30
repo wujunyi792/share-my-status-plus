@@ -51,9 +51,16 @@ actor SystemMonitorService: PollingMonitoringService {
     private var isMonitoring = false
     private var monitorTask: Task<Void, Never>?
     
+    // Previous CPU tick values for differential calculation
+    private var previousCPUTicks: (user: UInt64, system: UInt64, idle: UInt64, nice: UInt64)?
+    
+    // Reusable host port to avoid mach port leaks
+    private let hostPort: mach_port_t = mach_host_self()
+    
     // Lifecycle
     deinit {
         monitorTask?.cancel()
+        mach_port_deallocate(mach_task_self_, hostPort)
     }
     
     // Monitoring Control
@@ -66,6 +73,7 @@ actor SystemMonitorService: PollingMonitoringService {
         logger.info("Starting system monitoring with interval \(interval)s...")
         isMonitoring = true
         pollingInterval = interval
+        previousCPUTicks = nil
         
         monitorTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -85,6 +93,7 @@ actor SystemMonitorService: PollingMonitoringService {
         monitorTask?.cancel()
         monitorTask = nil
         currentSnapshot = nil
+        previousCPUTicks = nil
     }
     
     // Get Current State
@@ -143,14 +152,14 @@ actor SystemMonitorService: PollingMonitoringService {
         return (nil, nil)
     }
     
-    // CPU Usage
+    // CPU Usage (differential - measures current interval, not since boot)
     private func getCPUUsage() -> Double? {
         var cpuInfo: processor_info_array_t!
         var numCpuInfo: mach_msg_type_number_t = 0
         var numCpus: natural_t = 0
         
         let result = host_processor_info(
-            mach_host_self(),
+            hostPort,
             PROCESSOR_CPU_LOAD_INFO,
             &numCpus,
             &cpuInfo,
@@ -176,10 +185,24 @@ actor SystemMonitorService: PollingMonitoringService {
             totalNice += UInt64(cpuLoadInfo[Int(CPU_STATE_NICE)])
         }
         
-        let totalTicks = totalUser + totalSystem + totalIdle + totalNice
-        let usedTicks = totalUser + totalSystem + totalNice
+        let currentTicks = (user: totalUser, system: totalSystem, idle: totalIdle, nice: totalNice)
         
-        return totalTicks > 0 ? Double(usedTicks) / Double(totalTicks) : nil
+        defer { previousCPUTicks = currentTicks }
+        
+        guard let prev = previousCPUTicks else {
+            // First sample — return nil (need two samples for differential)
+            return nil
+        }
+        
+        let deltaUser   = totalUser   - prev.user
+        let deltaSystem = totalSystem - prev.system
+        let deltaIdle   = totalIdle   - prev.idle
+        let deltaNice   = totalNice   - prev.nice
+        
+        let deltaTotal = deltaUser + deltaSystem + deltaIdle + deltaNice
+        let deltaUsed  = deltaUser + deltaSystem + deltaNice
+        
+        return deltaTotal > 0 ? Double(deltaUsed) / Double(deltaTotal) : nil
     }
     
     // Memory Usage
@@ -196,9 +219,10 @@ actor SystemMonitorService: PollingMonitoringService {
         var vmStats = vm_statistics64()
         var infoCount = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.stride / MemoryLayout<integer_t>.stride)
         
+        let port = hostPort
         let result = withUnsafeMutablePointer(to: &vmStats) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(infoCount)) {
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &infoCount)
+                host_statistics64(port, HOST_VM_INFO64, $0, &infoCount)
             }
         }
         
@@ -207,25 +231,18 @@ actor SystemMonitorService: PollingMonitoringService {
         // Get page size
         let pageSize = UInt64(vm_kernel_page_size)
         
-        // Calculate used memory (similar to Activity Monitor)
-        // App Memory = active + wired + compressed
-        // File Cache = file-backed pages
-        // Used = App Memory + File Cache (but don't count purgeable as truly used)
+        // Used memory: wired + active + inactive + compressed - purgeable
         let wiredPages = vmStats.wire_count
         let activePages = vmStats.active_count
         let inactivePages = vmStats.inactive_count
         let compressedPages = vmStats.compressor_page_count
         let purgeablePages = vmStats.purgeable_count
         
-        // Calculate used memory: wired + active + inactive + compressed - purgeable
-        // This gives us the actual memory being used (excluding truly free memory)
         let usedPages = wiredPages + activePages + inactivePages + compressedPages - purgeablePages
         let usedMemory = Double(usedPages) * Double(pageSize)
         
-        // Calculate percentage
         let memoryUsage = usedMemory / totalPhysicalMemory
         
-        // Clamp between 0 and 1 to handle edge cases
         return max(0.0, min(1.0, memoryUsage))
     }
 }

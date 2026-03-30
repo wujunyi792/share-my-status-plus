@@ -79,8 +79,7 @@ struct MenuBarView: View {
                     HStack(spacing: 8) {
                         // Album artwork or default icon
                         Group {
-                            if let artworkData = music.artworkData,
-                               let nsImage = NSImage(data: artworkData) {
+                            if let nsImage = music.artworkImage {
                                 Image(nsImage: nsImage)
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
