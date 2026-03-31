@@ -28,8 +28,17 @@ struct MenuBarView: View {
             
             Divider()
             
-            // Update banner prompt in menu bar
-            if let latest = coordinator.availableUpdate {
+            // GitHub Release auto-update banner
+            GitHubUpdateMenuBarBanner(
+                phase: coordinator.updatePhase,
+                onCheckUpdate: { coordinator.checkGitHubUpdate() },
+                onDownload: { coordinator.downloadGitHubUpdate() },
+                onInstall: { coordinator.installGitHubUpdate() },
+                onDismissError: { coordinator.dismissUpdateError() }
+            )
+
+            // Legacy server-based update banner (fallback)
+            if case .idle = coordinator.updatePhase, let latest = coordinator.availableUpdate {
                 MenuBarUpdateBanner(latest: latest)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -367,6 +376,144 @@ struct MenuBarButtonStyle: ButtonStyle {
             .onHover { hovering in
                 isHovered = hovering
             }
+    }
+}
+
+// GitHub Release Auto-Update Banner for Menu Bar
+
+private struct GitHubUpdateMenuBarBanner: View {
+    let phase: AppUpdatePhase
+    let onCheckUpdate: () -> Void
+    let onDownload: () -> Void
+    let onInstall: () -> Void
+    let onDismissError: () -> Void
+
+    var body: some View {
+        switch phase {
+        case .idle:
+            EmptyView()
+        case .checking:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在检查更新…")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        case .available(let info):
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .foregroundColor(.blue)
+                        .frame(width: 12)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("发现新版本")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                        Text("v\(info.version) (\(info.buildNumber))  \(formattedSize(info.assetSize))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("下载更新") { onDownload() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.mini)
+                }
+            }
+            .padding(8)
+            .background(Color.blue.opacity(0.08))
+            .cornerRadius(6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        case .downloading(let info, let progress):
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.down.circle")
+                        .foregroundColor(.blue)
+                        .frame(width: 12)
+                    Text("正在下载 v\(info.version)…")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                    Spacer()
+                    Text("\(Int(progress * 100))%")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                }
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+            }
+            .padding(8)
+            .background(Color.blue.opacity(0.08))
+            .cornerRadius(6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        case .downloaded(let info, _):
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .frame(width: 12)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("下载完成")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                    Text("v\(info.version) 准备就绪")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Button("安装并重启") { onInstall() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.mini)
+            }
+            .padding(8)
+            .background(Color.green.opacity(0.08))
+            .cornerRadius(6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        case .installing:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在安装更新，即将重启…")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(8)
+            .background(Color.orange.opacity(0.08))
+            .cornerRadius(6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        case .error(let msg):
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                    .frame(width: 12)
+                Text(msg)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                Spacer()
+                Button("重试") { onDismissError(); onCheckUpdate() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+            }
+            .padding(8)
+            .background(Color.orange.opacity(0.08))
+            .cornerRadius(6)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+    }
+
+    private func formattedSize(_ bytes: Int) -> String {
+        let mb = Double(bytes) / 1_048_576
+        if mb < 1 { return String(format: "%.0f KB", Double(bytes) / 1024) }
+        return String(format: "%.1f MB", mb)
     }
 }
 

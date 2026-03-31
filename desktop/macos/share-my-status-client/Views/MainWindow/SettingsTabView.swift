@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 /// Settings tab view for app configuration
 struct SettingsTabView: View {
     @EnvironmentObject var configuration: AppConfiguration
+    @EnvironmentObject var coordinator: AppCoordinator
     @State private var accessibilityGranted = AccessibilityPermissionChecker.isAccessibilityGranted()
     @State private var showAccessibilityHelp = false
     
@@ -498,6 +499,22 @@ struct SettingsTabView: View {
                         
                         Divider()
                         
+                        HStack {
+                            Text("自动更新")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Spacer()
+                            updateStatusLabel
+                            Button("检查更新") {
+                                coordinator.checkGitHubUpdate()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(isCheckingOrDownloading)
+                        }
+                        
+                        Divider()
+                        
                         VStack(alignment: .leading, spacing: 8) {
                             Text("应用标识符")
                                 .font(.subheadline)
@@ -555,6 +572,51 @@ struct SettingsTabView: View {
         }
     }
     
+    private var isCheckingOrDownloading: Bool {
+        switch coordinator.updatePhase {
+        case .checking, .downloading, .installing: return true
+        default: return false
+        }
+    }
+
+    @ViewBuilder
+    private var updateStatusLabel: some View {
+        switch coordinator.updatePhase {
+        case .idle:
+            Text("已是最新版本")
+                .font(.caption)
+                .foregroundColor(.green)
+        case .checking:
+            HStack(spacing: 4) {
+                ProgressView().controlSize(.mini)
+                Text("检查中…")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        case .available(let info):
+            Text("v\(info.version) 可更新")
+                .font(.caption)
+                .foregroundColor(.blue)
+        case .downloading(_, let progress):
+            Text("下载中 \(Int(progress * 100))%")
+                .font(.caption)
+                .foregroundColor(.blue)
+                .monospacedDigit()
+        case .downloaded:
+            Text("等待安装")
+                .font(.caption)
+                .foregroundColor(.orange)
+        case .installing:
+            Text("安装中…")
+                .font(.caption)
+                .foregroundColor(.orange)
+        case .error:
+            Text("检查失败")
+                .font(.caption)
+                .foregroundColor(.red)
+        }
+    }
+
     /// Open configuration file
     private func openConfigurationFile() {
         let openPanel = NSOpenPanel()
@@ -1000,6 +1062,7 @@ private struct ManualImportView: View {
 #Preview {
     SettingsTabView()
         .environmentObject(AppConfiguration())
+        .environmentObject(AppCoordinator.shared)
         .frame(width: 600, height: 500)
 }
 
