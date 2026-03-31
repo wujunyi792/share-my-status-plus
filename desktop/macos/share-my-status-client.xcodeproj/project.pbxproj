@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		4577A19D6F29315267D43FE9 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 730C76C77B4F407A1B09914E /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		2B19962A2E95B00B005C2FE1 /* Copy MediaRemote Script */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -84,6 +88,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4577A19D6F29315267D43FE9 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -128,6 +133,7 @@
 			);
 			name = "share-my-status-client";
 			packageProductDependencies = (
+				730C76C77B4F407A1B09914E /* Sparkle */,
 			);
 			productName = "share-my-status-client";
 			productReference = 2B1995072E959754005C2FE1 /* Share My Status.app */;
@@ -157,6 +163,9 @@
 			);
 			mainGroup = 2B1994FE2E959754005C2FE1;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				EB07A17B1C33A8FB892FD5B7 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2B1995082E959754005C2FE1 /* Products */;
 			projectDirPath = "";
@@ -330,6 +339,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Share My Status";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_SUEnableAutomaticChecks = YES;
+				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/wujunyi792/share-my-status-plus/sparkle-appcast/appcast.xml";
+				INFOPLIST_KEY_SUPublicEDKey = "MYQ5wXTnPCx9oWNADEHusGfsiAceiy3omnIYMCDMAaM=";
+				INFOPLIST_KEY_SUScheduledCheckInterval = 7200;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -372,6 +385,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Share My Status";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_SUEnableAutomaticChecks = YES;
+				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/wujunyi792/share-my-status-plus/sparkle-appcast/appcast.xml";
+				INFOPLIST_KEY_SUPublicEDKey = "MYQ5wXTnPCx9oWNADEHusGfsiAceiy3omnIYMCDMAaM=";
+				INFOPLIST_KEY_SUScheduledCheckInterval = 7200;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -414,6 +431,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		EB07A17B1C33A8FB892FD5B7 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		730C76C77B4F407A1B09914E /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EB07A17B1C33A8FB892FD5B7 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 2B1994FF2E959754005C2FE1 /* Project object */;
 }

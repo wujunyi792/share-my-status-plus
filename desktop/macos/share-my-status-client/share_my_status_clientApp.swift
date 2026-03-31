@@ -30,6 +30,12 @@ struct share_my_status_clientApp: App {
         .commands {
             // Remove "New Window" command to prevent duplicates
             CommandGroup(replacing: .newItem) { }
+            CommandGroup(after: .appInfo) {
+                Button("检查更新…") {
+                    coordinator.checkForUpdates()
+                }
+                .disabled(!coordinator.canCheckForUpdates)
+            }
         }
         
         // MenuBarExtra requires macOS 13.0+
@@ -132,4 +138,3 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 }
-

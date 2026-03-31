@@ -31,23 +31,6 @@ struct StatusTabView: View {
             
             Divider()
             
-            // GitHub Release auto-update banner
-            GitHubUpdateBannerView(
-                phase: coordinator.updatePhase,
-                onCheckUpdate: { coordinator.checkGitHubUpdate() },
-                onDownload: { coordinator.downloadGitHubUpdate() },
-                onInstall: { coordinator.installGitHubUpdate() },
-                onDismissError: { coordinator.dismissUpdateError() }
-            )
-            .padding(.horizontal)
-
-            // Legacy server-based update banner (fallback)
-            if case .idle = coordinator.updatePhase, let latest = coordinator.availableUpdate {
-                UpdateBannerView(latest: latest)
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-            }
-            
             // Scrollable Content
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -102,6 +85,29 @@ struct StatusTabView: View {
                     .padding(.horizontal, 4)
                 }
                 
+                GroupBox("软件更新") {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(coordinator.automaticallyChecksForUpdates ? "已启用自动检查" : "仅支持手动检查")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("更新检查与安装由 Sparkle 标准流程处理。")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Button("检查更新…") {
+                            coordinator.checkForUpdates()
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!coordinator.canCheckForUpdates)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 4)
+                }
+                
                 // Current Status
                 GroupBox("当前状态") {
                     HStack(alignment: .top, spacing: 16) {
@@ -147,64 +153,6 @@ struct StatusTabView: View {
                 .padding()
             }
         }
-    }
-}
-
-private struct UpdateBannerView: View {
-    let latest: ClientVersionInfo
-    
-    var versionText: String { latest.version ?? "未知版本" }
-    var buildText: String { latest.buildNumber != nil ? String(latest.buildNumber!) : "未知构建" }
-    var isForce: Bool { latest.forceUpdate ?? false }
-    
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: isForce ? "exclamationmark.triangle.fill" : "arrow.down.circle.fill")
-                .foregroundColor(isForce ? .orange : .blue)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(isForce ? "发现强制更新" : "发现新版本")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                Text("版本：\(versionText) (\(buildText))")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                if let note = latest.releaseNote, !note.isEmpty {
-                    Text(note)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .lineLimit(3)
-                }
-                // 新增：下载链接文本，点击打开浏览器
-                if let urlStr = latest.downloadUrl, let url = URL(string: urlStr) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "link")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                        Link("打开下载页面", destination: url)
-                            .font(.caption)
-                    }
-                }
-            }
-            Spacer()
-            
-            if let urlStr = latest.downloadUrl, let url = URL(string: urlStr) {
-                Button(isForce ? "立即更新" : "去下载") {
-                    NSWorkspace.shared.open(url)
-                }
-                .buttonStyle(.borderedProminent)
-                
-                if isForce {
-                    Button("退出应用") {
-                        NSApp.terminate(nil)
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-        }
-        .padding(10)
-        .background((isForce ? Color.orange : Color.blue).opacity(0.08))
-        .cornerRadius(8)
     }
 }
 
@@ -975,165 +923,9 @@ private struct StatisticsRow: View {
     }
 }
 
-// GitHub Release Auto-Update Banner (Main Window)
-
-private struct GitHubUpdateBannerView: View {
-    let phase: AppUpdatePhase
-    let onCheckUpdate: () -> Void
-    let onDownload: () -> Void
-    let onInstall: () -> Void
-    let onDismissError: () -> Void
-
-    var body: some View {
-        switch phase {
-        case .idle:
-            EmptyView()
-        case .checking:
-            HStack(spacing: 10) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("正在检查更新…")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-            .padding(10)
-            .background(Color.blue.opacity(0.05))
-            .cornerRadius(8)
-            .padding(.vertical, 4)
-        case .available(let info):
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 10) {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .foregroundColor(.blue)
-                        .font(.title2)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("发现新版本")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                        Text("v\(info.version) (\(info.buildNumber))  •  \(formattedSize(info.assetSize))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Button("下载更新") { onDownload() }
-                        .buttonStyle(.borderedProminent)
-                }
-                if let notes = info.releaseNotes, !notes.isEmpty {
-                    Text(notes)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(5)
-                        .padding(.top, 2)
-                }
-            }
-            .padding(10)
-            .background(Color.blue.opacity(0.08))
-            .cornerRadius(8)
-            .padding(.vertical, 4)
-        case .downloading(let info, let progress):
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 10) {
-                    Image(systemName: "arrow.down.circle")
-                        .foregroundColor(.blue)
-                        .font(.title2)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("正在下载 v\(info.version)…")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                        Text("\(formattedSize(Int(Double(info.assetSize) * progress))) / \(formattedSize(info.assetSize))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    Text("\(Int(progress * 100))%")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .monospacedDigit()
-                }
-                ProgressView(value: progress)
-                    .progressViewStyle(.linear)
-            }
-            .padding(10)
-            .background(Color.blue.opacity(0.08))
-            .cornerRadius(8)
-            .padding(.vertical, 4)
-        case .downloaded(let info, _):
-            HStack(spacing: 10) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                    .font(.title2)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("下载完成")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    Text("v\(info.version) (\(info.buildNumber)) 准备安装")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                Button("安装并重启") { onInstall() }
-                    .buttonStyle(.borderedProminent)
-            }
-            .padding(10)
-            .background(Color.green.opacity(0.08))
-            .cornerRadius(8)
-            .padding(.vertical, 4)
-        case .installing:
-            HStack(spacing: 10) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("正在安装更新，应用即将重启…")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                Spacer()
-            }
-            .padding(10)
-            .background(Color.orange.opacity(0.08))
-            .cornerRadius(8)
-            .padding(.vertical, 4)
-        case .error(let msg):
-            HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
-                    .font(.title2)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("更新失败")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    Text(msg)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(3)
-                }
-                Spacer()
-                Button("重试") {
-                    onDismissError()
-                    onCheckUpdate()
-                }
-                .buttonStyle(.bordered)
-                Button("关闭") { onDismissError() }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-            }
-            .padding(10)
-            .background(Color.orange.opacity(0.08))
-            .cornerRadius(8)
-            .padding(.vertical, 4)
-        }
-    }
-
-    private func formattedSize(_ bytes: Int) -> String {
-        let mb = Double(bytes) / 1_048_576
-        if mb < 1 { return String(format: "%.0f KB", Double(bytes) / 1024) }
-        return String(format: "%.1f MB", mb)
-    }
-}
-
 #Preview {
     StatusTabView()
         .environmentObject(AppConfiguration())
         .environmentObject(StatusReporter())
         .frame(width: 600, height: 500)
 }
-

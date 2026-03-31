@@ -1,4 +1,4 @@
-name: Manual macOS Client Build & Release Upload
+name: Manual unsigned macOS Client Build & Sparkle Release
 
 on:
   workflow_dispatch:
@@ -12,62 +12,107 @@ concurrency:
 
 jobs:
   build_macos_client:
-    name: Build macOS Client and Upload to Release
+    name: Build unsigned macOS Client and Publish Sparkle Feed
     runs-on: macos-26
+    env:
+      APP_PATH: build/Build/Products/Release/Share My Status.app
+      FEED_BRANCH: sparkle-appcast
+      FEED_URL: https://raw.githubusercontent.com/${{ github.repository }}/sparkle-appcast/appcast.xml
+      SPARKLE_TOOLS_VERSION: 2.9.1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Validate Sparkle-only distribution configuration
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if [ -z "${SPARKLE_PRIVATE_KEY}" ]; then
+            echo "::error::Missing SPARKLE_PRIVATE_KEY repository secret"
+            exit 1
+          fi
+          echo "This workflow intentionally skips Developer ID signing and notarization."
+          echo "Update authenticity is provided by Sparkle EdDSA signatures only."
+
       - name: Show Xcode version
         run: xcodebuild -version
+
       - name: Install xcpretty
         run: gem install xcpretty
+
+      - name: Resolve package dependencies
+        run: |
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project desktop/macos/share-my-status-client.xcodeproj \
+            -scheme share-my-status-client
 
       - name: Build macOS app
         run: |
           set -euo pipefail
-          # Build without treating warnings as errors, use Swift 5 language mode, and relax Swift concurrency checks
           xcodebuild \
             -project desktop/macos/share-my-status-client.xcodeproj \
             -scheme share-my-status-client \
             -configuration Release \
             -derivedDataPath build \
             -destination 'platform=macOS,arch=arm64' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=- \
             clean build | xcpretty
 
-      - name: Read version and build number from Info.plist
-        id: read_version
+      - name: Read version and build number
+        id: version
         run: |
-          INFO_PLIST="build/Build/Products/Release/Share My Status.app/Contents/Info.plist"
-          if [ ! -f "$INFO_PLIST" ]; then
-            echo "::error::Info.plist not found at $INFO_PLIST"
+          set -euo pipefail
+          INFO_PLIST="${APP_PATH}/Contents/Info.plist"
+          if [ ! -f "${INFO_PLIST}" ]; then
+            echo "::error::Info.plist not found at ${INFO_PLIST}"
             ls -R build/Build/Products || true
             exit 1
           fi
-          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO_PLIST")
-          BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$INFO_PLIST")
+
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${INFO_PLIST}")
+          BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "${INFO_PLIST}")
           TAG_NAME="desktop-macos-v${VERSION}-${BUILD_NUMBER}"
           ARTIFACT_NAME="share-my-status-client-macos-v${VERSION}-${BUILD_NUMBER}.zip"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
-          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
-          echo "Version: $VERSION, Build: $BUILD_NUMBER, Tag: $TAG_NAME, Artifact: $ARTIFACT_NAME"
+          ARTIFACT_BASENAME="${ARTIFACT_NAME%.zip}"
 
-      - name: Package app as zip with versioned filename
+          {
+            echo "VERSION=${VERSION}"
+            echo "BUILD_NUMBER=${BUILD_NUMBER}"
+            echo "TAG_NAME=${TAG_NAME}"
+            echo "ARTIFACT_NAME=${ARTIFACT_NAME}"
+            echo "ARTIFACT_BASENAME=${ARTIFACT_BASENAME}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Package app as zip
         run: |
-          APP_PATH="build/Build/Products/Release/Share My Status.app"
-          if [ ! -d "$APP_PATH" ]; then
-            echo "::error::App not found at $APP_PATH"
+          set -euo pipefail
+          if [ ! -d "${APP_PATH}" ]; then
+            echo "::error::App not found at ${APP_PATH}"
             ls -R build/Build/Products || true
             exit 1
           fi
-          ditto -c -k --keepParent "$APP_PATH" "$ARTIFACT_NAME"
-          shasum -a 256 "$ARTIFACT_NAME" > "$ARTIFACT_NAME.sha256"
 
-      - name: Upload to GitHub Release (auto create with version/build tag)
+          codesign -dv "${APP_PATH}" > codesign.txt 2>&1 || true
+          if ! grep -q 'TeamIdentifier=not set' codesign.txt; then
+            echo "::error::Build output unexpectedly contains a team identity"
+            cat codesign.txt
+            exit 1
+          fi
+          if grep -q 'Authority=Developer ID' codesign.txt; then
+            echo "::error::Build output unexpectedly contains a Developer ID signature"
+            cat codesign.txt
+            exit 1
+          fi
+
+          ditto -c -k --keepParent "${APP_PATH}" "${ARTIFACT_NAME}"
+          shasum -a 256 "${ARTIFACT_NAME}" > "${ARTIFACT_NAME}.sha256"
+
+      - name: Upload GitHub release assets
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.TAG_NAME }}
@@ -77,6 +122,57 @@ jobs:
             ${{ env.ARTIFACT_NAME }}.sha256
           draft: false
           prerelease: false
-          generate_release_notes: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Sparkle tools
+        run: |
+          set -euo pipefail
+          curl -L \
+            -o "Sparkle-${SPARKLE_TOOLS_VERSION}.tar.xz" \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_TOOLS_VERSION}/Sparkle-${SPARKLE_TOOLS_VERSION}.tar.xz"
+          tar -xf "Sparkle-${SPARKLE_TOOLS_VERSION}.tar.xz"
+
+      - name: Generate Sparkle appcast
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          FEED_DIR="$(mktemp -d)"
+          cp "${ARTIFACT_NAME}" "${FEED_DIR}/"
+
+          gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" --json body --jq '.body' > "${FEED_DIR}/${ARTIFACT_BASENAME}.txt"
+          if [ ! -s "${FEED_DIR}/${ARTIFACT_BASENAME}.txt" ]; then
+            rm -f "${FEED_DIR}/${ARTIFACT_BASENAME}.txt"
+          fi
+
+          echo "${SPARKLE_PRIVATE_KEY}" | \
+            "./Sparkle-${SPARKLE_TOOLS_VERSION}/bin/generate_appcast" \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/" \
+            --release-notes-url-prefix "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${FEED_BRANCH}/" \
+            "${FEED_DIR}"
+
+          DEPLOY_DIR="$(mktemp -d)"
+          cp "${FEED_DIR}/appcast.xml" "${DEPLOY_DIR}/"
+          find "${FEED_DIR}" -maxdepth 1 -type f \( -name '*.html' -o -name '*.txt' \) -exec cp {} "${DEPLOY_DIR}/" \;
+
+          cd "${DEPLOY_DIR}"
+          git init
+          git checkout -b "${FEED_BRANCH}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Update Sparkle feed for ${TAG_NAME}"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin "HEAD:${FEED_BRANCH}"
+
+          {
+            echo "Distribution mode: unsigned / no Developer ID / no notarization"
+            echo "Sparkle trust model: EdDSA feed + update signatures only"
+            echo "Sparkle feed updated:"
+            echo "${FEED_URL}"
+          } >> "${GITHUB_STEP_SUMMARY}"

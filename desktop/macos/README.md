@@ -750,6 +750,14 @@ xcodebuild -project share-my-status-client.xcodeproj \
 
 ### 分发选项
 
+#### 当前仓库默认发布模式（CI）
+
+- GitHub Actions 当前产出的是不带 `Developer ID` 身份、也不做 notarization 的 macOS 客户端发布包
+- 自动更新使用 Sparkle 标准流程，信任链只依赖 Sparkle 的 `EdDSA` 公私钥与 HTTPS 分发
+- Release 产物会上传到 GitHub Releases，同时生成 `appcast.xml` 并推送到 `sparkle-appcast` 分支
+- 这种模式不会暴露 Apple 开发者团队身份，但首次打开时更容易触发 Gatekeeper 拦截
+- 为减少 App Translocation 对后续更新的影响，建议用户第一次启动前就把应用移动到 `/Applications`
+
 #### 选项1: 直接分发
 ```bash
 # 构建后的应用位置
@@ -782,6 +790,25 @@ xcrun notarytool submit share-my-status-client.app.zip \
                       --password app-specific-password \
                       --team-id TEAM_ID
 ```
+
+说明：上面这套公证流程当前不是本仓库默认 CI 的一部分，只作为以后切换到 Apple Developer ID / notarization 路线时的参考。
+
+### 首次打开 unsigned 发布版
+
+当前默认发布产物不带 `Developer ID` 身份，也没有 notarization，因此第一次打开时请按下面顺序操作：
+
+1. 先把 `Share My Status.app` 从 `Downloads` 移到 `/Applications`
+2. 在 Finder 中按住 `Control` 点击应用，选择“打开”
+3. 在系统弹窗中再次选择“打开”
+4. 如果仍被拦截，进入 “系统设置 → 隐私与安全性”，在安全提示区域为这个应用点“仍要打开”
+
+如果想只对这一个应用移除下载隔离标记，而不是关闭整个系统校验，可以执行：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Share My Status.app"
+```
+
+建议只对这个应用单独执行，不要使用全局关闭 Gatekeeper 的方式。
 
 ### 验证脚本
 
@@ -943,25 +970,18 @@ cd ~/Library/Developer/Xcode/DerivedData/*/Build/Products/Debug/
 sudo tccutil reset Accessibility com.share-my-status.client
 ```
 
-#### 代码签名问题
+#### 无 Developer ID 分发 / Gatekeeper
 
-**问题**: 代码签名失败
+**问题**: 第一次打开时被 macOS 拦截
 ```bash
-# 检查签名状态
-codesign -vvv --deep --strict share-my-status-client.app
+# 推荐先移动到 /Applications
+mv ~/Downloads/"Share My Status.app" /Applications/
 
-# 重新签名
-codesign --force --deep --sign "Apple Development" share-my-status-client.app
+# 只移除这个应用的 quarantine 标记
+xattr -dr com.apple.quarantine "/Applications/Share My Status.app"
 ```
 
-**问题**: Gatekeeper阻止运行
-```bash
-# 临时允许运行 (仅用于测试)
-sudo spctl --master-disable
-
-# 或为特定应用添加例外
-sudo spctl --add share-my-status-client.app
-```
+不要使用 `sudo spctl --master-disable` 这种全局关闭方式。当前仓库的默认发布路线本来就是 unsigned + Sparkle EdDSA，只需要对具体应用单独放行即可。
 
 #### 常见问题解决
 
@@ -975,9 +995,9 @@ sudo spctl --add share-my-status-client.app
    lipo -info MediaRemoteAdapter.framework/MediaRemoteAdapter
    ```
 
-3. **代码签名问题**: 重新配置开发者证书
+3. **首次打开被拦截**: 将应用移到 `/Applications` 后，用右键“打开”或移除该应用的 quarantine 标记
    ```bash
-   codesign --force --deep --sign "Apple Development" share-my-status-client.app
+   xattr -dr com.apple.quarantine "/Applications/Share My Status.app"
    ```
 
 4. **路径问题**: 使用绝对路径测试

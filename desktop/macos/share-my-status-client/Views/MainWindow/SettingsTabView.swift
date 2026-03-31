@@ -506,11 +506,11 @@ struct SettingsTabView: View {
                             Spacer()
                             updateStatusLabel
                             Button("检查更新") {
-                                coordinator.checkGitHubUpdate()
+                                coordinator.checkForUpdates()
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
-                            .disabled(isCheckingOrDownloading)
+                            .disabled(!coordinator.canCheckForUpdates)
                         }
                         
                         Divider()
@@ -572,48 +572,16 @@ struct SettingsTabView: View {
         }
     }
     
-    private var isCheckingOrDownloading: Bool {
-        switch coordinator.updatePhase {
-        case .checking, .downloading, .installing: return true
-        default: return false
-        }
-    }
-
     @ViewBuilder
     private var updateStatusLabel: some View {
-        switch coordinator.updatePhase {
-        case .idle:
-            Text("已是最新版本")
+        if coordinator.automaticallyChecksForUpdates {
+            Text("已启用自动检查")
                 .font(.caption)
                 .foregroundColor(.green)
-        case .checking:
-            HStack(spacing: 4) {
-                ProgressView().controlSize(.mini)
-                Text("检查中…")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        case .available(let info):
-            Text("v\(info.version) 可更新")
+        } else {
+            Text("仅支持手动检查")
                 .font(.caption)
-                .foregroundColor(.blue)
-        case .downloading(_, let progress):
-            Text("下载中 \(Int(progress * 100))%")
-                .font(.caption)
-                .foregroundColor(.blue)
-                .monospacedDigit()
-        case .downloaded:
-            Text("等待安装")
-                .font(.caption)
-                .foregroundColor(.orange)
-        case .installing:
-            Text("安装中…")
-                .font(.caption)
-                .foregroundColor(.orange)
-        case .error:
-            Text("检查失败")
-                .font(.caption)
-                .foregroundColor(.red)
+                .foregroundColor(.secondary)
         }
     }
 
@@ -1065,4 +1033,3 @@ private struct ManualImportView: View {
         .environmentObject(AppCoordinator.shared)
         .frame(width: 600, height: 500)
 }
-

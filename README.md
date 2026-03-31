@@ -50,7 +50,9 @@
 - 默认本地开发端口由 Vite 输出日志可见
 
 4) 桌面端（macOS）
-- 打开 `desktop/macos/share-my-status-client.xcodeproj`，按需配置签名后运行
+- 打开 `desktop/macos/share-my-status-client.xcodeproj` 运行
+- 当前仓库默认发布路线是不使用 `Developer ID`、不做 notarization，只使用 Sparkle 的 `EdDSA` 更新签名
+- 首次打开发布版时，建议先把应用移到 `/Applications`，再按 [`desktop/macos/README.md`](./desktop/macos/README.md) 里的 Gatekeeper 指引放行
 
 5) IDL 与路由模型更新
 - 修改 idl/*.thrift 后，在项目根目录执行：`make hz-update`
@@ -80,4 +82,3 @@
 
 ## 反馈与贡献
 欢迎提交 Issue 或 PR 来完善功能与文档。部署或开发问题请附带日志与环境说明，便于快速定位与协作。
-
