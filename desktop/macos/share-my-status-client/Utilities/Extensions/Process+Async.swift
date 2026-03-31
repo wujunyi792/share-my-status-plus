@@ -23,36 +23,38 @@ extension Process {
             process.standardOutput = outputPipe
             process.standardError = errorPipe
             
-            var isFinished = false
-            var outputData = Data()
+            let resumeGuard = UnfairLockFlag()
+            let outputBuffer = LockedData()
             
-            process.terminationHandler = { process in
-                isFinished = true
-                let exitCode = process.terminationStatus
-                continuation.resume(returning: (outputData, exitCode))
+            process.terminationHandler = { proc in
+                outputPipe.fileHandleForReading.readabilityHandler = nil
+                
+                if resumeGuard.trySet() {
+                    continuation.resume(returning: (outputBuffer.copy(), proc.terminationStatus))
+                }
             }
             
-            // Start reading output
             outputPipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
                 if !data.isEmpty {
-                    outputData.append(data)
+                    outputBuffer.append(data)
                 }
             }
             
             do {
                 try process.run()
                 
-                // Setup timeout
                 Task {
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    if !isFinished {
+                    if resumeGuard.trySet() {
                         process.terminate()
                         continuation.resume(throwing: ProcessError.timeout)
                     }
                 }
             } catch {
-                continuation.resume(throwing: ProcessError.launchFailed(error))
+                if resumeGuard.trySet() {
+                    continuation.resume(throwing: ProcessError.launchFailed(error))
+                }
             }
         }
     }
@@ -101,6 +103,40 @@ enum ProcessError: LocalizedError {
         case .nonZeroExit(let code):
             return "Process exited with code \(code)"
         }
+    }
+}
+
+/// Thread-safe mutable Data buffer.
+final class LockedData: @unchecked Sendable {
+    private var _lock = os_unfair_lock()
+    private var _data = Data()
+    
+    func append(_ chunk: Data) {
+        os_unfair_lock_lock(&_lock)
+        _data.append(chunk)
+        os_unfair_lock_unlock(&_lock)
+    }
+    
+    func copy() -> Data {
+        os_unfair_lock_lock(&_lock)
+        let result = _data
+        os_unfair_lock_unlock(&_lock)
+        return result
+    }
+}
+
+/// Atomic once-flag using os_unfair_lock (available macOS 10.12+)
+final class UnfairLockFlag: @unchecked Sendable {
+    private var _lock = os_unfair_lock()
+    private var _set = false
+    
+    /// Atomically sets the flag. Returns `true` if this call set it (first time), `false` if already set.
+    func trySet() -> Bool {
+        os_unfair_lock_lock(&_lock)
+        defer { os_unfair_lock_unlock(&_lock) }
+        if _set { return false }
+        _set = true
+        return true
     }
 }
 

@@ -49,8 +49,8 @@ actor MediaRemoteService {
     private var outputPipe: Pipe?
     private var errorPipe: Pipe?
     
-    // Serial queue for chunk processing to maintain order
-    private var processingQueue: DispatchQueue?
+    // Async stream consumer task for serial processing
+    private var streamConsumerTask: Task<Void, Never>?
     
     // Buffer for incomplete JSON lines
     private var lineBuffer = ""
@@ -209,32 +209,30 @@ actor MediaRemoteService {
         let streamID = UUID().uuidString.prefix(8)
         logger.info("Stream session ID: \(streamID)")
         
-        // Create serial queue for this stream session to maintain chunk order
-        let queue = DispatchQueue(label: "com.sharemystatus.mediaremote.stream.\(streamID)", qos: .userInitiated)
-        self.processingQueue = queue
+        // Handle output using an AsyncStream to avoid blocking GCD threads with semaphores
+        var continuation: AsyncStream<String>.Continuation!
+        let chunkStream = AsyncStream<String> { cont in
+            continuation = cont
+        }
         
-        // Handle output line by line
-        outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            if data.isEmpty { return }
-            
-            // Convert data to string
-            guard let chunk = String(data: data, encoding: .utf8) else { return }
-            
-            // Process on serial queue to maintain chunk order
-            // Use sync to ensure chunks are processed sequentially
-            queue.async {
-                // Create a semaphore to wait for async processing to complete
-                let semaphore = DispatchSemaphore(value: 0)
-                
-                Task { [weak self] in
-                    defer { semaphore.signal() }
-                    await self?.logger.debug("[\(streamID)] Received chunk: \(chunk.count) bytes")
-                    await self?.processStreamChunk(chunk, onUpdate: onUpdate)
-                }
-                
-                semaphore.wait()
+        // Consumer task: processes chunks serially on the actor
+        let consumerTask = Task { [weak self] in
+            for await chunk in chunkStream {
+                guard !Task.isCancelled else { break }
+                await self?.processStreamChunk(chunk, onUpdate: onUpdate)
             }
+        }
+        self.streamConsumerTask = consumerTask
+        
+        // Producer: readabilityHandler pushes into the async stream (non-blocking)
+        outputPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty {
+                continuation.finish()
+                return
+            }
+            guard let chunk = String(data: data, encoding: .utf8) else { return }
+            continuation.yield(chunk)
         }
         
         process.terminationHandler = { [weak self] process in
@@ -259,6 +257,10 @@ actor MediaRemoteService {
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         errorPipe?.fileHandleForReading.readabilityHandler = nil
         
+        // Cancel stream consumer
+        streamConsumerTask?.cancel()
+        streamConsumerTask = nil
+        
         // Terminate process
         if let process = streamProcess {
             logger.info("Terminating stream process PID: \(process.processIdentifier)")
@@ -271,7 +273,6 @@ actor MediaRemoteService {
         streamProcess = nil
         outputPipe = nil
         errorPipe = nil
-        processingQueue = nil
         isStreaming = false
         currentMusic = nil
         lineBuffer = ""
@@ -311,66 +312,38 @@ actor MediaRemoteService {
     /// Process incoming stream chunk, handling multiple or incomplete JSON objects
     /// MediaRemote outputs Newline-Delimited JSON (NDJSON): one JSON per line
     private func processStreamChunk(_ chunk: String, onUpdate: @escaping (MusicSnapshot?) -> Void) {
-        // Append chunk to buffer
         lineBuffer.append(chunk)
-        logger.debug("Buffer size after append: \(lineBuffer.count) bytes")
         
-        // Process all complete lines (ending with \n)
-        // MediaRemote outputs compact JSON (no internal newlines), so \n is safe delimiter
         while let newlineRange = lineBuffer.range(of: "\n") {
-            // Extract the complete line (without newline)
             let line = String(lineBuffer[..<newlineRange.lowerBound])
-            
-            // Remove this line from buffer (including the newline)
             lineBuffer.removeSubrange(..<newlineRange.upperBound)
             
-            // Process non-empty lines
             let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedLine.isEmpty {
-                logger.debug("Processing complete line: \(trimmedLine.count) chars")
                 processStreamLine(trimmedLine, onUpdate: onUpdate)
             }
         }
         
-        // Log if there's remaining incomplete data
-        if !lineBuffer.isEmpty {
-            logger.debug("Incomplete line in buffer: \(lineBuffer.count) bytes (waiting for newline)")
-        }
-        
         // Safety: prevent buffer overflow (10MB limit for large artwork)
         if lineBuffer.count > 10_000_000 {
-            logger.error("Buffer exceeded 10MB! This indicates a problem. Clearing buffer.")
-            logger.error("Buffer starts with: \(lineBuffer.prefix(100))")
+            logger.error("Buffer exceeded 10MB, clearing.")
             lineBuffer = ""
         }
     }
     
     /// Process a single complete JSON line
     private func processStreamLine(_ line: String, onUpdate: @escaping (MusicSnapshot?) -> Void) {
-        // Log raw JSON line for debugging (truncated to avoid spam)
-        if line.count > 200 {
-            logger.info("Raw JSON line: \(line.prefix(200))...")
-        } else {
-            logger.info("Raw JSON line: \(line)")
-        }
+        guard let data = line.data(using: .utf8) else { return }
         
-        // Each line should be a JSON object
-        guard let data = line.data(using: .utf8) else { 
-            logger.warning("Failed to convert stream line to UTF-8")
-            return 
-        }
-        
-        // Stream output has nested structure: {type, diff, payload: {...}}
         let decoder = JSONDecoder()
         guard let streamOutput = try? decoder.decode(MediaRemoteStreamOutput.self, from: data) else {
-            logger.warning("Failed to decode stream line: \(line.prefix(200))")
+            logger.warning("Failed to decode stream line (\(line.count) chars)")
             return
         }
         
-        // Convert to flat structure
         let mediaInfo = streamOutput.toMediaRemoteOutput()
         
-        logger.info("Stream update - type: \(streamOutput.type), diff: \(streamOutput.diff), title: \(mediaInfo.title ?? "nil"), artist: \(mediaInfo.artist ?? "nil"), playing: \(mediaInfo.playing ?? false)")
+        logger.debug("Stream update - type: \(streamOutput.type), diff: \(streamOutput.diff), title: \(mediaInfo.title ?? "nil")")
         
         // Handle differential updates
         if streamOutput.diff {
@@ -626,8 +599,9 @@ actor MediaRemoteService {
     private func handleStreamTermination(exitCode: Int32) {
         logger.info("MediaRemote stream terminated with code \(exitCode)")
         
-        // Reset state
         songChangeState = .idle
+        streamConsumerTask?.cancel()
+        streamConsumerTask = nil
         
         isStreaming = false
         streamProcess = nil
@@ -636,8 +610,6 @@ actor MediaRemoteService {
         
         if exitCode != 0 {
             logger.error("MediaRemote stream terminated abnormally with code \(exitCode)")
-        } else {
-            logger.info("MediaRemote stream terminated normally")
         }
     }
     
@@ -649,19 +621,10 @@ actor MediaRemoteService {
         
         var artwork: Data? = nil
         if let artworkBase64 = mediaInfo.artworkData {
-            logger.info("Converting artwork from base64 (length: \(artworkBase64.count) chars)")
-            logger.info("Artwork base64 prefix: \(artworkBase64.prefix(50))")
-            logger.info("Artwork base64 suffix: \(artworkBase64.suffix(50))")
-            
             artwork = Data(base64Encoded: artworkBase64)
-            if let artworkData = artwork {
-                logger.info("Artwork decoded successfully (size: \(artworkData.count) bytes)")
-            } else {
-                logger.warning("Failed to decode base64 artwork data")
-                logger.warning("Base64 string may be incomplete or corrupted")
+            if artwork == nil {
+                logger.warning("Failed to decode base64 artwork (\(artworkBase64.count) chars)")
             }
-        } else {
-            logger.info("No artworkData in media info")
         }
         
         return MusicSnapshot(

@@ -208,8 +208,7 @@ private struct CurrentMusicCard: View {
         HStack(spacing: 12) {
             // Album artwork or default icon
             Group {
-                if let artworkData = music.artworkData,
-                   let nsImage = NSImage(data: artworkData) {
+                if let nsImage = music.artworkImage {
                     Image(nsImage: nsImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -465,82 +464,72 @@ private struct ModernMusicCard: View {
     }
 }
 
-// Vinyl Record View - separated component for proper rotation handling
+// Vinyl Record View - uses TimelineView for efficient rotation that pauses off-screen
 private struct VinylRecordView: View {
     let music: MusicSnapshot
-    @State private var rotationAngle: Double = 0
+    
+    // Track the accumulated angle so pausing/resuming is seamless
+    @State private var baseAngle: Double = 0
+    @State private var referenceDate: Date = .now
+    
+    private let rpm: Double = 120 // degrees per second (one revolution = 3 seconds)
     
     var body: some View {
-        ZStack {
-            // Outer ring (vinyl record)
-            Circle()
-                .fill(Color.black)
-                .frame(width: 120, height: 120)
+        // TimelineView automatically pauses when the view is off-screen,
+        // avoiding unnecessary rendering and energy usage.
+        TimelineView(.animation(paused: !music.isPlaying)) { timeline in
+            let elapsed = music.isPlaying
+                ? timeline.date.timeIntervalSince(referenceDate)
+                : 0
+            let angle = baseAngle + elapsed * rpm
             
-            // Album artwork or placeholder
-            Group {
-                if let artworkData = music.artworkData,
-                   let nsImage = NSImage(data: artworkData) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 100, height: 100)
-                        .clipShape(Circle())
-                } else {
-                    Circle()
-                        .fill(LinearGradient(
-                            colors: [.purple.opacity(0.8), .purple.opacity(0.4)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
-                        .frame(width: 100, height: 100)
-                        .overlay(
-                            Image(systemName: "music.note")
-                                .font(.system(size: 32))
-                                .foregroundColor(.white)
-                        )
-                }
-            }
-            
-            // Center hole
-            Circle()
-                .fill(Color.black)
-                .frame(width: 20, height: 20)
-            
-            // Playing indicator
-            if music.isPlaying {
+            ZStack {
                 Circle()
-                    .fill(Color.green)
-                    .frame(width: 8, height: 8)
-                    .overlay(
-                        Text("Playing")
-                            .font(.caption2)
-                            .foregroundColor(.white)
-                            .opacity(0)
-                    )
-            }
-        }
-        .rotationEffect(.degrees(rotationAngle))
-        .onAppear {
-            // Start rotation if playing when view appears
-            if music.isPlaying {
-                withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-                    rotationAngle = 360
+                    .fill(Color.black)
+                    .frame(width: 120, height: 120)
+                
+                Group {
+                    if let nsImage = music.artworkImage {
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 100, height: 100)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(LinearGradient(
+                                colors: [.purple.opacity(0.8), .purple.opacity(0.4)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ))
+                            .frame(width: 100, height: 100)
+                            .overlay(
+                                Image(systemName: "music.note")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(.white)
+                            )
+                    }
+                }
+                
+                Circle()
+                    .fill(Color.black)
+                    .frame(width: 20, height: 20)
+                
+                if music.isPlaying {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 8, height: 8)
                 }
             }
+            .rotationEffect(.degrees(angle))
         }
         .onChange(of: music.isPlaying) { isPlaying in
-            // Handle play/pause state changes
             if isPlaying {
-                // Start rotation
-                withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-                    rotationAngle = 360
-                }
+                referenceDate = .now
             } else {
-                // Stop rotation at current position
-                withAnimation(.default) {
-                    rotationAngle = rotationAngle.truncatingRemainder(dividingBy: 360)
-                }
+                // Freeze at current visual angle
+                baseAngle = baseAngle + Date.now.timeIntervalSince(referenceDate) * rpm
+                baseAngle = baseAngle.truncatingRemainder(dividingBy: 360)
             }
         }
     }
@@ -967,10 +956,10 @@ private struct StatisticsRow: View {
         }
         .font(.caption)
         .task {
-            // Update stats periodically
+            // Refresh every 5 seconds (stats rarely change; 1s was wasteful)
             while !Task.isCancelled {
                 stats = await reporter.getNetworkStatistics()
-                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
     }

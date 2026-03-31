@@ -5,6 +5,7 @@
 
 
 import Foundation
+import AppKit
 
 // Domain Music Models
 
@@ -18,9 +19,15 @@ struct MusicSnapshot {
     let artworkData: Data?
     let timestamp: Date
     
+    /// Lazily-created, cached NSImage from artworkData.
+    /// Avoids re-decoding image bytes on every SwiftUI render cycle.
+    var artworkImage: NSImage? {
+        guard let data = artworkData else { return nil }
+        return ArtworkImageCache.shared.image(for: data)
+    }
+    
     /// Convert to API MusicInfo model
     func toMusicInfo(coverHash: String? = nil) -> MusicInfo {
-        // Convert timestamp to milliseconds
         let timestampMs = Int64(timestamp.timeIntervalSince1970 * 1000)
         return MusicInfo(
             title: title,
@@ -29,6 +36,36 @@ struct MusicSnapshot {
             coverHash: coverHash,
             ts: timestampMs
         )
+    }
+}
+
+/// Thread-safe LRU-style cache for decoded artwork images.
+/// Keyed by data byte count + prefix hash to avoid full-data hashing overhead.
+final class ArtworkImageCache: @unchecked Sendable {
+    static let shared = ArtworkImageCache()
+    
+    private let lock = NSLock()
+    private var cache: [Int: (data: Data, image: NSImage)] = [:]
+    private static let maxEntries = 5
+    
+    func image(for data: Data) -> NSImage? {
+        let key = data.count ^ data.prefix(64).hashValue
+        lock.lock()
+        if let entry = cache[key], entry.data == data {
+            lock.unlock()
+            return entry.image
+        }
+        lock.unlock()
+        
+        guard let img = NSImage(data: data) else { return nil }
+        
+        lock.lock()
+        if cache.count >= Self.maxEntries {
+            cache.removeAll(keepingCapacity: true)
+        }
+        cache[key] = (data, img)
+        lock.unlock()
+        return img
     }
 }
 
