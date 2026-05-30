@@ -9,8 +9,8 @@ WORKDIR /app
 # Install bash git dos2unix for TypeScript compiler
 RUN apk add --no-cache bash git
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install the pnpm line that still honors package.json pnpm settings.
+RUN npm install -g pnpm@9
 
 # Copy the frontend source code (excluding node_modules and build artifacts)
 COPY frontend/ ./

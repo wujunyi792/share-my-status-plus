@@ -4,4 +4,4 @@
 # component change publishes a new OCI Helm chart.
 
 backend: 1.0.5-1
-frontend: 1.0.5-1
+frontend: 1.0.5-2
