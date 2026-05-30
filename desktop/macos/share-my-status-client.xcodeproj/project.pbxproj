@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5AE0FACE0000000000000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5AE0FACE0000000000000002 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		2B19962A2E95B00B005C2FE1 /* Copy MediaRemote Script */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -84,6 +88,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5AE0FACE0000000000000001 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -128,6 +133,7 @@
 			);
 			name = "share-my-status-client";
 			packageProductDependencies = (
+				5AE0FACE0000000000000002 /* Sparkle */,
 			);
 			productName = "share-my-status-client";
 			productReference = 2B1995072E959754005C2FE1 /* Share My Status.app */;
@@ -157,6 +163,9 @@
 			);
 			mainGroup = 2B1994FE2E959754005C2FE1;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5AE0FACE0000000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2B1995082E959754005C2FE1 /* Products */;
 			projectDirPath = "";
@@ -319,7 +328,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = "";
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -328,6 +337,7 @@
 					"$(PROJECT_DIR)/share-my-status-client",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Share My Status";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -361,7 +371,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = "";
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -370,6 +380,7 @@
 					"$(PROJECT_DIR)/share-my-status-client",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Share My Status";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -414,6 +425,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5AE0FACE0000000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5AE0FACE0000000000000002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5AE0FACE0000000000000003 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 2B1994FF2E959754005C2FE1 /* Project object */;
 }

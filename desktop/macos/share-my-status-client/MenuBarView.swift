@@ -203,7 +203,19 @@ struct MenuBarView: View {
                     .contentShape(Rectangle())  // Make entire area clickable
                 }
                 .buttonStyle(MenuBarButtonStyle())
-                
+
+                Button(action: {
+                    SparkleUpdater.shared.checkForUpdates()
+                }) {
+                    HStack {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                        Text("检查更新")
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())  // Make entire area clickable
+                }
+                .buttonStyle(MenuBarButtonStyle())
+
                 Divider()
                 
                 Button(action: {
