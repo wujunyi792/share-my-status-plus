@@ -27,27 +27,8 @@ backend:
     type: ClusterIP
     port: 8080
     targetPort: 8080
-  env:
-    APP_NAME: share-my-status
-    HTTP_PORT: "8080"
-    DEBUG: "false"
-    DEFAULT_TZ: Asia/Shanghai
-    ENDPOINT: https://example.com
-    REDIRECT_DEFAULT_TARGET: https://example.com/s/{SharingKey}
-    DB_DSN: "share_user:share_password_change_me@tcp(mysql:3306)/share_my_status?charset=utf8mb4&parseTime=True&loc=Local"
-    DB_MAX_OPEN_CONNS: "20"
-    DB_MAX_IDLE_CONNS: "5"
-    DB_CONN_MAX_LIFETIME: "1800"
-    REDIS_URL: redis://redis:6379
-    REDIS_PASSWORD: redis_password_change_me
-    REDIS_DB: "0"
-    FEISHU_APP_ID: ""
-    FEISHU_APP_SECRET: ""
-    LOG_LEVEL: info
-    LOG_FORMAT: json
-    LEGACY_CRYPTO_KEY: default-key-12345678
-    LEGACY_CRYPTO_IV: default-iv-123456
-    LEGACY_DEFAULT_JUMP_LINK: https://example.com
+  env: {}
+  extraEnvFrom: []
   extraEnv: []
   livenessProbe:
     httpGet:

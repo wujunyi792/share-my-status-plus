@@ -2,7 +2,7 @@ apiVersion: v2
 name: share-my-status
 description: Real-time personal status sharing platform (Go backend + React frontend)
 type: application
-version: 1.0.502-b.1.0.5.1.f.1.0.5.2
+version: 1.0.503-b.1.0.5.1.f.1.0.5.2
 appVersion: "backend=1.0.5-1,frontend=1.0.5-2"
 
 dependencies:

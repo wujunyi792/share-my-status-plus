@@ -42,9 +42,16 @@ spec:
             - name: http
               containerPort: {{ .Values.backend.service.targetPort }}
               protocol: TCP
+          {{- if or .Values.backend.env .Values.backend.extraEnvFrom }}
           envFrom:
+            {{- if .Values.backend.env }}
             - configMapRef:
                 name: {{ include "share-my-status.backend.fullname" . }}-env
+            {{- end }}
+            {{- with .Values.backend.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
           {{- with .Values.backend.extraEnv }}
           env:
             {{- toYaml . | nindent 12 }}
