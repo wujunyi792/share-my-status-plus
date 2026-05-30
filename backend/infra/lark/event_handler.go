@@ -3,14 +3,14 @@ package lark
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
-	"share-my-status/api/model/share_my_status/common"
+	"share-my-status/domain/render"
 	"share-my-status/domain/user"
 	"share-my-status/infra/config"
 	"share-my-status/model"
 	"share-my-status/pkg/crypto"
-	"share-my-status/pkg/dbutil"
 	"strings"
 	"time"
 
@@ -23,15 +23,15 @@ import (
 )
 
 type EventHandler struct {
-	userService *user.UserService
-	db          *gorm.DB
-	larkClient  *lark.Client
-	config      *config.Config
+	userService   *user.UserService
+	larkClient    *lark.Client
+	config        *config.Config
+	renderService *render.Service
 }
 
 // NewEventHandler 创建事件处理器
-func NewEventHandler(userService *user.UserService, db *gorm.DB, larkClient *lark.Client, cfg *config.Config) *EventHandler {
-	return &EventHandler{userService: userService, db: db, larkClient: larkClient, config: cfg}
+func NewEventHandler(userService *user.UserService, larkClient *lark.Client, cfg *config.Config, renderService *render.Service) *EventHandler {
+	return &EventHandler{userService: userService, larkClient: larkClient, config: cfg, renderService: renderService}
 }
 
 // OnP2MessageReceiveV1 处理飞书消息接收事件
@@ -101,13 +101,7 @@ func (h *EventHandler) OnP2MessageReceiveV1(ctx context.Context, event *larkim.P
 func (h *EventHandler) OnP2CardURLPreviewGet(ctx context.Context, event *callback.URLPreviewGetEvent) (*callback.URLPreviewGetResponse, error) {
 	logrus.Infof("URL preview request: %s", event.Event.Context.URL)
 
-	// 默认预览
-	urlPreview := &callback.URLPreviewGetResponse{
-		Inline: &callback.Inline{
-			Title:    "未在播放音乐",
-			ImageKey: "img_v3_02e1_e30f851f-c7c1-4c58-8366-3494186fcbeg", // 默认图片
-		},
-	}
+	urlPreview := toLarkURLPreview(render.NewDefaultPreview())
 
 	// 解析URL
 	parsedURL, err := url.Parse(event.Event.Context.URL)
@@ -118,7 +112,11 @@ func (h *EventHandler) OnP2CardURLPreviewGet(ctx context.Context, event *callbac
 
 	// 提取参数
 	key := h.extractSharingKey(parsedURL.Path)
-	var fn func(id string) (*model.User, error)
+	template := parsedURL.Query().Get("m")
+	if template == "" {
+		template = render.DefaultTemplate
+	}
+
 	if key == "" {
 		// 旧版兼容
 		openIDEncoded := parsedURL.Query().Get("u")
@@ -130,58 +128,62 @@ func (h *EventHandler) OnP2CardURLPreviewGet(ctx context.Context, event *callbac
 			logrus.Errorf("Failed to decode openID: %v", err)
 			return urlPreview, nil
 		}
-		fn = h.userService.GetUserByOpenID
-	} else {
-		fn = h.userService.GetUserBySharingKey
+
+		u, err := h.userService.GetUserByOpenID(key)
+		if err != nil {
+			logrus.Errorf("Failed to get user by open id: %v", err)
+			return urlPreview, nil
+		}
+
+		preview, err := h.renderService.RenderByUserID(ctx, u.ID, template)
+		if err != nil {
+			return handleURLPreviewRenderError(urlPreview, err), nil
+		}
+		return toLarkURLPreview(preview), nil
 	}
 
-	if key == "" {
-		logrus.Warn("No sharing key found in URL")
-		return urlPreview, nil
-	}
-
-	template := parsedURL.Query().Get("m")
-	if template == "" {
-		template = "正在听{artist}-{title}"
-	}
-
-	// 获取用户状态
-	u, err := fn(key)
+	preview, err := h.renderService.RenderBySharingKey(ctx, key, template)
 	if err != nil {
-		logrus.Errorf("Failed to get user by sharing key: %v", err)
-		return urlPreview, nil
+		return handleURLPreviewRenderError(urlPreview, err), nil
 	}
 
-	// 检查公开访问权限
-	publicEnabled, err := h.userService.IsPublicEnabled(u.ID)
-	if err != nil {
-		logrus.Errorf("Failed to check public access: %v", err)
-		return urlPreview, nil
-	}
+	return toLarkURLPreview(preview), nil
+}
 
-	if !publicEnabled {
+func handleURLPreviewRenderError(urlPreview *callback.URLPreviewGetResponse, err error) *callback.URLPreviewGetResponse {
+	switch {
+	case errors.Is(err, render.ErrPublicAccessDisabled):
 		urlPreview.Inline.Title = "未开启公开访问"
-		return urlPreview, nil
+	case errors.Is(err, render.ErrSharingKeyNotFound):
+		logrus.Errorf("Failed to get user by sharing key: %v", err)
+	default:
+		logrus.Errorf("Failed to render URL preview: %v", err)
+	}
+	return urlPreview
+}
+
+func toLarkURLPreview(preview *render.PreviewResponse) *callback.URLPreviewGetResponse {
+	resp := &callback.URLPreviewGetResponse{}
+	if preview == nil || preview.Inline == nil {
+		return resp
 	}
 
-	// 获取当前状态
-	currentState, err := h.getCurrentState(ctx, u.ID)
-	if err != nil {
-		logrus.Errorf("Failed to get current state: %v", err)
-		return urlPreview, nil
+	resp.Inline = &callback.Inline{
+		Title:     preview.Inline.Title,
+		I18nTitle: preview.Inline.I18nTitle,
+		ImageKey:  preview.Inline.ImageKey,
+	}
+	if preview.Inline.URL != nil {
+		resp.Inline.URL = &callback.URL{
+			CopyURL: preview.Inline.URL.CopyURL,
+			IOS:     preview.Inline.URL.IOS,
+			Android: preview.Inline.URL.Android,
+			PC:      preview.Inline.URL.PC,
+			Web:     preview.Inline.URL.Web,
+		}
 	}
 
-	// 渲染模板
-	title := h.renderTemplate(template, currentState)
-	urlPreview.Inline.Title = title
-
-	// 如果有封面，设置封面图片
-	if currentState.Music != nil && currentState.Music.CoverHash != nil {
-		// 这里应该设置实际的封面图片，暂时使用默认图片
-		// urlPreview.Inline.ImageKey = getCoverImageKey(*currentState.Music.CoverHash)
-	}
-
-	return urlPreview, nil
+	return resp
 }
 
 // Command 命令结构
@@ -401,44 +403,6 @@ func (h *EventHandler) buildSharingURL(sharingKey string) string {
 	return strings.ReplaceAll(h.config.Redirect.DefaultTarget, "{SharingKey}", sharingKey)
 }
 
-// renderTemplate 渲染模板
-func (h *EventHandler) renderTemplate(template string, state *common.StatusSnapshot) string {
-	if state == nil {
-		result := strings.ReplaceAll(template, "{artist}", "")
-		result = strings.ReplaceAll(result, "{title}", "未在播放")
-		result = strings.ReplaceAll(result, "{album}", "")
-		result = strings.ReplaceAll(result, "{activityLabel}", "")
-		result = h.renderTimeVariables(result)
-		result = h.renderSystemVariables(result, nil)
-		result = h.renderConditionalVariables(result, nil)
-		return result
-	}
-
-	result := template
-
-	// 替换音乐信息
-	result = h.renderMusicVariables(result, state.Music)
-
-	// 替换系统信息
-	result = h.renderSystemVariables(result, state.System)
-
-	// 替换活动信息
-	result = h.renderActivityVariables(result, state.Activity)
-
-	// 替换时间信息
-	result = h.renderTimeVariables(result)
-
-	// 替换条件表达式
-	result = h.renderConditionalVariables(result, state.System)
-
-	return result
-}
-
-// getCurrentState 获取当前状态
-func (h *EventHandler) getCurrentState(ctx context.Context, userID uint64) (*common.StatusSnapshot, error) {
-	return dbutil.GetCurrentStateFromDB(ctx, h.db, userID)
-}
-
 // sendMessage 发送消息
 func (h *EventHandler) sendMessage(ctx context.Context, openID, content string) error {
 	client := h.larkClient
@@ -467,138 +431,6 @@ func (h *EventHandler) sendMessage(ctx context.Context, openID, content string) 
 	}
 
 	return nil
-}
-
-// renderMusicVariables 渲染音乐相关变量
-func (h *EventHandler) renderMusicVariables(template string, music *common.Music) string {
-	result := template
-
-	if music != nil {
-		artist := ""
-		title := ""
-		album := ""
-
-		if music.Artist != nil {
-			artist = *music.Artist
-		}
-		if music.Title != nil {
-			title = *music.Title
-		}
-		if music.Album != nil {
-			album = *music.Album
-		}
-
-		result = strings.ReplaceAll(result, "{artist}", artist)
-		result = strings.ReplaceAll(result, "{title}", title)
-		result = strings.ReplaceAll(result, "{album}", album)
-	} else {
-		result = strings.ReplaceAll(result, "{artist}", "")
-		result = strings.ReplaceAll(result, "{title}", "未在播放")
-		result = strings.ReplaceAll(result, "{album}", "")
-	}
-
-	return result
-}
-
-// renderSystemVariables 渲染系统相关变量
-func (h *EventHandler) renderSystemVariables(template string, system *common.System) string {
-	result := template
-
-	if system != nil {
-		// 电量百分比
-		if system.BatteryPct != nil {
-			batteryPct := *system.BatteryPct
-			result = strings.ReplaceAll(result, "{batteryPct}", fmt.Sprintf("%.2f", batteryPct))
-			result = strings.ReplaceAll(result, "{batteryPctRounded}", fmt.Sprintf("%.0f%%", batteryPct*100))
-		} else {
-			result = strings.ReplaceAll(result, "{batteryPct}", "")
-			result = strings.ReplaceAll(result, "{batteryPctRounded}", "")
-		}
-
-		// CPU使用率
-		if system.CpuPct != nil {
-			cpuPct := *system.CpuPct
-			result = strings.ReplaceAll(result, "{cpuPct}", fmt.Sprintf("%.2f", cpuPct))
-			result = strings.ReplaceAll(result, "{cpuPctRounded}", fmt.Sprintf("%.0f%%", cpuPct*100))
-		} else {
-			result = strings.ReplaceAll(result, "{cpuPct}", "")
-			result = strings.ReplaceAll(result, "{cpuPctRounded}", "")
-		}
-
-		// 内存使用率
-		if system.MemoryPct != nil {
-			memoryPct := *system.MemoryPct
-			result = strings.ReplaceAll(result, "{memoryPct}", fmt.Sprintf("%.2f", memoryPct))
-			result = strings.ReplaceAll(result, "{memoryPctRounded}", fmt.Sprintf("%.0f%%", memoryPct*100))
-		} else {
-			result = strings.ReplaceAll(result, "{memoryPct}", "")
-			result = strings.ReplaceAll(result, "{memoryPctRounded}", "")
-		}
-	} else {
-		// 清空所有系统变量
-		result = strings.ReplaceAll(result, "{batteryPct}", "")
-		result = strings.ReplaceAll(result, "{batteryPctRounded}", "")
-		result = strings.ReplaceAll(result, "{cpuPct}", "")
-		result = strings.ReplaceAll(result, "{cpuPctRounded}", "")
-		result = strings.ReplaceAll(result, "{memoryPct}", "")
-		result = strings.ReplaceAll(result, "{memoryPctRounded}", "")
-	}
-
-	return result
-}
-
-// renderActivityVariables 渲染活动相关变量
-func (h *EventHandler) renderActivityVariables(template string, activity *common.Activity) string {
-	result := template
-
-	if activity != nil && activity.Label != "" {
-		result = strings.ReplaceAll(result, "{activityLabel}", activity.Label)
-	} else {
-		result = strings.ReplaceAll(result, "{activityLabel}", "")
-	}
-
-	return result
-}
-
-// renderTimeVariables 渲染时间相关变量
-func (h *EventHandler) renderTimeVariables(template string) string {
-	result := template
-	now := time.Now()
-
-	// 本地时间
-	result = strings.ReplaceAll(result, "{nowLocal}", now.Format("2006-01-02 15:04:05"))
-
-	// 日期 (年-月-日)
-	result = strings.ReplaceAll(result, "{dateYMD}", now.Format("2006-01-02"))
-
-	// ISO 8601 格式
-	result = strings.ReplaceAll(result, "{nowISO}", now.Format(time.RFC3339))
-
-	return result
-}
-
-// renderConditionalVariables 渲染条件表达式变量
-func (h *EventHandler) renderConditionalVariables(template string, system *common.System) string {
-	result := template
-
-	// 处理充电状态条件表达式 {charging?'充电中':'未充电'}
-	if strings.Contains(result, "{charging?") {
-		charging := false
-		if system != nil && system.Charging != nil {
-			charging = *system.Charging
-		}
-
-		// 简单的条件表达式解析
-		if charging {
-			result = strings.ReplaceAll(result, "{charging?'充电中':'未充电'}", "充电中")
-			result = strings.ReplaceAll(result, "{charging?'充电中':'未在充电'}", "充电中")
-		} else {
-			result = strings.ReplaceAll(result, "{charging?'充电中':'未充电'}", "未充电")
-			result = strings.ReplaceAll(result, "{charging?'充电中':'未在充电'}", "未在充电")
-		}
-	}
-
-	return result
 }
 
 // replyMessage 回复消息

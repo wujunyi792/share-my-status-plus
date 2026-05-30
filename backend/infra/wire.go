@@ -5,6 +5,7 @@ package infra
 
 import (
 	"share-my-status/domain/cover"
+	"share-my-status/domain/render"
 	"share-my-status/domain/state"
 	"share-my-status/domain/stats"
 	"share-my-status/domain/user"
@@ -32,10 +33,11 @@ type AppDependencies struct {
 	WSClient     *ws.DistributedWebSocketService
 	Scheduler    *scheduler.Scheduler
 
-	CoverService *cover.CoverService
-	UserService  *user.UserService
-	StatsService *stats.StatsService
-	StateService *state.StateService
+	CoverService  *cover.CoverService
+	RenderService *render.Service
+	UserService   *user.UserService
+	StatsService  *stats.StatsService
+	StateService  *state.StateService
 }
 
 // ProviderSet 定义所有Provider的集合
@@ -49,6 +51,7 @@ var ProviderSet = wire.NewSet(
 	lark.NewEventHandler,
 	ws.InitDistributedWebSocketService,
 	cover.NewCoverService,
+	render.NewRenderService,
 	user.NewUserService,
 	stats.NewStatsService,
 	state.NewStateService,
