@@ -295,7 +295,10 @@ jobs:
       - name: Checksums
         run: |
           set -euo pipefail
-          shasum -a 256 "$DMG_PATH" > "$DMG_PATH.sha256"
+          # Write the checksum with just the basename so users can verify with
+          # `shasum -a 256 -c <file>.sha256` after downloading.
+          ( cd "$(dirname "$DMG_PATH")" \
+            && shasum -a 256 "$(basename "$DMG_PATH")" > "$(basename "$DMG_PATH").sha256" )
           cat "$DMG_PATH.sha256"
 
       # ---------------------------------------------------------------------
