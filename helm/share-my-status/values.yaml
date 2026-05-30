@@ -7,7 +7,7 @@ fullnameOverride: ""
 
 release:
   backendVersion: "1.0.5-1"
-  frontendVersion: "1.0.5-1"
+  frontendVersion: "1.0.5-2"
 
 serviceAccount:
   create: true
