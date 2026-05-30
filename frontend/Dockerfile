@@ -9,9 +9,6 @@ WORKDIR /app
 # Install bash git dos2unix for TypeScript compiler
 RUN apk add --no-cache bash git
 
-# if you located in China, you can use aliyun mirror to speed up
-RUN #npm config set registry https://registry.npmmirror.com
-
 # Install pnpm
 RUN npm install -g pnpm
 
@@ -25,7 +22,7 @@ RUN pnpm install
 RUN pnpm run build
 
 # Production image stage
-FROM nginx:1.25-alpine
+FROM nginx:1.26-alpine
 
 # if you located in China, you can use aliyun mirror to speed up
 # RUN #sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories

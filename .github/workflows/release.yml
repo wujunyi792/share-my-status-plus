@@ -1,132 +1,280 @@
-name: Release and Docker Publish
+name: Release
 
+# Triggered when release.yml in project root changes on main.
+# Changed components get new GHCR images; any component change publishes a chart.
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    paths: [release.yml]
+  workflow_dispatch:
 
 concurrency:
   group: release-${{ github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  CHART_PATH: helm/share-my-status
 
 jobs:
-  build_backend:
-    name: Build & Push Backend Image
+  detect:
+    name: Detect version changes
     runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.diff.outputs.backend }}
+      frontend: ${{ steps.diff.outputs.frontend }}
+      chart: ${{ steps.diff.outputs.chart }}
+      backend_version: ${{ steps.parse.outputs.backend }}
+      frontend_version: ${{ steps.parse.outputs.frontend }}
+      chart_version: ${{ steps.parse.outputs.chart_version }}
+      app_version: ${{ steps.parse.outputs.app_version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 2
 
-      - name: Check tag commit is on main
+      - name: Parse current versions
+        id: parse
         run: |
-          git fetch origin main
-          if git branch --contains $GITHUB_SHA origin/main; then
-            echo "on_main=true" >> $GITHUB_ENV
-          else
-            echo "on_main=false" >> $GITHUB_ENV
-            echo "Tag commit not on main; skipping." >> $GITHUB_STEP_SUMMARY
+          release_to_base_chart_version() {
+            version="$1"
+            semver="${version%-*}"
+            build="${version##*-}"
+            major_minor=$(echo "${semver}" | cut -d. -f1-2)
+            patch=$(echo "${semver}" | cut -d. -f3)
+            echo "${major_minor}.$((patch * 100 + build))"
+          }
+
+          release_to_prerelease() {
+            echo "$1" | tr '-' '.'
+          }
+
+          backend=$(grep '^backend:' release.yml | awk '{print $2}')
+          frontend=$(grep '^frontend:' release.yml | awk '{print $2}')
+
+          for name in backend frontend; do
+            version=$(eval echo "\${${name}}")
+            if [ -z "${version}" ]; then
+              echo "release.yml must contain ${name}: <major.minor.patch-build>" >&2
+              exit 1
+            fi
+            if ! echo "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$'; then
+              echo "Invalid ${name} version '${version}'. Expected major.minor.patch-build, e.g. 1.0.5-1." >&2
+              exit 1
+            fi
+          done
+
+          chart_source=$(printf '%s\n%s\n' "${backend}" "${frontend}" | sort -V | tail -1)
+          chart_base=$(release_to_base_chart_version "${chart_source}")
+          chart_version="${chart_base}-b.$(release_to_prerelease "${backend}").f.$(release_to_prerelease "${frontend}")"
+          app_version="backend=${backend},frontend=${frontend}"
+
+          echo "backend=${backend}" >> "$GITHUB_OUTPUT"
+          echo "frontend=${frontend}" >> "$GITHUB_OUTPUT"
+          echo "chart_version=${chart_version}" >> "$GITHUB_OUTPUT"
+          echo "app_version=${app_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Diff against previous release.yml
+        id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "chart=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-      - name: Set up Docker Buildx
-        if: env.on_main == 'true'
-        uses: docker/setup-buildx-action@v3
+          if ! git show HEAD~1:release.yml > /tmp/old-release.yml 2>/dev/null; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "chart=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-      - name: Login to DockerHub
-        if: env.on_main == 'true'
+          old_backend=$(grep '^backend:' /tmp/old-release.yml | awk '{print $2}')
+          old_frontend=$(grep '^frontend:' /tmp/old-release.yml | awk '{print $2}')
+          backend=$(grep '^backend:' release.yml | awk '{print $2}')
+          frontend=$(grep '^frontend:' release.yml | awk '{print $2}')
+
+          [ "$old_backend" != "$backend" ] && backend_changed=true || backend_changed=false
+          [ "$old_frontend" != "$frontend" ] && frontend_changed=true || frontend_changed=false
+
+          echo "backend=${backend_changed}" >> "$GITHUB_OUTPUT"
+          echo "frontend=${frontend_changed}" >> "$GITHUB_OUTPUT"
+          if [ "${backend_changed}" = "true" ] || [ "${frontend_changed}" = "true" ]; then
+            echo "chart=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "chart=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  backend-image:
+    name: Build & Push Backend Image
+    needs: detect
+    if: needs.detect.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image metadata
+        id: vars
+        run: |
+          owner_lc=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          image="${REGISTRY}/${owner_lc}/share-my-status-backend"
+          version="${{ needs.detect.outputs.backend_version }}"
+          echo "tags=${image}:${version},${image}:latest" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to ghcr.io
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push backend
-        if: env.on_main == 'true'
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
+          context: .
           file: ./backend/Dockerfile
           push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/share-my-status-backend:${{ github.ref_name }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/share-my-status-backend:latest
+          platforms: linux/amd64
+          tags: ${{ steps.vars.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
-  build_frontend:
+  frontend-image:
     name: Build & Push Frontend Image
+    needs: detect
+    if: needs.detect.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
-      - name: Check tag commit is on main
+      - name: Set image metadata
+        id: vars
         run: |
-          git fetch origin main
-          if git branch --contains $GITHUB_SHA origin/main; then
-            echo "on_main=true" >> $GITHUB_ENV
-          else
-            echo "on_main=false" >> $GITHUB_ENV
-            echo "Tag commit not on main; skipping." >> $GITHUB_STEP_SUMMARY
-          fi
+          owner_lc=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          image="${REGISTRY}/${owner_lc}/share-my-status-frontend"
+          version="${{ needs.detect.outputs.frontend_version }}"
+          echo "tags=${image}:${version},${image}:latest" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Docker Buildx
-        if: env.on_main == 'true'
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Login to DockerHub
-        if: env.on_main == 'true'
+      - name: Login to ghcr.io
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push frontend
-        if: env.on_main == 'true'
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
+          context: .
           file: ./frontend/Dockerfile
           push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/share-my-status-frontend:${{ github.ref_name }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/share-my-status-frontend:latest
+          platforms: linux/amd64
+          tags: ${{ steps.vars.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
-  create_release:
-    name: Create GitHub Release
+  helm-chart:
+    name: Push Helm Chart
+    needs: [detect, backend-image, frontend-image]
+    if: >
+      always() &&
+      needs.detect.outputs.chart == 'true' &&
+      (needs.backend-image.result == 'success' || needs.backend-image.result == 'skipped') &&
+      (needs.frontend-image.result == 'success' || needs.frontend-image.result == 'skipped')
     runs-on: ubuntu-latest
-    needs:
-      - build_backend
-      - build_frontend
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
-      - name: Check tag commit is on main
+      - name: Sync chart metadata from release.yml
         run: |
-          git fetch origin main
-          if git branch --contains $GITHUB_SHA origin/main; then
-            echo "on_main=true" >> $GITHUB_ENV
-          else
-            echo "on_main=false" >> $GITHUB_ENV
-            echo "Tag commit not on main; skipping release." >> $GITHUB_STEP_SUMMARY
+          chart_version="${{ needs.detect.outputs.chart_version }}"
+          app_version="${{ needs.detect.outputs.app_version }}"
+          backend="${{ needs.detect.outputs.backend_version }}"
+          frontend="${{ needs.detect.outputs.frontend_version }}"
+
+          sed -i "s/^version: .*/version: ${chart_version}/" "${CHART_PATH}/Chart.yaml"
+          sed -i "s/^appVersion: .*/appVersion: \"${app_version}\"/" "${CHART_PATH}/Chart.yaml"
+          sed -i "s/^  backendVersion: .*/  backendVersion: \"${backend}\"/" "${CHART_PATH}/values.yaml"
+          sed -i "s/^  frontendVersion: .*/  frontendVersion: \"${frontend}\"/" "${CHART_PATH}/values.yaml"
+
+          echo "Chart version: ${chart_version}"
+          echo "App version: ${app_version}"
+          cat "${CHART_PATH}/Chart.yaml"
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.0
+
+      - name: Update chart dependencies
+        run: |
+          if grep -q '^dependencies:' "${CHART_PATH}/Chart.yaml"; then
+            helm dependency update "${CHART_PATH}"
           fi
 
-      - name: Create Release
-        if: env.on_main == 'true'
-        uses: softprops/action-gh-release@v1
+      - run: helm lint "${CHART_PATH}"
+
+      - name: Package chart
+        id: package
+        run: |
+          mkdir -p .chart-out
+          helm package "${CHART_PATH}" --destination .chart-out
+          pkg=$(ls .chart-out/*.tgz | head -1)
+          echo "package=$pkg" >> "$GITHUB_OUTPUT"
+
+      - name: Login to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push OCI artifact
+        run: |
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          helm push "${{ steps.package.outputs.package }}" "oci://ghcr.io/${owner}/charts"
+
+  sync-versions:
+    name: Sync version files back to repo
+    needs: [detect, backend-image, frontend-image, helm-chart]
+    if: always() && needs.detect.outputs.chart == 'true' && needs.helm-chart.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Update chart metadata
+        run: |
+          chart_version="${{ needs.detect.outputs.chart_version }}"
+          app_version="${{ needs.detect.outputs.app_version }}"
+          backend="${{ needs.detect.outputs.backend_version }}"
+          frontend="${{ needs.detect.outputs.frontend_version }}"
+
+          sed -i "s/^version: .*/version: ${chart_version}/" "${CHART_PATH}/Chart.yaml"
+          sed -i "s/^appVersion: .*/appVersion: \"${app_version}\"/" "${CHART_PATH}/Chart.yaml"
+          sed -i "s/^  backendVersion: .*/  backendVersion: \"${backend}\"/" "${CHART_PATH}/values.yaml"
+          sed -i "s/^  frontendVersion: .*/  frontendVersion: \"${frontend}\"/" "${CHART_PATH}/values.yaml"
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "${CHART_PATH}/Chart.yaml" "${CHART_PATH}/values.yaml"
+          if git diff --cached --quiet; then
+            echo "No sync needed"
+            exit 0
+          fi
+          git commit -m "chore: sync versions from release.yml [skip ci]"
+          git push origin main

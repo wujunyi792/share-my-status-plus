@@ -1,0 +1,168 @@
+replicaCount: 1
+revisionHistoryLimit: 10
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+release:
+  backendVersion: "1.0.5-1"
+  frontendVersion: "1.0.5-1"
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+backend:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/wujunyi792/share-my-status-backend
+    tag: ""
+    pullPolicy: IfNotPresent
+  podAnnotations: {}
+  podLabels: {}
+  securityContext: {}
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  env:
+    APP_NAME: share-my-status
+    HTTP_PORT: "8080"
+    DEBUG: "false"
+    DEFAULT_TZ: Asia/Shanghai
+    ENDPOINT: https://example.com
+    REDIRECT_DEFAULT_TARGET: https://example.com/s/{SharingKey}
+    DB_DSN: "share_user:share_password_change_me@tcp(mysql:3306)/share_my_status?charset=utf8mb4&parseTime=True&loc=Local"
+    DB_MAX_OPEN_CONNS: "20"
+    DB_MAX_IDLE_CONNS: "5"
+    DB_CONN_MAX_LIFETIME: "1800"
+    REDIS_URL: redis://redis:6379
+    REDIS_PASSWORD: redis_password_change_me
+    REDIS_DB: "0"
+    FEISHU_APP_ID: ""
+    FEISHU_APP_SECRET: ""
+    LOG_LEVEL: info
+    LOG_FORMAT: json
+    LEGACY_CRYPTO_KEY: default-key-12345678
+    LEGACY_CRYPTO_IV: default-iv-123456
+    LEGACY_DEFAULT_JUMP_LINK: https://example.com
+  extraEnv: []
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/wujunyi792/share-my-status-frontend
+    tag: ""
+    pullPolicy: IfNotPresent
+  podAnnotations: {}
+  podLabels: {}
+  securityContext: {}
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 80
+  nginx:
+    defaultConf: ""
+  livenessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: status.example.com
+      backendPaths:
+        - /api/v1/ws
+        - /link
+        - /api
+        - /v1
+        - /s
+      frontendPaths:
+        - /
+  tls: []
+
+mysql:
+  enabled: false
+  auth:
+    rootPassword: root_password_change_me
+    database: share_my_status
+    username: share_user
+    password: share_password_change_me
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+
+redis:
+  enabled: false
+  architecture: standalone
+  auth:
+    enabled: true
+    password: redis_password_change_me
+  master:
+    persistence:
+      enabled: true
+      size: 4Gi

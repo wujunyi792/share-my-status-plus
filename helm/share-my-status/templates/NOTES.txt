@@ -1,0 +1,11 @@
+Share My Status has been installed.
+
+Backend service:
+  {{ include "share-my-status.backend.fullname" . }}:{{ .Values.backend.service.port }}
+
+Frontend service:
+  {{ include "share-my-status.frontend.fullname" . }}:{{ .Values.frontend.service.port }}
+
+Release versions:
+  backend={{ .Values.release.backendVersion }}
+  frontend={{ .Values.release.frontendVersion }}
