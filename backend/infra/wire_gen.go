@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 	"share-my-status/domain/cover"
+	"share-my-status/domain/render"
 	"share-my-status/domain/state"
 	"share-my-status/domain/stats"
 	"share-my-status/domain/user"
@@ -45,7 +46,8 @@ func InitializeApp() (*AppDependencies, error) {
 		return nil, err
 	}
 	userService := user.NewUserService(db, client)
-	eventHandler := lark.NewEventHandler(userService, db, larkClient, configConfig)
+	service := render.NewRenderService(db, userService)
+	eventHandler := lark.NewEventHandler(userService, larkClient, configConfig, service)
 	eventDispatcher, err := lark.InitEventDispatcher(configConfig, eventHandler)
 	if err != nil {
 		return nil, err
@@ -60,17 +62,18 @@ func InitializeApp() (*AppDependencies, error) {
 	statsService := stats.NewStatsService(db, client)
 	stateService := state.NewStateService(db, client, distributedWebSocketService, userService)
 	appDependencies := &AppDependencies{
-		Config:       configConfig,
-		DB:           db,
-		RedisClient:  client,
-		LarkClient:   larkClient,
-		LarkWSClient: wsClient,
-		WSClient:     distributedWebSocketService,
-		Scheduler:    schedulerScheduler,
-		CoverService: coverService,
-		UserService:  userService,
-		StatsService: statsService,
-		StateService: stateService,
+		Config:        configConfig,
+		DB:            db,
+		RedisClient:   client,
+		LarkClient:    larkClient,
+		LarkWSClient:  wsClient,
+		WSClient:      distributedWebSocketService,
+		Scheduler:     schedulerScheduler,
+		CoverService:  coverService,
+		RenderService: service,
+		UserService:   userService,
+		StatsService:  statsService,
+		StateService:  stateService,
 	}
 	return appDependencies, nil
 }
@@ -87,14 +90,15 @@ type AppDependencies struct {
 	WSClient     *ws.DistributedWebSocketService
 	Scheduler    *scheduler.Scheduler
 
-	CoverService *cover.CoverService
-	UserService  *user.UserService
-	StatsService *stats.StatsService
-	StateService *state.StateService
+	CoverService  *cover.CoverService
+	RenderService *render.Service
+	UserService   *user.UserService
+	StatsService  *stats.StatsService
+	StateService  *state.StateService
 }
 
 // ProviderSet 定义所有Provider的集合
-var ProviderSet = wire.NewSet(config.Init, database.Init, cache.Init, lark.InitLarkClient, lark.InitWsClient, lark.InitEventDispatcher, lark.NewEventHandler, ws.InitDistributedWebSocketService, cover.NewCoverService, user.NewUserService, stats.NewStatsService, state.NewStateService, scheduler.NewScheduler, wire.Struct(new(AppDependencies), "*"))
+var ProviderSet = wire.NewSet(config.Init, database.Init, cache.Init, lark.InitLarkClient, lark.InitWsClient, lark.InitEventDispatcher, lark.NewEventHandler, ws.InitDistributedWebSocketService, cover.NewCoverService, render.NewRenderService, user.NewUserService, stats.NewStatsService, state.NewStateService, scheduler.NewScheduler, wire.Struct(new(AppDependencies), "*"))
 
 var GlobalAppDependencies *AppDependencies
 
