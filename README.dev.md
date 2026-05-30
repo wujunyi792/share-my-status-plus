@@ -68,6 +68,6 @@ docker-compose -f docker-compose.yml down -v
 
 ## 🔗 相关文档
 
-- [生产环境部署](DEPLOYMENT.md)
+- [Helm Chart](helm/share-my-status/README.md)
 - [API文档](backend/README.md)
 - [前端开发](frontend/README.md)

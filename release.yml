@@ -1,0 +1,7 @@
+# Release versions - bump a component version to trigger a release.
+# Format: major.minor.patch-build (e.g. 1.0.5-1)
+# CI watches this file. Changed components get new GHCR images, and any
+# component change publishes a new OCI Helm chart.
+
+backend: 1.0.5-1
+frontend: 1.0.5-1

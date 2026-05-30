@@ -4,7 +4,7 @@
 <text x="50%" y="80%" dominant-baseline="middle" text-anchor="middle" font-size="18" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial" fill="#e5e7eb">实时状态 · 推送 · 看板 · 跳转</text>
 
   <p>
-    <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" />
+    <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" />
     <img alt="Hertz" src="https://img.shields.io/badge/Hertz-0.10.2-ff6f00?logo=apache&logoColor=white" />
     <img alt="React" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white" />
     <img alt="Vite" src="https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white" />
@@ -27,14 +27,14 @@
 - 状态统计与图表展示（前端看板）
 - 封面与公共跳转服务（/s 路由）
 - macOS 桌面端快速更新状态
-- 支持 Docker Compose 与 Kubernetes 部署
+- 支持 Helm Chart + GHCR 镜像发布
 
 ## 项目结构
 - backend/：Go 后端（Hertz + GORM + DI）
 - frontend/：Vite + React + Tailwind 前端
 - desktop/macos/：macOS 客户端（Xcode 工程）
 - idl/：Thrift IDL（服务接口与数据契约）
-- k8s/：Kubernetes 部署清单
+- helm/share-my-status/：正式发布用 Helm Chart
 
 ## 快速开始
 1) 克隆与准备
@@ -66,8 +66,15 @@
 - 日志：使用 logrus 记录，错误信息清晰不泄露敏感信息
 
 ## 部署
-- Docker Compose：直接使用项目根目录 `docker-compose.yml`
-- Kubernetes：参考 `k8s/` 目录的 Deployment/Service/Ingress/ConfigMap；按需调整配置后应用到集群
+最新发布入口是根目录 `release.yml`：
+
+1. 修改 `backend` 或 `frontend` 版本号，格式为 `major.minor.patch-build`，例如 `1.0.5-1`
+2. 合并到 `main`
+3. GitHub Actions 为变更的组件发布镜像到 GHCR
+4. 任一组件版本变化都会发布 OCI Helm Chart 到 `ghcr.io/<owner>/charts/share-my-status`
+5. ArgoCD 同步 Helm Chart；CI 不直接部署集群
+
+Helm Chart 位于 `helm/share-my-status/`。镜像默认使用 `values.release.backendVersion` 与 `values.release.frontendVersion` 作为 tag。
 
 <div style="border:1px solid #e5e7eb; border-radius:12px; padding:12px; background:#fafafa;">
   <b>提示：</b> 本地开发推荐使用 <code>APP_ENV=debug</code>，并通过 <code>make wire</code>、<code>make hz-update</code> 同步依赖与路由。
@@ -80,4 +87,3 @@
 
 ## 反馈与贡献
 欢迎提交 Issue 或 PR 来完善功能与文档。部署或开发问题请附带日志与环境说明，便于快速定位与协作。
-
