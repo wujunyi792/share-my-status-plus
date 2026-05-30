@@ -1,7 +1,7 @@
 name: Release
 
 # Triggered when release.yml in project root changes on main.
-# Changed components get new GHCR images; any component change publishes a chart.
+# Changed components get new GHCR images; any component/chart change publishes a chart.
 on:
   push:
     branches: [main]
@@ -30,6 +30,7 @@ jobs:
       chart: ${{ steps.diff.outputs.chart }}
       backend_version: ${{ steps.parse.outputs.backend }}
       frontend_version: ${{ steps.parse.outputs.frontend }}
+      chart_release: ${{ steps.parse.outputs.chart }}
       chart_version: ${{ steps.parse.outputs.chart_version }}
       app_version: ${{ steps.parse.outputs.app_version }}
     steps:
@@ -55,8 +56,9 @@ jobs:
 
           backend=$(grep '^backend:' release.yml | awk '{print $2}')
           frontend=$(grep '^frontend:' release.yml | awk '{print $2}')
+          chart=$(grep '^chart:' release.yml | awk '{print $2}')
 
-          for name in backend frontend; do
+          for name in backend frontend chart; do
             version=$(eval echo "\${${name}}")
             if [ -z "${version}" ]; then
               echo "release.yml must contain ${name}: <major.minor.patch-build>" >&2
@@ -68,13 +70,13 @@ jobs:
             fi
           done
 
-          chart_source=$(printf '%s\n%s\n' "${backend}" "${frontend}" | sort -V | tail -1)
-          chart_base=$(release_to_base_chart_version "${chart_source}")
+          chart_base=$(release_to_base_chart_version "${chart}")
           chart_version="${chart_base}-b.$(release_to_prerelease "${backend}").f.$(release_to_prerelease "${frontend}")"
           app_version="backend=${backend},frontend=${frontend}"
 
           echo "backend=${backend}" >> "$GITHUB_OUTPUT"
           echo "frontend=${frontend}" >> "$GITHUB_OUTPUT"
+          echo "chart=${chart}" >> "$GITHUB_OUTPUT"
           echo "chart_version=${chart_version}" >> "$GITHUB_OUTPUT"
           echo "app_version=${app_version}" >> "$GITHUB_OUTPUT"
 
@@ -97,15 +99,18 @@ jobs:
 
           old_backend=$(grep '^backend:' /tmp/old-release.yml | awk '{print $2}')
           old_frontend=$(grep '^frontend:' /tmp/old-release.yml | awk '{print $2}')
+          old_chart=$(grep '^chart:' /tmp/old-release.yml | awk '{print $2}')
           backend=$(grep '^backend:' release.yml | awk '{print $2}')
           frontend=$(grep '^frontend:' release.yml | awk '{print $2}')
+          chart=$(grep '^chart:' release.yml | awk '{print $2}')
 
           [ "$old_backend" != "$backend" ] && backend_changed=true || backend_changed=false
           [ "$old_frontend" != "$frontend" ] && frontend_changed=true || frontend_changed=false
+          [ "$old_chart" != "$chart" ] && chart_changed=true || chart_changed=false
 
           echo "backend=${backend_changed}" >> "$GITHUB_OUTPUT"
           echo "frontend=${frontend_changed}" >> "$GITHUB_OUTPUT"
-          if [ "${backend_changed}" = "true" ] || [ "${frontend_changed}" = "true" ]; then
+          if [ "${backend_changed}" = "true" ] || [ "${frontend_changed}" = "true" ] || [ "${chart_changed}" = "true" ]; then
             echo "chart=true" >> "$GITHUB_OUTPUT"
           else
             echo "chart=false" >> "$GITHUB_OUTPUT"

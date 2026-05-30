@@ -12,7 +12,7 @@ Production-oriented Helm chart for Share My Status Plus:
 The release workflow publishes this chart as an OCI artifact on GHCR:
 
 ```sh
-helm pull oci://ghcr.io/wujunyi792/charts/share-my-status --version 1.0.501-b.1.0.5.1.f.1.0.5.1
+helm pull oci://ghcr.io/wujunyi792/charts/share-my-status --version 1.0.503-b.1.0.5.1.f.1.0.5.2
 ```
 
 Install directly:
@@ -20,7 +20,7 @@ Install directly:
 ```sh
 helm install share-my-status \
   oci://ghcr.io/wujunyi792/charts/share-my-status \
-  --version 1.0.501-b.1.0.5.1.f.1.0.5.1 \
+  --version 1.0.503-b.1.0.5.1.f.1.0.5.2 \
   --namespace share-my-status \
   --create-namespace \
   -f values-prod.yaml
@@ -32,6 +32,7 @@ Override at least these values for production:
 
 | Key | Description |
 | --- | --- |
+| `backend.env` or `backend.extraEnvFrom` | Backend environment variables |
 | `backend.env.ENDPOINT` | Public backend endpoint |
 | `backend.env.REDIRECT_DEFAULT_TARGET` | Public frontend status URL pattern |
 | `backend.env.DB_DSN` | MySQL DSN |
@@ -43,18 +44,28 @@ Override at least these values for production:
 | `backend.env.LEGACY_CRYPTO_IV` | Legacy compatibility IV |
 | `ingress.hosts` / `ingress.tls` | Public hostnames and TLS config |
 
-`backend.extraEnv` can be used to source sensitive values from Kubernetes Secrets instead of placing them in `backend.env`.
+`backend.extraEnvFrom` can import a whole Secret or ConfigMap, for example:
+
+```yaml
+backend:
+  env: {}
+  extraEnvFrom:
+    - secretRef:
+        name: share-my-status-config
+```
+
+`backend.extraEnv` can be used for individual `valueFrom` entries.
 
 The bundled MySQL and Redis subcharts are disabled by default. Production should normally point `backend.env.DB_DSN` and `backend.env.REDIS_URL` at managed services. For self-contained dev or test installs, enable `mysql.enabled` and `redis.enabled`, then set the backend DSN/Redis URL to the generated in-cluster service names.
 
 ## Release Flow
 
-1. Bump `backend` and/or `frontend` in the repository root `release.yml`, using `major.minor.patch-build`.
+1. Bump `backend`, `frontend`, and/or `chart` in the repository root `release.yml`, using `major.minor.patch-build`.
 2. Merge to `main`.
 3. GitHub Actions publishes:
    - changed backend images to `ghcr.io/<owner>/share-my-status-backend:<backend>`
    - changed frontend images to `ghcr.io/<owner>/share-my-status-frontend:<frontend>`
-   - a chart to `oci://ghcr.io/<owner>/charts/share-my-status:<chart-version>` whenever either component version changes
+   - a chart to `oci://ghcr.io/<owner>/charts/share-my-status:<chart-version>` whenever a component or chart version changes
 4. ArgoCD syncs the OCI Helm chart. CI does not deploy directly.
 
-The chart version is derived from both component versions so a backend-only or frontend-only bump produces a distinct chart version. For example, `backend: 1.0.5-1` and `frontend: 1.0.5-1` becomes `1.0.501-b.1.0.5.1.f.1.0.5.1`.
+The chart version is derived from the `chart` release version and includes both component versions as pre-release metadata. For example, `chart: 1.0.5-3`, `backend: 1.0.5-1`, and `frontend: 1.0.5-2` becomes `1.0.503-b.1.0.5.1.f.1.0.5.2`.

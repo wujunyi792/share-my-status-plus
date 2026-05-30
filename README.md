@@ -68,10 +68,10 @@
 ## 部署
 最新发布入口是根目录 `release.yml`：
 
-1. 修改 `backend` 或 `frontend` 版本号，格式为 `major.minor.patch-build`，例如 `1.0.5-1`
+1. 修改 `backend`、`frontend` 或 `chart` 版本号，格式为 `major.minor.patch-build`，例如 `1.0.5-1`
 2. 合并到 `main`
 3. GitHub Actions 为变更的组件发布镜像到 GHCR
-4. 任一组件版本变化都会发布 OCI Helm Chart 到 `ghcr.io/<owner>/charts/share-my-status`
+4. 任一组件或 chart 版本变化都会发布 OCI Helm Chart 到 `ghcr.io/<owner>/charts/share-my-status`
 5. ArgoCD 同步 Helm Chart；CI 不直接部署集群
 
 Helm Chart 位于 `helm/share-my-status/`。镜像默认使用 `values.release.backendVersion` 与 `values.release.frontendVersion` 作为 tag。
