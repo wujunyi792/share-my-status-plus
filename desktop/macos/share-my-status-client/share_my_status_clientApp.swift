@@ -30,6 +30,10 @@ struct share_my_status_clientApp: App {
         .commands {
             // Remove "New Window" command to prevent duplicates
             CommandGroup(replacing: .newItem) { }
+            // Add "检查更新…" right under the "About" item in the app menu.
+            CommandGroup(after: .appInfo) {
+                CheckForUpdatesView()
+            }
         }
         
         // MenuBarExtra requires macOS 13.0+
