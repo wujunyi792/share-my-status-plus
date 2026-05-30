@@ -3,6 +3,6 @@
 # CI watches this file. Changed components get new GHCR images, and any
 # component or chart change publishes a new OCI Helm chart.
 
-backend: 1.0.5-1
+backend: 1.0.5-2
 frontend: 1.0.5-2
-chart: 1.0.5-3
+chart: 1.0.5-4

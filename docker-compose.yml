@@ -4,24 +4,22 @@ x-env-file: &env_file
   - .env
 
 services:
-  # MySQL Database
-  mysql:
-    image: mysql:latest
-    container_name: share-my-status-mysql
+  # PostgreSQL Database
+  postgres:
+    image: postgres:18-alpine
+    container_name: share-my-status-postgres
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-share_my_status}
-      MYSQL_USER: ${MYSQL_USER:-share_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-share_password_change_me}
-      MYSQL_CHARSET: utf8mb4
+      POSTGRES_DB: ${POSTGRES_DB:-status-sharing}
+      POSTGRES_USER: ${POSTGRES_USER:-status_sharing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password_change_me}
     env_file: *env_file
     ports:
-      - "${MYSQL_PORT:-3306}:3306"  # 使用不同端口避免冲突
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - ./docker/data/mysql:/var/lib/mysql
+      - ./docker/data/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root123}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-status_sharing} -d ${POSTGRES_DB:-status-sharing}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -56,10 +54,14 @@ services:
     restart: always
     ports:
       - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      DB_DSN: "host=postgres user=${POSTGRES_USER:-status_sharing} password=${POSTGRES_PASSWORD:-postgres_password_change_me} dbname=${POSTGRES_DB:-status-sharing} port=5432 sslmode=disable TimeZone=Asia/Shanghai"
+      REDIS_URL: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password_change_me}
     volumes:
       - ./backend/.env:/app/.env
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy

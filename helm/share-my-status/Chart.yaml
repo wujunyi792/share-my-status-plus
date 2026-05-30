@@ -2,14 +2,14 @@ apiVersion: v2
 name: share-my-status
 description: Real-time personal status sharing platform (Go backend + React frontend)
 type: application
-version: 1.0.503-b.1.0.5.1.f.1.0.5.2
-appVersion: "backend=1.0.5-1,frontend=1.0.5-2"
+version: 1.0.504-b.1.0.5.2.f.1.0.5.2
+appVersion: "backend=1.0.5-2,frontend=1.0.5-2"
 
 dependencies:
-  - name: mysql
-    version: 14.0.x
+  - name: postgresql
+    version: 18.6.x
     repository: https://charts.bitnami.com/bitnami
-    condition: mysql.enabled
+    condition: postgresql.enabled
   - name: redis
     version: 25.5.x
     repository: https://charts.bitnami.com/bitnami

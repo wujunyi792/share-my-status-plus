@@ -8,7 +8,7 @@
 
 ```bash
 # 只启动基础设施服务
-docker-compose -f docker-compose.dev.yml up -d mysql redis
+docker-compose -f docker-compose.yml up -d postgres redis
 ```
 
 ### 2. 配置后端环境变量
@@ -39,7 +39,7 @@ APP_ENV=debug go run .
 
 | 服务 | 端口   | 用途 | 访问地址           |
 |------|------|------|----------------|
-| MySQL | 3306 | 数据库 | localhost:3306 |
+| PostgreSQL | 5432 | 数据库 | localhost:5432 |
 | Redis | 6379 | 缓存 | localhost:6379 |
 
 ## 🛠️ 常用命令
@@ -51,13 +51,13 @@ APP_ENV=debug go run .
 docker-compose -f docker-compose.yml up -d
 
 # 启动指定服务
-docker-compose -f docker-compose.yml up -d mysql redis
+docker-compose -f docker-compose.yml up -d postgres redis
 
 # 查看服务状态
 docker-compose -f docker-compose.yml ps
 
 # 查看服务日志
-docker-compose -f docker-compose.yml logs -f mysql
+docker-compose -f docker-compose.yml logs -f postgres
 
 # 停止所有服务
 docker-compose -f docker-compose.yml down
