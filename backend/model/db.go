@@ -13,9 +13,9 @@ import (
 type User struct {
 	ID         uint64    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	OpenID     string    `gorm:"column:open_id;type:varchar(64);uniqueIndex;not null" json:"openId"`
-	SecretKey  []byte    `gorm:"column:secret_key;type:varbinary(64);uniqueIndex;not null" json:"secretKey"`
+	SecretKey  []byte    `gorm:"column:secret_key;type:bytea;uniqueIndex;not null" json:"secretKey"`
 	SharingKey string    `gorm:"column:sharing_key;type:varchar(64);uniqueIndex;not null" json:"sharingKey"`
-	Status     int       `gorm:"column:status;type:tinyint;not null;default:1" json:"status"`
+	Status     int       `gorm:"column:status;type:smallint;not null;default:1" json:"status"`
 	CreatedAt  time.Time `gorm:"column:created_at" json:"createdAt"`
 	UpdatedAt  time.Time `gorm:"column:updated_at" json:"updatedAt"`
 }
@@ -34,7 +34,7 @@ type UserSettingsPayload struct {
 // UserSettings 用户设置表
 type UserSettings struct {
 	UserID    uint64                                  `gorm:"column:user_id;primaryKey" json:"userId"`
-	Settings  datatypes.JSONType[UserSettingsPayload] `gorm:"column:settings;type:json;not null" json:"settings"`
+	Settings  datatypes.JSONType[UserSettingsPayload] `gorm:"column:settings;type:jsonb;not null" json:"settings"`
 	UpdatedAt time.Time                               `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }
 
@@ -46,7 +46,7 @@ func (UserSettings) TableName() string {
 // CurrentState 当前状态表
 type CurrentState struct {
 	UserID    uint64                                    `gorm:"column:user_id;primaryKey" json:"userId"`
-	Snapshot  datatypes.JSONType[common.StatusSnapshot] `gorm:"column:snapshot;type:json;not null" json:"snapshot"`
+	Snapshot  datatypes.JSONType[common.StatusSnapshot] `gorm:"column:snapshot;type:jsonb;not null" json:"snapshot"`
 	UpdatedAt time.Time                                 `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }
 
@@ -60,7 +60,7 @@ type StateHistory struct {
 	ID         uint64                                    `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
 	UserID     uint64                                    `gorm:"column:user_id;index:ix_hist_user_time,priority:1" json:"userId"`
 	RecordedAt time.Time                                 `gorm:"column:recorded_at;index:ix_hist_user_time,priority:2" json:"recordedAt"`
-	Snapshot   datatypes.JSONType[common.StatusSnapshot] `gorm:"column:snapshot;type:json;not null" json:"snapshot"`
+	Snapshot   datatypes.JSONType[common.StatusSnapshot] `gorm:"column:snapshot;type:jsonb;not null" json:"snapshot"`
 }
 
 // TableName 指定表名
@@ -81,7 +81,7 @@ type CoverAssetPayload struct {
 type CoverAsset struct {
 	CoverHash string                                `gorm:"column:cover_hash;type:char(32);primaryKey" json:"coverHash"`
 	LarkKey   string                                `gorm:"column:lark_key;type:varchar(64);" json:"larkKey"`
-	Asset     datatypes.JSONType[CoverAssetPayload] `gorm:"column:asset;type:json;not null" json:"asset"`
+	Asset     datatypes.JSONType[CoverAssetPayload] `gorm:"column:asset;type:jsonb;not null" json:"asset"`
 	CreatedAt time.Time                             `gorm:"column:created_at" json:"createdAt"`
 	UpdatedAt time.Time                             `gorm:"column:updated_at" json:"updatedAt"`
 }
@@ -108,7 +108,7 @@ type ClientVersion struct {
 	BuildNumber int       `gorm:"column:build_number;type:int;not null" json:"buildNumber"`
 	DownloadUrl string    `gorm:"column:download_url;type:varchar(255);not null" json:"downloadUrl"`
 	ReleaseNote string    `gorm:"column:release_note;type:text" json:"releaseNote"`
-	ForceUpdate bool      `gorm:"column:force_update;type:tinyint(1);not null;default:false" json:"forceUpdate"`
+	ForceUpdate bool      `gorm:"column:force_update;type:boolean;not null;default:false" json:"forceUpdate"`
 	CreatedAt   time.Time `gorm:"column:created_at" json:"createdAt"`
 	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updatedAt"`
 }

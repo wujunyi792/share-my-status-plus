@@ -6,7 +6,7 @@ import (
 	"share-my-status/model"
 
 	"github.com/sirupsen/logrus"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -28,7 +28,7 @@ func Init(cfg *config.Config) (*gorm.DB, error) {
 	}
 
 	// 连接数据库
-	db, err := gorm.Open(mysql.Open(dbCfg.DSN), gormConfig)
+	db, err := gorm.Open(postgres.Open(dbCfg.DSN), gormConfig)
 	if err != nil {
 		logrus.Errorf("Failed to connect to database: %v", err)
 		return nil, err

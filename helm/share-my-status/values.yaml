@@ -6,7 +6,7 @@ nameOverride: ""
 fullnameOverride: ""
 
 release:
-  backendVersion: "1.0.5-1"
+  backendVersion: "1.0.5-2"
   frontendVersion: "1.0.5-2"
 
 serviceAccount:
@@ -125,13 +125,12 @@ ingress:
         - /
   tls: []
 
-mysql:
+postgresql:
   enabled: false
   auth:
-    rootPassword: root_password_change_me
-    database: share_my_status
-    username: share_user
-    password: share_password_change_me
+    database: status-sharing
+    username: status_sharing
+    password: postgres_password_change_me
   primary:
     persistence:
       enabled: true

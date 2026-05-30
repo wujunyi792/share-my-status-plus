@@ -10,12 +10,12 @@
 - WebSocket实时通信（使用Hertz WebSocket）
 - 飞书集成（消息命令、链接预览）
 - Redis缓存
-- MySQL数据库
+- PostgreSQL数据库
 
 ## 技术栈
 
 - **框架**: Hertz (CloudWeGo)
-- **数据库**: MySQL 8.0 + GORM
+- **数据库**: PostgreSQL + GORM
 - **缓存**: Redis
 - **WebSocket**: hertz-contrib/websocket
 - **飞书SDK**: larksuite/oapi-sdk-go
@@ -54,7 +54,7 @@ DEBUG=true
 DEFAULT_TZ=Asia/Shanghai
 
 # 数据库配置
-DB_DSN=user:password@tcp(localhost:3306)/share_my_status?charset=utf8mb4&parseTime=True&loc=Local
+DB_DSN=host=localhost user=status_sharing password=postgres_password_change_me dbname=status-sharing port=5432 sslmode=disable TimeZone=Asia/Shanghai
 DB_MAX_IDLE_CONNS=10
 DB_MAX_OPEN_CONNS=100
 DB_CONN_MAX_LIFETIME=3600
@@ -76,7 +76,7 @@ LOG_FORMAT=json
 ## 数据库初始化
 
 ```sql
-CREATE DATABASE share_my_status CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE "status-sharing";
 ```
 
 应用启动时会自动创建表结构。
