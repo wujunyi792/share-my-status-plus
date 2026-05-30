@@ -21,6 +21,7 @@ jobs:
   build_macos_client:
     name: Build, Sign, Notarize & Upload
     runs-on: macos-26
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -241,22 +242,23 @@ jobs:
       # ---------------------------------------------------------------------
       - name: Generate signed appcast
         id: appcast
+        timeout-minutes: 5
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          # Fetch Sparkle's CLI tools (sign_update, generate_keys).
+          # Fetch Sparkle's CLI tools (sign_update).
           curl -fsSL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" -o "$RUNNER_TEMP/sparkle.tar.xz"
           mkdir -p "$RUNNER_TEMP/sparkle"
           tar -xJf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
           BIN="$RUNNER_TEMP/sparkle/bin"
 
-          # Import the EdDSA private key into the keychain so sign_update can use it.
+          # Sign the DMG by reading the EdDSA key from a FILE, never the Keychain.
+          # generate_keys/keychain access hangs forever on headless CI (no GUI to
+          # approve the keychain prompt). --ed-key-file avoids the Keychain entirely.
+          # Prints: sparkle:edSignature="..." length="..."
           printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle_ed_priv"
-          "$BIN/generate_keys" -f "$RUNNER_TEMP/sparkle_ed_priv"
-
-          # sign_update prints: sparkle:edSignature="..." length="..."
-          SIG_ATTRS=$("$BIN/sign_update" "$DMG_PATH")
+          SIG_ATTRS=$("$BIN/sign_update" --ed-key-file "$RUNNER_TEMP/sparkle_ed_priv" "$DMG_PATH")
           echo "Signature attrs: $SIG_ATTRS"
 
           ARTIFACT="${{ steps.version.outputs.ARTIFACT_BASE }}.dmg"
