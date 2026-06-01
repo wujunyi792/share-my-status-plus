@@ -52,6 +52,10 @@ APP_ENV=dev
 HTTP_PORT=8080
 DEBUG=true
 DEFAULT_TZ=Asia/Shanghai
+ENDPOINT=https://status-sharing.example.com
+REDIRECT_DEFAULT_TARGET=https://status-sharing.example.com/status/{SharingKey}
+USER_PROFILE_URL_TEMPLATE=https://status-sharing.example.com/status/{SharingKey}
+USER_DOC_URL=https://example.com/share-my-status-doc
 
 # 数据库配置
 DB_DSN=host=localhost user=status_sharing password=postgres_password_change_me dbname=status-sharing port=5432 sslmode=disable TimeZone=Asia/Shanghai
