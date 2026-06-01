@@ -64,6 +64,33 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Version=$VERSION Build=$BUILD_NUMBER Tag=$TAG_NAME"
 
+      - name: Guard Sparkle build number monotonicity
+        env:
+          APPCAST_URL: https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml
+          NEW_BUILD_NUMBER: ${{ steps.version.outputs.BUILD_NUMBER }}
+        run: |
+          set -euo pipefail
+          APPCAST_PATH="$RUNNER_TEMP/latest-appcast.xml"
+          if ! curl -fsSL "$APPCAST_URL" -o "$APPCAST_PATH"; then
+            echo "No existing appcast found at $APPCAST_URL; skipping monotonic build check."
+            exit 0
+          fi
+
+          LATEST_BUILD_NUMBER=$(sed -n 's#.*<sparkle:version>\([^<]*\)</sparkle:version>.*#\1#p' "$APPCAST_PATH" | head -n 1 | tr -d '[:space:]')
+          if [ -z "$LATEST_BUILD_NUMBER" ]; then
+            echo "::error::Could not parse sparkle:version from latest appcast at $APPCAST_URL."
+            exit 1
+          fi
+          if ! echo "$LATEST_BUILD_NUMBER" | grep -Eq '^[0-9]+$'; then
+            echo "::error::Latest appcast sparkle:version '$LATEST_BUILD_NUMBER' is not a numeric build number."
+            exit 1
+          fi
+          if [ "$NEW_BUILD_NUMBER" -le "$LATEST_BUILD_NUMBER" ]; then
+            echo "::error::macOS build number must increase for Sparkle updates. New build $NEW_BUILD_NUMBER is not greater than latest appcast build $LATEST_BUILD_NUMBER."
+            exit 1
+          fi
+          echo "Sparkle build monotonicity check passed: $NEW_BUILD_NUMBER > $LATEST_BUILD_NUMBER."
+
       # ---------------------------------------------------------------------
       # Import the Developer ID Application certificate into a temp keychain
       # ---------------------------------------------------------------------
