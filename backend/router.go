@@ -5,12 +5,15 @@ package main
 import (
 	"share-my-status/api/handler/legacy"
 	share_my_status "share-my-status/api/handler/share_my_status"
+	"share-my-status/api/middleware"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 )
 
 // customizeRegister registers customize routers.
 func customizedRegister(r *server.Hertz) {
+	r.GET("/api/v1/client/resources", middleware.SecretKeyAuth(), share_my_status.ClientResources)
+	r.GET("/api/v1/render/template-config", share_my_status.RenderTemplateConfig)
 	r.GET("/api/v1/render", share_my_status.RenderPreview)
 
 	// 注册旧版兼容接口

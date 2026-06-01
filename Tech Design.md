@@ -63,72 +63,64 @@
 | --- | --- |
 | - **滚动窗口**：近3天/近7天，区间 `[now-72h, now]` / `[now-168h, now]`，随时间滑动。<br>- **日历窗口**：当月/当年，区间 `[当地时区当月1日00:00, now]` / `[当地时区1月1日00:00, now]`。<br>- **自定义窗**：用户指定 `[start, end]` 与 `tz`，服务端按时区归一。 | - **本月**：`[2025-10-01 00:00, now]`（Asia/Shanghai）。<br>- **今年**：`[2025-01-01 00:00, now]`（Asia/Shanghai）。<br>- 统一语义避免跨时区误差，响应体回显 `fromTs/toTs/tz`。 |
 
-### 3.1 链接定制与模板渲染
-公开分享链接格式：`https://example.com/x/{SharingKey}?r=&m=`。
+### 3.1 模板配置与渲染
+业务平台负责外层链接解析与 DIY 页面；后端提供标准 render 能力与精简模板变量配置。
+
+推荐渲染调用：`GET /api/v1/render?sharingKey={sharingKey}&m={encodedTemplate}`。
+
+兼容渲染调用：`GET /api/v1/render?url={encodedStandardShareURL}`。`url` 仅支持标准 `/s/{SharingKey}` 分享链接，不解析业务平台包装链接。
+
+模板配置：`GET /api/v1/render/template-config`，返回 `defaultTemplate`、`variables`、`expressions`。
 
 **变量总表（按类别分组）**：下列变量均来自后端可计算且允许对外呈现的最小字段集合，严格遵循隐私最小化原则；**仅支持本表列出的变量**，未列出的变量不可用。
 
 #### 3.1.1 实时音乐
-| 变量 | 含义 | 类型 | 来源字段或计算方式 | 示例 | 空值回退策略 | 长度与安全约束 | 
-| --- | --- | --- | --- | --- | --- | --- | 
-| `{artist}` | 歌手 | string | `snapshot.music.artist` | Taylor Swift | 空串或“未知” | **≤256**；**HTML/XSS 转义**；建议仅中英文、数字与常见标点 | 
-| `{title}` | 歌曲名 | string | `snapshot.music.title` | Love Story | 空串或“未知” | **≤256**；**HTML/XSS 转义**；建议仅中英文、数字与常见标点 | 
-| `{album}` | 专辑名 | string | `snapshot.music.album` | 1989 | 空串或“未知” | **≤256**；**HTML/XSS 转义**；建议仅中英文、数字与常见标点 | 
+| 变量 | 含义 | 类型 | 来源字段或计算方式 | 示例 | 空值回退策略 | 长度与安全约束 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{artist}` | 歌手 | string | `snapshot.music.artist` | Taylor Swift | 空串或“未知” | **≤256**；**HTML/XSS 转义**；建议仅中英文、数字与常见标点 |
+| `{title}` | 歌曲名 | string | `snapshot.music.title` | Love Story | 空串或“未知” | **≤256**；**HTML/XSS 转义**；建议仅中英文、数字与常见标点 |
+| `{album}` | 专辑名 | string | `snapshot.music.album` | 1989 | 空串或“未知” | **≤256**；**HTML/XSS 转义**；建议仅中英文、数字与常见标点 |
 
 #### 3.1.2 实时系统
-| 变量 | 含义 | 类型 | 来源字段或计算方式 | 示例 | 空值回退策略 | 长度与安全约束 | 
-| --- | --- | --- | --- | --- | --- | --- | 
-| `{batteryPct}` | 电量百分比（0–1） | number | `snapshot.system.batteryPct` | 0.82 | N/A 或空串 | 取值范围 **[0,1]**；用于派生显示 | 
-| `{charging}` | 充电中 | boolean | `snapshot.system.charging` | true | 视为 false | 布尔值；**支持三元表达式** `{charging?'充电中':'未在冲电'}`；仅允许基本条件表达式，不支持复杂逻辑/函数调用 | 
-| `{cpuPct}` | CPU 使用率（0–1） | number | `snapshot.system.cpuPct` | 0.23 | N/A 或空串 | 取值范围 **[0,1]**；用于派生显示 | 
-| `{memoryPct}` | 内存使用率（0–1） | number | `snapshot.system.memoryPct` | 0.58 | N/A 或空串 | 取值范围 **[0,1]**；用于派生显示 | 
+| 变量 | 含义 | 类型 | 来源字段或计算方式 | 示例 | 空值回退策略 | 长度与安全约束 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{batteryPct}` | 电量百分比（0–1） | number | `snapshot.system.batteryPct` | 0.82 | N/A 或空串 | 取值范围 **[0,1]**；用于派生显示 |
+| `{cpuPct}` | CPU 使用率（0–1） | number | `snapshot.system.cpuPct` | 0.23 | N/A 或空串 | 取值范围 **[0,1]**；用于派生显示 |
+| `{memoryPct}` | 内存使用率（0–1） | number | `snapshot.system.memoryPct` | 0.58 | N/A 或空串 | 取值范围 **[0,1]**；用于派生显示 |
+
+`charging` 只作为三元表达式条件变量开放，不作为 `{charging}` 独立占位符开放。
 
 #### 3.1.3 实时活动
-| 变量 | 含义 | 类型 | 来源字段或计算方式 | 示例 | 空值回退策略 | 长度与安全约束 | 
-| --- | --- | --- | --- | --- | --- | --- | 
-| `{activityLabel}` | 正在做的事标签 | string | `snapshot.activity.label` | 在工作 | 空串或“未知” | **≤64**；**HTML/XSS 转义**；不含应用名/窗口原文 | 
+| 变量 | 含义 | 类型 | 来源字段或计算方式 | 示例 | 空值回退策略 | 长度与安全约束 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{activityLabel}` | 正在做的事标签 | string | `snapshot.activity.label` | 在工作 | 空串或“未知” | **≤64**；**HTML/XSS 转义**；不含应用名/窗口原文 |
 
 #### 3.1.4 派生显示
-| 变量 | 含义 | 类型 | 来源字段或计算方式 | 示例 | 空值回退策略 | 长度与安全约束 | 
-| --- | --- | --- | --- | --- | --- | --- | 
-| `{batteryPctRounded}` | 电量百分比（整数） | number | `round(batteryPct*100)` | 82 | 显示 `N/A` | **0–100**；**四舍五入**到整数（half up） | 
-| `{cpuPctRounded}` | CPU 使用率（整数） | number | `round(cpuPct*100)` | 23 | 显示 `N/A` | **0–100**；**四舍五入**到整数（half up） | 
-| `{memoryPctRounded}` | 内存使用率（整数） | number | `round(memoryPct*100)` | 58 | 显示 `N/A` | **0–100**；**四舍五入**到整数（half up） | 
+| 变量 | 含义 | 类型 | 来源字段或计算方式 | 示例 | 空值回退策略 | 长度与安全约束 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{batteryPctRounded}` | 电量百分比（整数） | number | `round(batteryPct*100)` | 82 | 显示 `N/A` | **0–100**；**四舍五入**到整数（half up） |
+| `{cpuPctRounded}` | CPU 使用率（整数） | number | `round(cpuPct*100)` | 23 | 显示 `N/A` | **0–100**；**四舍五入**到整数（half up） |
+| `{memoryPctRounded}` | 内存使用率（整数） | number | `round(memoryPct*100)` | 58 | 显示 `N/A` | **0–100**；**四舍五入**到整数（half up） |
 
 #### 3.1.5 时间环境
-| 变量 | 含义 | 类型 | 来源字段或计算方式 | 示例 | 空值回退策略 | 长度与安全约束 | 
-| --- | --- | --- | --- | --- | --- | --- | 
-| `{nowISO}` | 当前时间（ISO 8601） | string | `now()` 按 `tz` 输出 RFC3339 | 2025-10-03T14:22:33+08:00 | 空串 | **≤64**；**Asia/Shanghai** 默认，可配置 | 
-| `{nowLocal}` | 当前时间（本地时区） | string | `now()` 本地格式 | 2025-10-03 14:22:33 | 空串 | **≤32**；**Asia/Shanghai** 默认，可配置 | 
-| `{dateYMD}` | 日期字符串 | string | `formatDate(now, 'YYYY-MM-DD')` | 2025-10-03 | 空串 | **≤16**；数字与连字符 | 
-
-#### 3.1.6 聚合统计
-> **注意事项**：
-> - 以下变量需用户**显式授权**历史存储与汇总；来源为统计表。
-> - **链接预览暂不支持聚合统计变量**：出于性能考虑，飞书签名链接预览**不渲染**聚合统计变量（`{topArtist}` 等）；这些变量**仅在 Web 公开页与客户端 UI 预览**中可用。
-
-| 变量 | 含义 | 类型 | 来源字段或计算方式 | 示例 | 空值回退策略 | 长度与安全约束 | 
-| --- | --- | --- | --- | --- | --- | --- | 
-| `{topArtist}` | 窗口内播放最多的歌手 | string | `stats.topArtists[0].name` | Coldplay | 空串或"未知" | **≤256**；**HTML/XSS 转义** | 
-| `{topTitle}` | 窗口内播放最多的歌曲名 | string | `stats.topTracks[0].track` | Yellow | 空串或"未知" | **≤256**；**HTML/XSS 转义** | 
-| `{uniqueTracks}` | 唯一歌曲数 | number | `stats.uniqueTracks` | 58 | 显示 `0` | 非负整数；**≤10^9** | 
-| `{playCountWindow}` | 统计窗口描述 | string | `window.type` 映射 | 近7天 | 空串 | **≤32**；受 `tz` 影响，默认 **Asia/Shanghai** | 
+| 变量 | 含义 | 类型 | 来源字段或计算方式 | 示例 | 空值回退策略 | 长度与安全约束 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{nowISO}` | 当前时间（ISO 8601） | string | `now()` 按 `tz` 输出 RFC3339 | 2025-10-03T14:22:33+08:00 | 空串 | **≤64**；**Asia/Shanghai** 默认，可配置 |
+| `{nowLocal}` | 当前时间（本地时区） | string | `now()` 本地格式 | 2025-10-03 14:22:33 | 空串 | **≤32**；**Asia/Shanghai** 默认，可配置 |
+| `{dateYMD}` | 日期字符串 | string | `formatDate(now, 'YYYY-MM-DD')` | 2025-10-03 | 空串 | **≤16**；数字与连字符 |
 
 **模板使用规则**：
 
-- `m`（mark）作为**轻量文本模板**，支持**本表 3.1.1-3.1.6 列出的所有变量**与**基本条件表达式**。**默认模板**为"`{artist}的{title}`"。当某字段缺失时，自动删除该占位符；布尔变量缺失时**按默认视为 false**处理。
+- `m`（mark）作为**轻量文本模板**，支持**本表 3.1.1-3.1.5 列出的所有变量**与 `charging` 三元表达式。**默认模板**为"`正在听{artist}-{title}`"。当某字段缺失时，自动删除该占位符；`charging` 缺失时按 `false` 处理。
 
 - **支持的变量类别**：
   - **实时音乐**：`{artist}` `{title}` `{album}`
-  - **实时系统**：`{batteryPct}` `{charging}` `{cpuPct}` `{memoryPct}`
+  - **实时系统**：`{batteryPct}` `{cpuPct}` `{memoryPct}`
   - **实时活动**：`{activityLabel}`
   - **派生显示**：`{batteryPctRounded}` `{cpuPctRounded}` `{memoryPctRounded}`
   - **时间环境**：`{nowISO}` `{nowLocal}` `{dateYMD}`
-  - **聚合统计**（需授权，**仅 Web 页可用**）：`{topArtist}` `{topTitle}` `{uniqueTracks}` `{playCountWindow}`
 
-- **条件表达式支持**：布尔变量（如 `{charging}`）支持三元表达式 `{charging?'充电中':'未在冲电'}`，仅允许**基本条件表达式**，不支持复杂逻辑、函数调用或嵌套表达式。
-
-- **性能限制**：**飞书签名链接预览暂不支持聚合统计变量**（`{topArtist}` 等），这些变量仅在 Web 公开页渲染。
+- **条件表达式支持**：`charging` 支持三元表达式 `{charging?'充电中':'未充电'}`、`{charging?'⚡':''}`，不支持复杂逻辑、函数调用或嵌套表达式。
 
 - **模板示例**：
 ```
@@ -136,12 +128,7 @@
 {title}（{album}）{charging?'⚡':''}
 {activityLabel} | 🎵{artist}-{title} | 🔋{batteryPctRounded}%
 正在听 {title} · {dateYMD}
-{topArtist} 最多播放 · 本月已听{uniqueTracks}首
 ```
-
-**r 参数与安全校验**：
-
-- `r`（redirect）必须以 `http://` 或 `https://` 开头；执行**协议校验**、**域名白名单校验**与**XSS/HTML 转义**；空值表示不配置跳转。
 
 > **安全与格式化说明**：
 > - **长度上限**：所有文本变量建议**≤256**；过长将截断并转义。
@@ -293,92 +280,27 @@ Content-Type: application/json
 
 - 失败重试与本地缓冲：环形缓冲最多 50 条，队列满时丢弃**旧事件**保留最新。
 
-### 7.1 链接定制 UI
-用户在客户端内置的"链接定制"界面中，粘贴基础链接 `https://example.com/x/{SharingKey}?r=&m=`，系统自动解析并可视化拼接。
+### 7.1 资源链接与外部配置入口
+macOS 客户端不再内置链接定制 UI。用户配置服务器地址与 Secret Key 后，客户端自动请求：
 
-#### 7.1.1 自动解析与参数校验
-- **提取 `SharingKey`**：从路径段 `x/{SharingKey}` 解析。
-
-- **`r` 参数（redirect）**：
-  - 必须以 `http://` 或 `https://` 开头。
-  - 执行**协议校验**、**域名白名单校验**、**HTML/XSS 转义**。
-  - 非法时给出红色提示并禁用"生成链接"；空值表示不配置跳转。
-
-- **`m` 参数（mark 模板）**：
-  - 支持**本文档 3.1.1-3.1.6 节列出的所有变量**（详见下方变量清单）。
-  - 默认模板为"`{artist}的{title}`"。
-  - 支持布尔变量的三元表达式（如 `{charging?'充电中':'未在冲电'}`），当布尔变量缺失时视为 `false`。
-  - **模板规则限制**：仅允许使用文档定义的变量与基本条件表达式；不支持复杂逻辑、函数调用或嵌套表达式。
-
-#### 7.1.2 可用变量清单（参照 3.1 节）
-客户端 UI 应提供**变量选择器**或**插入按钮**，便于用户可视化构建模板：
-
-| 变量类别 | 变量名 | 说明 | 示例值 |
-| --- | --- | --- | --- |
-| **实时音乐** | `{artist}` | 歌手 | Taylor Swift |
-|  | `{title}` | 歌曲名 | Love Story |
-|  | `{album}` | 专辑名 | 1989 |
-| **实时系统** | `{batteryPct}` | 电量百分比（0–1） | 0.82 |
-|  | `{charging}` | 充电中（布尔） | true |
-|  | `{cpuPct}` | CPU 使用率（0–1） | 0.23 |
-|  | `{memoryPct}` | 内存使用率（0–1） | 0.58 |
-| **实时活动** | `{activityLabel}` | 正在做的事标签 | 在工作 |
-| **派生显示** | `{batteryPctRounded}` | 电量百分比（整数 0–100） | 82 |
-|  | `{cpuPctRounded}` | CPU 使用率（整数 0–100） | 23 |
-|  | `{memoryPctRounded}` | 内存使用率（整数 0–100） | 58 |
-| **时间环境** | `{nowISO}` | 当前时间（ISO 8601） | 2025-10-03T14:22:33+08:00 |
-|  | `{nowLocal}` | 当前时间（本地格式） | 2025-10-03 14:22:33 |
-|  | `{dateYMD}` | 日期字符串（YYYY-MM-DD） | 2025-10-03 |
-| **聚合统计**（需授权，**仅 Web 页**） | `{topArtist}` | 窗口内播放最多的歌手 | Coldplay |
-|  | `{topTitle}` | 窗口内播放最多的歌曲名 | Yellow |
-|  | `{uniqueTracks}` | 唯一歌曲数 | 58 |
-|  | `{playCountWindow}` | 统计窗口描述 | 近7天 |
-
-> **性能限制**：聚合统计变量（`{topArtist}` `{topTitle}` `{uniqueTracks}` `{playCountWindow}`）出于性能考虑，**暂不支持在飞书签名链接预览中渲染**，仅在 Web 公开页和客户端 UI 预览中可用。
-
-#### 7.1.3 可视化拼接与实时预览
-- **所见即所得编辑器**：提供变量插入按钮或下拉选择器，用户点击即可插入变量占位符。
-
-- **实时预览面板**：以当前状态快照渲染模板文本，实时显示最终效果。
-  - 当某字段缺失时，自动删除该占位符或显示回退值（如"未知"）。
-  - 布尔变量（如 `{charging}`）按三元表达式规则渲染。
-  - 聚合统计变量在未授权时显示"需授权"提示；**即使已授权，也应提示"仅在 Web 页显示，飞书链接预览不支持"**。
-
-- **校验与提示**：
-  - **长度建议 ≤256**；超限时显示截断提示。
-  - 统一做 **HTML/XSS 转义**。
-  - **字符集建议**：中英文、数字与常见标点；可直接使用 Emoji 常量。
-
-- **一键复制**：点击"复制最终链接"将**规范化后的 URL**（含转义后的参数）放入剪贴板。
-
-#### 7.1.4 模板示例（供 UI 参考）
-```
-{artist}的{title} — {charging?'充电中':'未在冲电'}
-{title}（{album}）{charging?'⚡':''}
-{activityLabel} | 🎵{artist}-{title} | 🔋{batteryPctRounded}%
-正在听 {title} · {dateYMD}
-{topArtist} 最多播放 · 本月已听{uniqueTracks}首
+```http
+GET /api/v1/client/resources
+X-Secret-Key: <secret>
 ```
 
-#### 7.1.5 与本地设置联动
-- **白名单联动**：变量渲染仅来自被允许的采集源（如仅 QQ 音乐）；未允许的源将显示"未采集"或置空。
+响应只返回当前客户端可展示的链接：
 
-- **隐私开关联动**：当用户关闭某类采集（如活动、系统指标），对应变量自动置空或不渲染；UI 应在变量选择器中**灰显或标注**已关闭的采集项。
+```json
+{
+  "userDocUrl": "https://example.com/share-my-status-doc",
+  "feishuSignatureDiyUrl": "https://example.com/signature-diy?sharingKey=preview-sharing-key"
+}
+```
 
-- **授权状态联动**：聚合统计变量（`{topArtist}` 等）在未授权时，UI 应**提示用户开启授权**并链接到授权设置；已授权时正常渲染。
-
-- **性能限制提示**：当用户选择或插入聚合统计变量时，UI 应**明确提示**："聚合统计变量仅在 Web 公开页显示，飞书签名链接预览暂不支持（性能考虑）"。建议在变量选择器中对聚合统计类别添加图标或标签（如 "🌐 仅 Web"）。
-
-- **错误提示与兜底**：
-  - 解析失败或预览不可用时，降级为默认模板"`{artist}的{title}`"。
-  - 当无音乐播放时显示"未在播放"；无活动时显示"无活动"。
-  - 模板语法错误时，给出明确错误提示（如"不支持的变量"或"表达式格式错误"）。
-
-> **客户端链接定制安全与兜底**：
-> - 所有用户输入（`r`/`m` 参数）统一做 **协议校验 + 白名单校验 + HTML/XSS 转义**。
-> - 布尔变量的三元表达式仅允许**简单条件**；不支持函数调用与嵌套逻辑。
-> - 当链接不可用或模板变量缺失时，**自动回退**到默认模板并提示用户。
-> - 变量值的**长度与安全约束**详见本文档 3.1 节变量总表。
+- `userDocUrl` 来自 `USER_DOC_URL`。
+- `feishuSignatureDiyUrl` 来自 `FEISHU_SIGNATURE_DIY_URL`，服务端会按当前用户替换 `{SharingKey}`。
+- 客户端设置页只把这些资源展示为超链接，包括"说明文档"与"个性签名 DIY"。
+- 链接模板编辑、变量选择、外层包装链接解析均由业务平台负责；业务平台转换后调用后端标准 render 能力。
 
 ## 8 通用上报协议（Go 强类型与 JSON）
 **事件类型与版本**：使用 `version:"1"`。支持 `system`、`music`、`activity` 三类载荷，允许**批量上报**与**幂等**。
@@ -1248,4 +1170,3 @@ kubectl -n share-my-status get pods
 - **移动端支持**：iOS/Android 客户端采集与展示（同样遵循最小化字段）。
 
 - **开放 API**：对授权用户开放只读统计查询与最近状态读取接口。
-

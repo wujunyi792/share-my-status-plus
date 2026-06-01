@@ -38,6 +38,7 @@ type AppConfig struct {
 	Endpoint                   string `json:"endpoint"`
 	UserProfileURLTemplate     string `json:"userProfileUrlTemplate"`
 	FeishuSignatureURLTemplate string `json:"feishuSignatureUrlTemplate"`
+	FeishuSignatureDIYURL      string `json:"feishuSignatureDiyUrl"`
 	UserDocURL                 string `json:"userDocUrl"`
 }
 
@@ -96,6 +97,7 @@ func Init() (*Config, error) {
 			Endpoint:                   getEnv("ENDPOINT", "https://example.com"),
 			UserProfileURLTemplate:     getEnv("USER_PROFILE_URL_TEMPLATE", ""),
 			FeishuSignatureURLTemplate: getEnv("FEISHU_SIGNATURE_URL_TEMPLATE", ""),
+			FeishuSignatureDIYURL:      getEnv("FEISHU_SIGNATURE_DIY_URL", ""),
 			UserDocURL:                 getEnv("USER_DOC_URL", ""),
 		},
 		Database: DatabaseConfig{

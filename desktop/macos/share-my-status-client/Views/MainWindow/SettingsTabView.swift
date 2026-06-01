@@ -10,9 +10,10 @@ import UniformTypeIdentifiers
 /// Settings tab view for app configuration
 struct SettingsTabView: View {
     @EnvironmentObject var configuration: AppConfiguration
+    @EnvironmentObject var coordinator: AppCoordinator
     @State private var accessibilityGranted = AccessibilityPermissionChecker.isAccessibilityGranted()
     @State private var showAccessibilityHelp = false
-    
+
     // Import/Export states
     @State private var showExportOptions = false
     @State private var includeSecretKeyInExport = false
@@ -24,13 +25,10 @@ struct SettingsTabView: View {
     @State private var importJSONText = ""
     @State private var showValidationError = false
     @State private var validationErrorMessage = ""
-    
+
     // Secret key visibility
     @State private var isSecretKeyVisible = false
-    
-    // Link customization
-    @State private var showLinkCustomizer = false
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Fixed Title Bar with background
@@ -46,9 +44,9 @@ struct SettingsTabView: View {
             .padding(.horizontal)
             .padding(.vertical, 12)
             .background(Color(NSColor.controlBackgroundColor))
-            
+
             Divider()
-            
+
             // Scrollable Content
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -68,9 +66,9 @@ struct SettingsTabView: View {
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
-                            
+
                             Spacer()
-                            
+
                             // Status indicator
                             HStack(spacing: 6) {
                                 Image(systemName: accessibilityGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
@@ -81,7 +79,7 @@ struct SettingsTabView: View {
                                     .fontWeight(.medium)
                                     .foregroundColor(accessibilityGranted ? .green : .red)
                             }
-                            
+
                             // Refresh button
                             Button(action: {
                                 accessibilityGranted = AccessibilityPermissionChecker.isAccessibilityGranted()
@@ -91,7 +89,7 @@ struct SettingsTabView: View {
                             }
                             .buttonStyle(.borderless)
                             .help("刷新权限状态")
-                            
+
                             // Settings button (when not granted)
                             if !accessibilityGranted {
                                 Button(action: {
@@ -108,7 +106,7 @@ struct SettingsTabView: View {
                                 .controlSize(.mini)
                             }
                         }
-                        
+
                         // Compact hint (only when not granted)
                         if !accessibilityGranted {
                             HStack(spacing: 4) {
@@ -125,7 +123,7 @@ struct SettingsTabView: View {
                     .padding(.vertical, 8)
                     .padding(.horizontal, 4)
                 }
-                
+
                 // Network Settings
                 GroupBox("网络设置") {
                     VStack(alignment: .leading, spacing: 15) {
@@ -135,7 +133,7 @@ struct SettingsTabView: View {
                             TextField(DefaultSettings.endpointURL, text: $configuration.endpointURL)
                                 .textFieldStyle(.roundedBorder)
                         }
-                        
+
                         VStack(alignment: .leading, spacing: 5) {
                             Text("密钥")
                                 .font(.headline)
@@ -147,7 +145,7 @@ struct SettingsTabView: View {
                                     SecureField("输入API密钥", text: $configuration.secretKey)
                                         .textFieldStyle(.roundedBorder)
                                 }
-                                
+
                                 Button(action: {
                                     isSecretKeyVisible.toggle()
                                 }) {
@@ -163,7 +161,47 @@ struct SettingsTabView: View {
                     .padding(.vertical, 8)
                     .padding(.horizontal, 4)
                 }
-                
+
+                GroupBox("资源链接") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let resources = coordinator.clientResources,
+                           hasResourceLinks(resources) {
+                            ResourceLinkRow(
+                                title: "说明文档",
+                                systemImage: "book",
+                                urlString: resources.userDocUrl
+                            )
+                            ResourceLinkRow(
+                                title: "个性签名 DIY",
+                                systemImage: "wand.and.stars",
+                                urlString: resources.feishuSignatureDiyUrl
+                            )
+                        } else {
+                            Text("配置服务器地址和密钥后自动获取")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if let error = coordinator.clientResourcesError {
+                            Text("暂时无法获取资源链接：\(error)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Button(action: {
+                            Task { @MainActor in
+                                await coordinator.refreshClientResources()
+                            }
+                        }) {
+                            Label("刷新资源链接", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 4)
+                }
+
                 // Feature Settings
                 GroupBox("功能设置") {
                     VStack(alignment: .leading, spacing: 15) {
@@ -171,15 +209,15 @@ struct SettingsTabView: View {
                         Toggle("音乐信息上报", isOn: $configuration.musicReportingEnabled)
                             .font(.subheadline)
                             .fontWeight(.medium)
-                            
+
                             Divider()
-                            
+
                             // System Monitoring
                             VStack(alignment: .leading, spacing: 10) {
                                 Toggle("系统指标上报", isOn: $configuration.systemReportingEnabled)
                                     .font(.subheadline)
                                     .fontWeight(.medium)
-                                
+
                                 if configuration.systemReportingEnabled {
                                     VStack(alignment: .leading, spacing: 5) {
                                         HStack {
@@ -205,15 +243,15 @@ struct SettingsTabView: View {
                                     .padding(.leading, 20)
                                 }
                             }
-                            
+
                             Divider()
-                            
+
                             // Activity Detection
                             VStack(alignment: .leading, spacing: 10) {
                                 Toggle("活动检测上报", isOn: $configuration.activityReportingEnabled)
                                     .font(.subheadline)
                                     .fontWeight(.medium)
-                                
+
                                 if configuration.activityReportingEnabled {
                                     VStack(alignment: .leading, spacing: 5) {
                                         HStack {
@@ -243,8 +281,8 @@ struct SettingsTabView: View {
                     .padding(.vertical, 8)
                     .padding(.horizontal, 4)
                 }
-                
-                // 更新检查已默认开启；如有更新将在状态页与菜单栏提示                
+
+                // 更新检查已默认开启；如有更新将在状态页与菜单栏提示
                 // Music Settings
                 if configuration.musicReportingEnabled {
                     GroupBox("音乐设置") {
@@ -258,7 +296,7 @@ struct SettingsTabView: View {
                         .padding(.horizontal, 4)
                     }
                 }
-                
+
                 // Activity Settings
                 if configuration.activityReportingEnabled {
                     GroupBox("活动设置") {
@@ -267,44 +305,14 @@ struct SettingsTabView: View {
                             .padding(.horizontal, 4)
                     }
                 }
-                
-                // Link Customization
-                GroupBox("链接定制") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("创建自定义飞书签名链接，展示实时状态信息")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Button(action: {
-                            showLinkCustomizer = true
-                        }) {
-                            HStack {
-                                Image(systemName: "link.badge.plus")
-                                Text("打开链接定制工具")
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .foregroundColor(.secondary)
-                                    .imageScale(.small)
-                            }
-                            .padding(.vertical, 8)
-                        }
-                        .buttonStyle(.plain)
-                        .sheet(isPresented: $showLinkCustomizer) {
-                            CustomLinkView()
-                                .frame(width: 700, height: 800)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 4)
-                }
-                
+
                 // Import/Export Settings
                 GroupBox("配置管理") {
                     VStack(alignment: .leading, spacing: 15) {
                         Text("导入或导出当前配置，便于备份或在多台设备间同步设置")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        
+
                         HStack(spacing: 12) {
                             // Export Button
                             Button(action: {
@@ -335,7 +343,7 @@ struct SettingsTabView: View {
                                     }
                                 )
                             }
-                            
+
                             // Import Button
                             Button(action: {
                                 showImportDialog = true
@@ -381,7 +389,7 @@ struct SettingsTabView: View {
                                 )
                             }
                         }
-                        
+
                         // Success/Error messages
                         if showExportSuccess {
                             HStack {
@@ -400,7 +408,7 @@ struct SettingsTabView: View {
                                 }
                             }
                         }
-                        
+
                         if showImportSuccess {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
@@ -418,7 +426,7 @@ struct SettingsTabView: View {
                                 }
                             }
                         }
-                        
+
                         if showImportError && !showImportDialog {
                             HStack {
                                 Image(systemName: "exclamationmark.triangle.fill")
@@ -442,7 +450,7 @@ struct SettingsTabView: View {
                             .background(Color.orange.opacity(0.1))
                             .cornerRadius(6)
                         }
-                        
+
                         if showValidationError && !showImportDialog {
                             HStack {
                                 Image(systemName: "xmark.circle.fill")
@@ -470,7 +478,7 @@ struct SettingsTabView: View {
                     .padding(.vertical, 8)
                     .padding(.horizontal, 4)
                 }
-                
+
                 // App Information
                 GroupBox("应用信息") {
                     VStack(alignment: .leading, spacing: 12) {
@@ -483,9 +491,9 @@ struct SettingsTabView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
-                            
+
                             Spacer()
-                            
+
                             VStack(alignment: .trailing, spacing: 4) {
                                 Text("构建版本")
                                     .font(.subheadline)
@@ -495,9 +503,9 @@ struct SettingsTabView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
-                        
+
                         Divider()
-                        
+
                         VStack(alignment: .leading, spacing: 8) {
                             Text("应用标识符")
                                 .font(.subheadline)
@@ -506,7 +514,7 @@ struct SettingsTabView: View {
                                 Text(Bundle.main.bundleIdentifier ?? "未知")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                
+
                                 Button(action: {
                                     if let bundleId = Bundle.main.bundleIdentifier {
                                         NSPasteboard.general.clearContents()
@@ -525,16 +533,16 @@ struct SettingsTabView: View {
                     .padding(.vertical, 8)
                     .padding(.horizontal, 4)
                 }
-                
+
                     Spacer()
                 }
                 .padding()
             }
         }
     }
-    
+
     // File Operations
-    
+
     /// Save configuration to file
     private func saveConfigurationFile() {
         let savePanel = NSSavePanel()
@@ -542,7 +550,7 @@ struct SettingsTabView: View {
         savePanel.nameFieldStringValue = "share-my-status-config.json"
         savePanel.message = "选择保存位置"
         savePanel.prompt = "保存"
-        
+
         savePanel.begin { response in
             if response == .OK, let url = savePanel.url {
                 if let error = configuration.exportToFile(url: url, includeSecretKey: includeSecretKeyInExport) {
@@ -554,7 +562,7 @@ struct SettingsTabView: View {
             }
         }
     }
-    
+
     /// Open configuration file
     private func openConfigurationFile() {
         let openPanel = NSOpenPanel()
@@ -562,7 +570,7 @@ struct SettingsTabView: View {
         openPanel.allowsMultipleSelection = false
         openPanel.message = "选择配置文件"
         openPanel.prompt = "打开"
-        
+
         openPanel.begin { response in
             if response == .OK, let url = openPanel.url {
                 if let error = configuration.importFromFile(url: url) {
@@ -574,6 +582,44 @@ struct SettingsTabView: View {
             }
         }
     }
+
+    private func hasResourceLinks(_ resources: ClientResources) -> Bool {
+        !(resources.userDocUrl?.isEmpty ?? true) ||
+        !(resources.feishuSignatureDiyUrl?.isEmpty ?? true)
+    }
+}
+
+private struct ResourceLinkRow: View {
+    let title: String
+    let systemImage: String
+    let urlString: String?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .foregroundColor(.blue)
+                .frame(width: 18)
+
+            if let urlString = urlString,
+               !urlString.isEmpty,
+               let url = URL(string: urlString) {
+                Link(title, destination: url)
+                    .font(.subheadline)
+                Spacer()
+                Image(systemName: "arrow.up.forward")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("未配置")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
 }
 
 // App List Editor Component
@@ -582,29 +628,29 @@ private struct AppListEditor: View {
     @Binding var apps: [String]
     let mode: AppPickerView.AppPickerMode
     let defaultApps: [String]
-    
+
     @State private var showingAppPicker = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(title)
                     .font(.headline)
-                
+
                 Spacer()
-                
+
                 Button("恢复默认") {
                     apps = defaultApps
                 }
                 .buttonStyle(.bordered)
                 .tint(.orange)
-                
+
                 Button("从应用选择") {
                     showingAppPicker = true
                 }
                 .buttonStyle(.borderedProminent)
             }
-            
+
             if apps.isEmpty {
                 Text("暂无应用")
                     .foregroundColor(.secondary)
@@ -615,9 +661,9 @@ private struct AppListEditor: View {
                     HStack {
                         Text(app)
                             .font(.system(.body, design: .monospaced))
-                        
+
                         Spacer()
-                        
+
                         Button(action: {
                             apps.remove(at: index)
                         }) {
@@ -632,7 +678,7 @@ private struct AppListEditor: View {
                     .cornerRadius(6)
                 }
             }
-            
+
             Button(action: {
                 apps.append("")
             }) {
@@ -661,7 +707,7 @@ private struct ExportOptionsView: View {
     let onExportToClipboard: () -> Void
     let onExportToFile: () -> Void
     let onCancel: () -> Void
-    
+
     var body: some View {
         VStack(spacing: 20) {
             // Header
@@ -669,7 +715,7 @@ private struct ExportOptionsView: View {
                 Image(systemName: "square.and.arrow.up.circle.fill")
                     .font(.system(size: 40))
                     .foregroundColor(.blue)
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text("导出配置")
                         .font(.title2)
@@ -678,17 +724,17 @@ private struct ExportOptionsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
             }
-            
+
             Divider()
-            
+
             // Options
             VStack(alignment: .leading, spacing: 12) {
                 Text("导出选项")
                     .font(.headline)
-                
+
                 Toggle(isOn: $includeSecretKey) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("包含密钥 (Secret Key)")
@@ -699,7 +745,7 @@ private struct ExportOptionsView: View {
                     }
                 }
                 .toggleStyle(.checkbox)
-                
+
                 if includeSecretKey {
                     HStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -713,18 +759,18 @@ private struct ExportOptionsView: View {
                     .cornerRadius(8)
                 }
             }
-            
+
             Divider()
-            
+
             // Action Buttons
             HStack {
                 Button("取消") {
                     onCancel()
                 }
                 .keyboardShortcut(.cancelAction)
-                
+
                 Spacer()
-                
+
                 Button(action: onExportToFile) {
                     HStack {
                         Image(systemName: "doc.badge.arrow.up")
@@ -732,7 +778,7 @@ private struct ExportOptionsView: View {
                     }
                 }
                 .buttonStyle(.bordered)
-                
+
                 Button(action: onExportToClipboard) {
                     HStack {
                         Image(systemName: "doc.on.clipboard")
@@ -768,7 +814,7 @@ private struct ImportDialogView: View {
                 Image(systemName: "square.and.arrow.down.circle.fill")
                     .font(.system(size: 40))
                     .foregroundColor(.green)
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text("导入配置")
                         .font(.title2)
@@ -777,12 +823,12 @@ private struct ImportDialogView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
             }
-            
+
             Divider()
-            
+
             // Manual input only
             VStack(alignment: .leading, spacing: 12) {
                 ManualImportView(jsonText: $jsonText)
@@ -836,18 +882,18 @@ private struct ImportDialogView: View {
                     .cornerRadius(6)
                 }
             }
-            
+
             Divider()
-            
+
             // Action Buttons
             HStack {
                 Button("取消") {
                     onCancel()
                 }
                 .keyboardShortcut(.cancelAction)
-                
+
                 Spacer()
-                
+
                 Button(action: {
                     onImportManual(jsonText)
                 }) {
@@ -870,24 +916,24 @@ private struct ImportDialogView: View {
 
 private struct FileImportView: View {
     let onSelectFile: () -> Void
-    
+
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "doc.badge.arrow.up.fill")
                 .font(.system(size: 80))
                 .foregroundColor(.green)
-            
+
             VStack(spacing: 12) {
                 Text("从文件导入")
                     .font(.title3)
                     .fontWeight(.semibold)
-                
+
                 Text("选择 JSON 配置文件进行导入")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
-            
+
             Button(action: onSelectFile) {
                 HStack(spacing: 8) {
                     Image(systemName: "folder.badge.plus")
@@ -899,7 +945,7 @@ private struct FileImportView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("支持格式：")
                     .font(.caption)
@@ -926,15 +972,15 @@ private struct FileImportView: View {
 
 private struct ManualImportView: View {
     @Binding var jsonText: String
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("配置 JSON")
                     .font(.headline)
-                
+
                 Spacer()
-                
+
                 HStack(spacing: 8) {
                     Button {
                         openFileAndLoadText()
@@ -944,12 +990,12 @@ private struct ManualImportView: View {
                     }
                     .buttonStyle(.borderless)
                     .font(.caption)
-                    
+
                     if !jsonText.isEmpty {
                         Text("\(jsonText.count) 字符")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        
+
                         Button("清空") {
                             jsonText = ""
                         }
@@ -958,7 +1004,7 @@ private struct ManualImportView: View {
                     }
                 }
             }
-            
+
             TextEditor(text: $jsonText)
                 .font(.system(.body, design: .monospaced))
                 .frame(minHeight: 300, maxHeight: 420)
@@ -966,7 +1012,7 @@ private struct ManualImportView: View {
                 .background(Color(nsColor: .textBackgroundColor))
             .border(Color.secondary.opacity(0.3), width: 1)
             .cornerRadius(4)
-            
+
             HStack(spacing: 4) {
                 Image(systemName: "info.circle")
                     .font(.caption)
@@ -1000,6 +1046,6 @@ private struct ManualImportView: View {
 #Preview {
     SettingsTabView()
         .environmentObject(AppConfiguration())
+        .environmentObject(AppCoordinator.shared)
         .frame(width: 600, height: 500)
 }
-

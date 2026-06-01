@@ -223,20 +223,19 @@ func renderTimeVariables(template string) string {
 func renderConditionalVariables(template string, system *common.System) string {
 	result := template
 
-	if strings.Contains(result, "{charging?") {
-		charging := false
-		if system != nil && system.Charging != nil {
-			charging = *system.Charging
-		}
-
-		if charging {
-			result = strings.ReplaceAll(result, "{charging?'充电中':'未充电'}", "充电中")
-			result = strings.ReplaceAll(result, "{charging?'充电中':'未在充电'}", "充电中")
-		} else {
-			result = strings.ReplaceAll(result, "{charging?'充电中':'未充电'}", "未充电")
-			result = strings.ReplaceAll(result, "{charging?'充电中':'未在充电'}", "未在充电")
-		}
+	charging := false
+	if system != nil && system.Charging != nil {
+		charging = *system.Charging
 	}
 
-	return result
+	return chargingTernaryExpression.ReplaceAllStringFunc(result, func(match string) string {
+		parts := chargingTernaryExpression.FindStringSubmatch(match)
+		if len(parts) != 4 || parts[1] != "charging" {
+			return match
+		}
+		if charging {
+			return parts[2]
+		}
+		return parts[3]
+	})
 }
