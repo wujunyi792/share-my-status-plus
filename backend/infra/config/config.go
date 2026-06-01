@@ -29,13 +29,15 @@ type Config struct {
 
 // AppConfig 应用配置
 type AppConfig struct {
-	Name        string `json:"name"`
-	Version     string `json:"version"`
-	Environment string `json:"environment"`
-	Port        int    `json:"port"`
-	Debug       bool   `json:"debug"`
-	DefaultTZ   string `json:"defaultTz"`
-	Endpoint    string `json:"endpoint"`
+	Name                   string `json:"name"`
+	Version                string `json:"version"`
+	Environment            string `json:"environment"`
+	Port                   int    `json:"port"`
+	Debug                  bool   `json:"debug"`
+	DefaultTZ              string `json:"defaultTz"`
+	Endpoint               string `json:"endpoint"`
+	UserProfileURLTemplate string `json:"userProfileUrlTemplate"`
+	UserDocURL             string `json:"userDocUrl"`
 }
 
 // DatabaseConfig 数据库配置
@@ -86,11 +88,13 @@ func Init() (*Config, error) {
 
 	config := &Config{
 		App: AppConfig{
-			Name:      getEnv("APP_NAME", "share-my-status"),
-			Port:      getEnvAsInt("HTTP_PORT", 8080),
-			Debug:     getEnvAsBool("DEBUG", false),
-			DefaultTZ: getEnv("DEFAULT_TZ", "Asia/Shanghai"),
-			Endpoint:  getEnv("ENDPOINT", "https://example.com"),
+			Name:                   getEnv("APP_NAME", "share-my-status"),
+			Port:                   getEnvAsInt("HTTP_PORT", 8080),
+			Debug:                  getEnvAsBool("DEBUG", false),
+			DefaultTZ:              getEnv("DEFAULT_TZ", "Asia/Shanghai"),
+			Endpoint:               getEnv("ENDPOINT", "https://example.com"),
+			UserProfileURLTemplate: getEnv("USER_PROFILE_URL_TEMPLATE", ""),
+			UserDocURL:             getEnv("USER_DOC_URL", ""),
 		},
 		Database: DatabaseConfig{
 			DSN:             getEnv("DB_DSN", ""),

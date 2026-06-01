@@ -34,7 +34,9 @@ Override at least these values for production:
 | --- | --- |
 | `backend.env` or `backend.extraEnvFrom` | Backend environment variables |
 | `backend.env.ENDPOINT` | Public backend endpoint |
-| `backend.env.REDIRECT_DEFAULT_TARGET` | Public frontend status URL pattern |
+| `backend.env.REDIRECT_DEFAULT_TARGET` | `/s/{SharingKey}` redirect target |
+| `backend.env.USER_PROFILE_URL_TEMPLATE` | Personal profile URL shown in bot cards |
+| `backend.env.USER_DOC_URL` | User documentation URL shown in bot cards |
 | `backend.env.DB_DSN` | PostgreSQL DSN |
 | `backend.env.REDIS_URL` | Redis URL |
 | `backend.env.REDIS_PASSWORD` | Redis password |

@@ -60,41 +60,22 @@ func (h *EventHandler) OnP2MessageReceiveV1(ctx context.Context, event *larkim.P
 			user, err = userService.CreateUser(openID)
 			if err != nil {
 				logrus.Errorf("Failed to create user: %v", err)
-				return h.replyMessage(ctx, messageID, "❌ 创建用户失败，请稍后重试")
+				return h.replyInteractiveMessage(ctx, messageID, buildUserErrorCard("账户初始化失败", err))
 			}
 		} else {
 			logrus.Errorf("Failed to get user: %v", err)
-			return h.replyMessage(ctx, messageID, "❌ 获取用户信息失败")
+			return h.replyInteractiveMessage(ctx, messageID, buildUserErrorCard("账户读取失败", err))
 		}
-	}
-
-	// 特殊命令：/config 或 推荐配置 使用富文本(Post)回复
-	if command.Action == "config" && len(command.Params) == 0 {
-		cfgJSON := h.buildRecommendedConfigJSON(user, &h.config.App)
-
-		var content [][]map[string]any
-		content = append(content, []map[string]any{
-			{"tag": "code_block", "language": "JSON", "text": cfgJSON},
-		})
-
-		post := map[string]any{
-			"zh_cn": map[string]any{
-				"title":   "以下为推荐配置，请复制完整JSON，粘贴进客户端「设置」最下方「配置管理」-「导入」中",
-				"content": content,
-			},
-		}
-
-		return h.replyPostMessage(ctx, messageID, post)
 	}
 
 	// 执行命令
 	response, err := h.executeCommand(ctx, user, command)
 	if err != nil {
 		logrus.Errorf("Failed to execute command: %v", err)
-		return h.replyMessage(ctx, messageID, fmt.Sprintf("❌ 执行命令失败: %v", err))
+		return h.replyInteractiveMessage(ctx, messageID, buildExecErrorCard(err))
 	}
 
-	return h.replyMessage(ctx, messageID, response)
+	return h.replyCommandResponse(ctx, messageID, response)
 }
 
 // OnP2CardURLPreviewGet 处理链接预览事件
@@ -213,26 +194,27 @@ func (h *EventHandler) parseCommand(message string) *Command {
 
 	// 中文别名命令映射
 	alias := map[string]*Command{
-		"开启公开访问":   {Action: "public", Params: []string{"on"}},
-		"关闭公开访问":   {Action: "public", Params: []string{"off"}},
-		"授权音乐统计":   {Action: "stat", Params: []string{"on"}},
-		"取消授权音乐统计": {Action: "stat", Params: []string{"off"}},
-		"查看我的信息":   {Action: "info", Params: []string{}},
-		"轮转数据上报密钥": {Action: "rotate", Params: []string{"secret-key"}},
-		"轮转分享链接":   {Action: "rotate", Params: []string{"sharing-key"}},
-		"帮助":       {Action: "help", Params: []string{}},
-		"推荐配置":     {Action: "config", Params: []string{}},
+		"开启公开访问":        {Action: "public", Params: []string{"on"}},
+		"关闭公开访问":        {Action: "public", Params: []string{"off"}},
+		"授权音乐统计":        {Action: "stat", Params: []string{"on"}},
+		"取消授权音乐统计":      {Action: "stat", Params: []string{"off"}},
+		"查看我的信息":        {Action: "info", Params: []string{}},
+		"轮转数据上报密钥":      {Action: "rotate", Params: []string{"secret-key"}},
+		"轮转个人主页/飞书签名链接": {Action: "rotate", Params: []string{"sharing-key"}},
+		"轮转个人主页":        {Action: "rotate", Params: []string{"sharing-key"}},
+		"帮助":            {Action: "help", Params: []string{}},
+		"推荐配置":          {Action: "config", Params: []string{}},
 	}
 
 	if cmd, ok := alias[text]; ok {
 		return cmd
 	}
 
-	return &Command{Action: "help", Params: []string{}}
+	return &Command{Action: "unknown", Params: []string{}}
 }
 
 // executeCommand 执行命令
-func (h *EventHandler) executeCommand(ctx context.Context, user *model.User, command *Command) (string, error) {
+func (h *EventHandler) executeCommand(ctx context.Context, user *model.User, command *Command) (*commandResponse, error) {
 	userService := h.userService
 
 	switch command.Action {
@@ -244,25 +226,42 @@ func (h *EventHandler) executeCommand(ctx context.Context, user *model.User, com
 		return h.executeInfoCommand(ctx, user, userService)
 	case "rotate":
 		return h.executeRotateCommand(ctx, user, userService, command.Params)
+	case "config":
+		if len(command.Params) != 0 {
+			return cardResponse(buildParamErrorCard([]string{"/config"}, "/config")), nil
+		}
+		configJSON := h.buildRecommendedConfigJSON(user, &h.config.App)
+		return cardResponse(buildConfigCard(configJSON, user, &h.config.App)), nil
 	case "help":
-		return "ℹ️ 帮助：\n• `/public on` - 开启公开访问\n• `/public off` - 关闭公开访问\n• `/stat on` - 授权音乐统计（云端会开始存储音乐上报信息）\n• `/stat off` - 取消授权音乐统计（立即删除云端存储所有音乐上报信息）\n• `/info` - 查看我的信息\n• `/rotate secret-key` - 轮转数据上报密钥\n• `/rotate sharing-key` - 轮转分享链接\n• `/config` - 返回推荐配置 JSON\n• `/help` - 帮助\n\n中文别名也支持：\n• 开启公开访问\n• 关闭公开访问\n• 授权音乐统计\n• 取消授权音乐统计\n• 查看我的信息\n• 轮转数据上报密钥\n• 轮转分享链接\n• 推荐配置\n• 帮助", nil
+		if len(command.Params) != 0 {
+			return cardResponse(buildParamErrorCard([]string{"/help"}, "/help")), nil
+		}
+		return cardResponse(buildHelpCard()), nil
 	default:
-		return "❓ 未知命令，输入 help 查看帮助", nil
+		return cardResponse(buildUnknownCommandCard()), nil
 	}
 }
 
 // executePublicCommand 执行公开访问命令
-func (h *EventHandler) executePublicCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (string, error) {
+func (h *EventHandler) executePublicCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (*commandResponse, error) {
 	if len(params) != 1 {
-		return "❌ 用法错误，请使用：\n• `/public on` - 开启公开访问\n• `/public off` - 关闭公开访问", nil
+		return cardResponse(buildParamErrorCard([]string{"/public on", "/public off"}, "/public on")), nil
 	}
 
-	enable := params[0] == "on"
+	var enable bool
+	switch params[0] {
+	case "on":
+		enable = true
+	case "off":
+		enable = false
+	default:
+		return cardResponse(buildParamErrorCard([]string{"/public on", "/public off"}, "/public on")), nil
+	}
 
 	// 获取当前设置
 	settings, err := userService.GetUserSettings(user.ID)
 	if err != nil && err != gorm.ErrRecordNotFound {
-		return "", fmt.Errorf("failed to get user settings: %w", err)
+		return nil, fmt.Errorf("failed to get user settings: %w", err)
 	}
 
 	// 更新设置
@@ -274,30 +273,32 @@ func (h *EventHandler) executePublicCommand(ctx context.Context, user *model.Use
 
 	err = userService.UpdateUserSettings(user.ID, newSettings)
 	if err != nil {
-		return "", fmt.Errorf("failed to update settings: %w", err)
+		return nil, fmt.Errorf("failed to update settings: %w", err)
 	}
 
-	status := "✅ 公开访问已关闭，无法使用Web链接访问状态更新，但是飞书签名仍然可用"
-	if enable {
-		sharingURL := h.buildSharingURL(user.SharingKey)
-		status = fmt.Sprintf("✅ 公开访问已开启\n🔗 现可用以下Web链接实时查看状态更新: %s", sharingURL)
-	}
-
-	return status, nil
+	return cardResponse(buildPublicStatusCard(enable, &h.config.App, user.SharingKey)), nil
 }
 
 // executeStatCommand 执行音乐统计授权命令
-func (h *EventHandler) executeStatCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (string, error) {
+func (h *EventHandler) executeStatCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (*commandResponse, error) {
 	if len(params) != 1 {
-		return "❌ 用法错误，请使用：\n• `/stat on` - 授权音乐统计（云端会开始存储音乐上报信息）\n• `/stat off` - 取消授权音乐统计（立即删除云端存储所有音乐上报信息）", nil
+		return cardResponse(buildParamErrorCard([]string{"/stat on", "/stat off"}, "/stat on")), nil
 	}
 
-	enable := params[0] == "on"
+	var enable bool
+	switch params[0] {
+	case "on":
+		enable = true
+	case "off":
+		enable = false
+	default:
+		return cardResponse(buildParamErrorCard([]string{"/stat on", "/stat off"}, "/stat on")), nil
+	}
 
 	// 获取当前设置
 	settings, err := userService.GetUserSettings(user.ID)
 	if err != nil && err != gorm.ErrRecordNotFound {
-		return "", fmt.Errorf("failed to get user settings: %w", err)
+		return nil, fmt.Errorf("failed to get user settings: %w", err)
 	}
 
 	// 更新设置
@@ -309,21 +310,16 @@ func (h *EventHandler) executeStatCommand(ctx context.Context, user *model.User,
 
 	err = userService.UpdateUserSettings(user.ID, newSettings)
 	if err != nil {
-		return "", fmt.Errorf("failed to update settings: %w", err)
+		return nil, fmt.Errorf("failed to update settings: %w", err)
 	}
 
-	sharingURL := h.buildSharingURL(user.SharingKey)
-	if enable {
-		return fmt.Sprintf("✅ 音乐统计授权已开启，云端会开始存储音乐上报信息。\n🔗 统计数据每小时整点刷新，你可以使用以下链接查看实时状态更新: %s", sharingURL), nil
-	} else {
-		return "✅ 音乐统计授权已关闭，云端所有历史记录已清空", nil
-	}
+	return cardResponse(buildStatStatusCard(enable, &h.config.App, user.SharingKey)), nil
 }
 
 // executeRotateCommand 执行轮转命令
-func (h *EventHandler) executeRotateCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (string, error) {
+func (h *EventHandler) executeRotateCommand(ctx context.Context, user *model.User, userService *user.UserService, params []string) (*commandResponse, error) {
 	if len(params) != 1 {
-		return "❌ 用法错误，请使用：\n• `/rotate secret-key` - 轮转客户端密钥\n• `/rotate sharing-key` - 轮转分享链接密钥", nil
+		return cardResponse(buildParamErrorCard([]string{"/rotate secret-key", "/rotate sharing-key"}, "/rotate secret-key")), nil
 	}
 
 	keyType := params[0]
@@ -333,29 +329,28 @@ func (h *EventHandler) executeRotateCommand(ctx context.Context, user *model.Use
 		// 生成新的Secret Key
 		newSecretKey, err := userService.RotateSecretKey(user.ID)
 		if err != nil {
-			return "", fmt.Errorf("failed to rotate secret key: %w", err)
+			return nil, fmt.Errorf("failed to rotate secret key: %w", err)
 		}
-		return fmt.Sprintf("✅ Secret Key已轮转\n🔑 新密钥: %s\n⚠️ 请更新客户端配置", newSecretKey), nil
+		return cardResponse(buildRotateSecretCard(newSecretKey, &h.config.App)), nil
 
 	case "sharing-key":
 		// 生成新的Sharing Key
 		newSharingKey, err := userService.RotateSharingKey(user.ID)
 		if err != nil {
-			return "", fmt.Errorf("failed to rotate sharing key: %w", err)
+			return nil, fmt.Errorf("failed to rotate sharing key: %w", err)
 		}
-		sharingURL := h.buildSharingURL(newSharingKey)
-		return fmt.Sprintf("✅ Sharing Key已轮转\n🔗 新链接: %s\n⚠️ 请更新您的分享链接和飞书签名", sharingURL), nil
+		return cardResponse(buildRotateSharingCard(newSharingKey, &h.config.App)), nil
 	default:
-		return "❌ 无效的密钥类型，请使用：\n• `/rotate secret-key` - 轮转客户端密钥\n• `/rotate sharing-key` - 轮转分享链接密钥", nil
+		return cardResponse(buildParamErrorCard([]string{"/rotate secret-key", "/rotate sharing-key"}, "/rotate secret-key")), nil
 	}
 }
 
 // executeInfoCommand 执行信息命令
-func (h *EventHandler) executeInfoCommand(ctx context.Context, user *model.User, userService *user.UserService) (string, error) {
+func (h *EventHandler) executeInfoCommand(ctx context.Context, user *model.User, userService *user.UserService) (*commandResponse, error) {
 	// 获取用户设置
 	settings, err := userService.GetUserSettings(user.ID)
 	if err != nil && err != gorm.ErrRecordNotFound {
-		return "", fmt.Errorf("failed to get user settings: %w", err)
+		return nil, fmt.Errorf("failed to get user settings: %w", err)
 	}
 
 	publicEnabled := false
@@ -365,26 +360,7 @@ func (h *EventHandler) executeInfoCommand(ctx context.Context, user *model.User,
 		musicStatsAuthorized = settings.Settings.Data().AuthorizedMusicStats
 	}
 
-	sharingURL := h.buildSharingURL(user.SharingKey)
-	reportURL := h.config.App.Endpoint + "/api/v1/state/report"
-	signatureURL := h.config.App.Endpoint + "/s/" + user.SharingKey
-	info := fmt.Sprintf("📊 账户信息\n"+
-		"🔑 Secret Key: %s\n"+
-		"📮 上报地址: %s\n"+
-		"✍️ 飞书签名链接: %s\n"+
-		"🔗 Sharing Key: %s\n"+
-		"🌐 公开访问: %s\n"+
-		"📈 音乐统计: %s\n"+
-		"🔗 分享链接: %s",
-		user.SecretKey,
-		reportURL,
-		signatureURL,
-		user.SharingKey,
-		map[bool]string{true: "开启", false: "关闭"}[publicEnabled],
-		map[bool]string{true: "已授权", false: "未授权"}[musicStatsAuthorized],
-		sharingURL)
-
-	return info, nil
+	return cardResponse(buildAccountInfoCard(user, &h.config.App, publicEnabled, musicStatsAuthorized)), nil
 }
 
 // extractSharingKey 从URL路径中提取Sharing Key
@@ -395,12 +371,6 @@ func (h *EventHandler) extractSharingKey(path string) string {
 		return parts[1]
 	}
 	return ""
-}
-
-// buildSharingURL 生成分享链接，使用配置中的DefaultTarget
-func (h *EventHandler) buildSharingURL(sharingKey string) string {
-	// Replace {SharingKey} placeholder with actual sharing key
-	return strings.ReplaceAll(h.config.Redirect.DefaultTarget, "{SharingKey}", sharingKey)
 }
 
 // sendMessage 发送消息
@@ -456,6 +426,50 @@ func (h *EventHandler) replyMessage(ctx context.Context, messageID, content stri
 	_, err := client.Im.Message.Reply(ctx, req)
 	if err != nil {
 		logrus.Errorf("Failed to send message: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// replyCommandResponse 回复结构化命令结果
+func (h *EventHandler) replyCommandResponse(ctx context.Context, messageID string, response *commandResponse) error {
+	if response == nil {
+		return nil
+	}
+	switch response.msgType {
+	case msgTypeInteractive:
+		return h.replyInteractiveMessage(ctx, messageID, response.card)
+	default:
+		return h.replyMessage(ctx, messageID, response.text)
+	}
+}
+
+// replyInteractiveMessage 回复飞书交互式卡片
+func (h *EventHandler) replyInteractiveMessage(ctx context.Context, messageID string, card map[string]any) error {
+	client := h.larkClient
+	if client == nil {
+		return fmt.Errorf("lark client not initialized")
+	}
+
+	data, err := json.Marshal(card)
+	if err != nil {
+		logrus.Errorf("Failed to marshal interactive card: %v", err)
+		return err
+	}
+
+	req := larkim.NewReplyMessageReqBuilder().
+		MessageId(messageID).
+		Body(larkim.NewReplyMessageReqBodyBuilder().
+			MsgType(msgTypeInteractive).
+			Content(string(data)).
+			Uuid(fmt.Sprintf("%d", time.Now().UnixNano())).
+			Build()).
+		Build()
+
+	_, err = client.Im.Message.Reply(ctx, req)
+	if err != nil {
+		logrus.Errorf("Failed to send interactive card: %v", err)
 		return err
 	}
 
