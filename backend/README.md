@@ -56,6 +56,7 @@ ENDPOINT=https://status-sharing.example.com
 REDIRECT_DEFAULT_TARGET=https://status-sharing.example.com/status/{SharingKey}
 USER_PROFILE_URL_TEMPLATE=https://status-sharing.example.com/status/{SharingKey}
 FEISHU_SIGNATURE_URL_TEMPLATE=https://status-sharing.example.com/s/{SharingKey}
+FEISHU_SIGNATURE_DIY_URL=https://example.com/signature-diy?sharingKey={SharingKey}
 USER_DOC_URL=https://example.com/share-my-status-doc
 
 # 数据库配置
@@ -124,6 +125,12 @@ go build -o share-my-status .
 ### WebSocket
 
 - `GET /v1/ws` - WebSocket连接（使用Hertz WebSocket）
+
+### 渲染与客户端资源
+
+- `GET /api/v1/render` - 按 `sharingKey + m` 或标准分享 `url` 渲染链接预览文本
+- `GET /api/v1/render/template-config` - 获取当前支持的模板变量与表达式配置
+- `GET /api/v1/client/resources` - 获取客户端展示的说明文档和个性签名 DIY 链接（`X-Secret-Key` 鉴权）
 
 ### 飞书集成
 

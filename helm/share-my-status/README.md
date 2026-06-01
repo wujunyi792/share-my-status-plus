@@ -37,7 +37,8 @@ Override at least these values for production:
 | `backend.env.REDIRECT_DEFAULT_TARGET` | `/s/{SharingKey}` redirect target |
 | `backend.env.USER_PROFILE_URL_TEMPLATE` | Personal profile URL shown in bot cards |
 | `backend.env.FEISHU_SIGNATURE_URL_TEMPLATE` | Feishu signature URL shown in bot cards |
-| `backend.env.USER_DOC_URL` | User documentation URL shown in bot cards |
+| `backend.env.FEISHU_SIGNATURE_DIY_URL` | Feishu signature DIY page URL shown in bot cards and client resource links |
+| `backend.env.USER_DOC_URL` | User documentation URL shown in bot cards and client resource links |
 | `backend.env.DB_DSN` | PostgreSQL DSN |
 | `backend.env.REDIS_URL` | Redis URL |
 | `backend.env.REDIS_PASSWORD` | Redis password |

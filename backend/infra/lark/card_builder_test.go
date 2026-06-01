@@ -14,6 +14,7 @@ func TestBuildAccountInfoCardUsesConfirmedLayout(t *testing.T) {
 		Endpoint:                   "https://status-sharing.mjclouds.com/",
 		UserProfileURLTemplate:     "https://status-sharing.mjclouds.com/status/{SharingKey}",
 		FeishuSignatureURLTemplate: "https://status-sharing.mjclouds.com/s/{SharingKey}",
+		FeishuSignatureDIYURL:      "https://magic.solutionsuite.cn/diy?sharingKey={SharingKey}",
 		UserDocURL:                 "https://example.com/share-my-status-doc",
 	}
 	user := &model.User{
@@ -28,6 +29,7 @@ func TestBuildAccountInfoCardUsesConfirmedLayout(t *testing.T) {
 	want := []string{
 		"**🏠 个人主页**\n`https://status-sharing.mjclouds.com/status/preview-sharing-key`",
 		"**✍️ 飞书签名链接**\n`https://status-sharing.mjclouds.com/s/preview-sharing-key`",
+		"**🛠 个性签名 DIY**\n`https://magic.solutionsuite.cn/diy?sharingKey=preview-sharing-key`",
 		"**📮 上报地址**\n`https://status-sharing.mjclouds.com/api/v1/state/report`",
 		"**🔑 Secret Key**\n`preview-secret-key`",
 		"**🌐 公开访问**\n<font color='green'>开启</font>",
@@ -67,9 +69,10 @@ func TestBuildAccountInfoCardMissingOptionalURLs(t *testing.T) {
 	contents := accountFieldContents(t, card)
 	assertContains(t, contents[0], "`未配置 USER_PROFILE_URL_TEMPLATE`")
 	assertContains(t, contents[1], "`未配置 FEISHU_SIGNATURE_URL_TEMPLATE`")
-	assertContains(t, contents[4], "<font color='grey'>关闭</font>")
-	assertContains(t, contents[5], "<font color='grey'>未授权</font>")
-	assertContains(t, contents[6], "`未配置 USER_DOC_URL`")
+	assertContains(t, contents[2], "`未配置 FEISHU_SIGNATURE_DIY_URL`")
+	assertContains(t, contents[5], "<font color='grey'>关闭</font>")
+	assertContains(t, contents[6], "<font color='grey'>未授权</font>")
+	assertContains(t, contents[7], "`未配置 USER_DOC_URL`")
 }
 
 func TestBuildConfigCardUsesV2InteractiveSkeleton(t *testing.T) {

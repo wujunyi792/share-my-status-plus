@@ -18,6 +18,19 @@ func TestParseRenderPreviewRequestFromURL(t *testing.T) {
 	}
 }
 
+func TestParseRenderPreviewRequestURLTakesPrecedence(t *testing.T) {
+	req, err := parseRenderPreviewRequest("https://example.com/s/url-key?m=url-template", "legacy-key", "legacy-template")
+	if err != nil {
+		t.Fatalf("parseRenderPreviewRequest() error = %v", err)
+	}
+	if req.sharingKey != "url-key" {
+		t.Fatalf("sharingKey = %q, want %q", req.sharingKey, "url-key")
+	}
+	if req.template != "url-template" {
+		t.Fatalf("template = %q, want %q", req.template, "url-template")
+	}
+}
+
 func TestParseRenderPreviewRequestLegacyFallback(t *testing.T) {
 	req, err := parseRenderPreviewRequest("", " legacy-key ", "hello {title}")
 	if err != nil {
@@ -54,6 +67,13 @@ func TestParseRenderPreviewRequestNonSharePath(t *testing.T) {
 
 func TestParseRenderPreviewRequestExtraSharePathSegments(t *testing.T) {
 	_, err := parseRenderPreviewRequest("https://example.com/s/share-key-123/extra?m=hello", "", "")
+	if !errors.Is(err, errRenderURLInvalid) {
+		t.Fatalf("error = %v, want %v", err, errRenderURLInvalid)
+	}
+}
+
+func TestParseRenderPreviewRequestWrappedBusinessURL(t *testing.T) {
+	_, err := parseRenderPreviewRequest("https://magic.solutionsuite.cn/r?fid=abc&u=https%3A%2F%2Fexample.com%2Fs%2Fshare-key-123%3Fm%3Dhello", "", "")
 	if !errors.Is(err, errRenderURLInvalid) {
 		t.Fatalf("error = %v, want %v", err, errRenderURLInvalid)
 	}

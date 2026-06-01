@@ -65,6 +65,12 @@ func RenderPreview(ctx context.Context, c *app.RequestContext) {
 	c.JSON(consts.StatusOK, preview)
 }
 
+// RenderTemplateConfig returns supported render template variables and expressions.
+// @router /api/v1/render/template-config [GET]
+func RenderTemplateConfig(ctx context.Context, c *app.RequestContext) {
+	c.JSON(consts.StatusOK, render.GetTemplateConfig())
+}
+
 func parseRenderPreviewRequest(rawURL string, legacySharingKey string, legacyTemplate string) (*renderPreviewRequest, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {

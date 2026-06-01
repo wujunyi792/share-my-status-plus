@@ -32,6 +32,7 @@ func buildAccountInfoCard(user *model.User, app *config.AppConfig, publicEnabled
 		div([]map[string]any{
 			field("🏠 个人主页", inlineOptionalURL(buildUserProfileURL(app.UserProfileURLTemplate, user.SharingKey), "USER_PROFILE_URL_TEMPLATE"), false),
 			field("✍️ 飞书签名链接", inlineOptionalURL(buildSignatureURL(app.FeishuSignatureURLTemplate, user.SharingKey), "FEISHU_SIGNATURE_URL_TEMPLATE"), false),
+			field("🛠 个性签名 DIY", inlineOptionalURL(buildSignatureDIYURL(app.FeishuSignatureDIYURL, user.SharingKey), "FEISHU_SIGNATURE_DIY_URL"), false),
 			field("📮 上报地址", inlineCode(buildReportURL(app.Endpoint)), false),
 			field("🔑 Secret Key", inlineCode(string(user.SecretKey)), false),
 			field("🌐 公开访问", statusText(publicEnabled, "开启", "关闭"), true),
@@ -310,6 +311,13 @@ func buildReportURL(endpoint string) string {
 }
 
 func buildSignatureURL(template string, sharingKey string) string {
+	if strings.TrimSpace(template) == "" {
+		return ""
+	}
+	return strings.ReplaceAll(template, "{SharingKey}", sharingKey)
+}
+
+func buildSignatureDIYURL(template string, sharingKey string) string {
 	if strings.TrimSpace(template) == "" {
 		return ""
 	}

@@ -68,3 +68,7 @@ struct StatusSnapshot: Codable {
     let lastUpdateTs: Int64
 }
 
+struct ClientResources: Codable {
+    let userDocUrl: String?
+    let feishuSignatureDiyUrl: String?
+}

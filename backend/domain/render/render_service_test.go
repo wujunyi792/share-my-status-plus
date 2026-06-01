@@ -54,14 +54,14 @@ func TestRenderTemplateTimeVariables(t *testing.T) {
 }
 
 func TestRenderTemplateChargingConditions(t *testing.T) {
-	template := "{charging?'充电中':'未充电'}|{charging?'充电中':'未在充电'}"
+	template := "{charging?'充电中':'未充电'}|{charging?'充电中':'未在充电'}|{charging?'⚡':''}"
 
 	charging := &common.StatusSnapshot{
 		System: &common.System{
 			Charging: boolPtr(true),
 		},
 	}
-	if got, want := RenderTemplate(template, charging), "充电中|充电中"; got != want {
+	if got, want := RenderTemplate(template, charging), "充电中|充电中|⚡"; got != want {
 		t.Fatalf("RenderTemplate(charging) = %q, want %q", got, want)
 	}
 
@@ -70,8 +70,47 @@ func TestRenderTemplateChargingConditions(t *testing.T) {
 			Charging: boolPtr(false),
 		},
 	}
-	if got, want := RenderTemplate(template, notCharging), "未充电|未在充电"; got != want {
+	if got, want := RenderTemplate(template, notCharging), "未充电|未在充电|"; got != want {
 		t.Fatalf("RenderTemplate(notCharging) = %q, want %q", got, want)
+	}
+
+	if got, want := RenderTemplate(template, nil), "未充电|未在充电|"; got != want {
+		t.Fatalf("RenderTemplate(missing charging) = %q, want %q", got, want)
+	}
+}
+
+func TestTemplateConfigExposesOnlySupportedVariables(t *testing.T) {
+	cfg := GetTemplateConfig()
+	if cfg.DefaultTemplate != DefaultTemplate {
+		t.Fatalf("DefaultTemplate = %q, want %q", cfg.DefaultTemplate, DefaultTemplate)
+	}
+	if len(cfg.Expressions) != 1 {
+		t.Fatalf("expressions len = %d, want 1", len(cfg.Expressions))
+	}
+	if got := cfg.Expressions[0].ConditionVariables; len(got) != 1 || got[0] != "charging" {
+		t.Fatalf("condition variables = %#v, want [charging]", got)
+	}
+
+	state := &common.StatusSnapshot{
+		Music: &common.Music{
+			Artist: strPtr("Artist"),
+			Title:  strPtr("Title"),
+			Album:  strPtr("Album"),
+		},
+		System: &common.System{
+			BatteryPct: floatPtr(0.82),
+			CpuPct:     floatPtr(0.37),
+			MemoryPct:  floatPtr(0.62),
+		},
+		Activity: &common.Activity{
+			Label: "在研发",
+		},
+	}
+	for _, variable := range cfg.Variables {
+		got := RenderTemplate(variable.Placeholder, state)
+		if strings.Contains(got, "{") || strings.Contains(got, "}") {
+			t.Fatalf("placeholder %q was not rendered: %q", variable.Placeholder, got)
+		}
 	}
 }
 
