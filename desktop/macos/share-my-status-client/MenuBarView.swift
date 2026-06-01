@@ -10,6 +10,7 @@ struct MenuBarView: View {
     @EnvironmentObject var configuration: AppConfiguration
     @EnvironmentObject var reporter: StatusReporter
     @EnvironmentObject var coordinator: AppCoordinator
+    @ObservedObject private var updater = SparkleUpdater.shared
     
     @Environment(\.openWindow) private var openWindow
     
@@ -27,12 +28,13 @@ struct MenuBarView: View {
             .padding(.vertical, 8)
             
             Divider()
-            
-            // Update banner prompt in menu bar
-            if let latest = coordinator.availableUpdate {
-                MenuBarUpdateBanner(latest: latest)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+
+            if let update = updater.availableUpdate {
+                MenuBarSparkleUpdateBanner(update: update) {
+                    updater.checkForUpdates()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
             }
             
             // Permission Warning
@@ -301,46 +303,35 @@ struct MenuBarView: View {
     }
 }
 
-private struct MenuBarUpdateBanner: View {
-    let latest: ClientVersionInfo
-    var versionText: String { latest.version ?? "未知版本" }
-    var buildText: String { latest.buildNumber != nil ? String(latest.buildNumber!) : "未知构建" }
-    var isForce: Bool { latest.forceUpdate ?? false }
-    
+private struct MenuBarSparkleUpdateBanner: View {
+    let update: SparkleUpdateInfo
+    let openUpdater: () -> Void
+
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: isForce ? "exclamationmark.triangle.fill" : "arrow.down.circle")
-                .foregroundColor(isForce ? .orange : .blue)
+            Image(systemName: "arrow.down.circle")
+                .foregroundColor(.blue)
                 .frame(width: 12)
+
             VStack(alignment: .leading, spacing: 2) {
-                Text(isForce ? "强制更新可用" : "有新版本可用")
+                Text("有新版本可用")
                     .font(.caption)
                     .fontWeight(.medium)
-                Text("\(versionText) (\(buildText))")
+                Text("\(update.displayVersion) (\(update.buildVersion))")
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
-                // 新增：下载链接文本，点击打开浏览器
-                if let urlStr = latest.downloadUrl, let url = URL(string: urlStr) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "link")
-                            .font(.caption2)
-                            .foregroundColor(.blue)
-                        Link("打开下载页面", destination: url)
-                            .font(.caption2)
-                    }
-                }
             }
+
             Spacer()
-            if let urlStr = latest.downloadUrl, let url = URL(string: urlStr) {
-                Button(isForce ? "更新" : "下载") {
-                    NSWorkspace.shared.open(url)
-                }
-                .buttonStyle(.borderedProminent)
+
+            Button("更新") {
+                openUpdater()
             }
+            .buttonStyle(.borderedProminent)
         }
         .padding(8)
-        .background((isForce ? Color.orange : Color.blue).opacity(0.08))
+        .background(Color.blue.opacity(0.08))
         .cornerRadius(6)
     }
 }

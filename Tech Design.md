@@ -490,8 +490,6 @@ GET /v1/cover/{hash}?size=128
 
 - WebSocket：`GET /api/v1/ws?sharingKey=...`。
 
-- 客户端版本检查：`GET /api/v1/client/check-version`（查询最新客户端版本信息）。
-
 - 飞书事件处理：在**官方 SDK 长链接会话**内接收**链接预览拉取事件**和**消息接收事件**，内部 handler 解析请求并执行预览渲染、命令处理与必要的**预览更新能力**，遵循幂等与频控。**注意**：出于性能考虑，飞书链接预览**暂不支持聚合统计变量渲染**，仅返回实时状态（音乐、系统、活动）。
 
 - 封面：`GET /api/v1/cover/exists?md5=...`、`POST /api/v1/cover/upload`、`GET /api/v1/cover/:hash?size=...`。
@@ -713,19 +711,6 @@ CREATE TABLE music_stats (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='音乐统计结果（JSON）';
 ```
 
--- 客户端版本信息表
-CREATE TABLE client_versions (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '版本记录主键',
-  platform VARCHAR(16) NOT NULL COMMENT '平台：windows、macos',
-  version VARCHAR(32) NOT NULL COMMENT '版本号',
-  build_number INT NOT NULL COMMENT '构建号',
-  download_url VARCHAR(255) NOT NULL COMMENT '下载链接',
-  release_note TEXT COMMENT '发布说明',
-  force_update TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否强制更新',
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  KEY ix_platform (platform)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='客户端版本信息';
 ```
 
 **主键与索引建议**：
@@ -741,8 +726,6 @@ CREATE TABLE client_versions (
 - `cover_assets`：`cover_hash` 主键（MD5）；`asset` JSON 包含 `b64`（base64字符串）、`contentType`（MIME类型）、`size`（字节大小）、`uploadTime`（上传时间戳）、`storageType`（固定为"base64"）；结合 CDN 缓存策略按访问路径控制缓存与清理。
 
 - `music_stats`：`uk_user_window` 唯一约束避免重复窗口（暂未启用，计划后续版本实现）。
-
-- `client_versions`：`platform` 索引用于快速查询各平台最新版本。
 
 > **保留与清理策略**：
 > - `current_state`：仅保留最近快照；无清理任务，按覆盖更新。
@@ -878,20 +861,6 @@ type MusicStats struct {
     UpdatedAt  time.Time                             `gorm:"column:updated_at"`
 }
 
-// =====================================
-// client_versions（客户端版本信息）
-// =====================================
-type ClientVersion struct {
-    ID          uint64    `gorm:"column:id;primaryKey;autoIncrement"`
-    Platform    string    `gorm:"column:platform;type:varchar(16);index:ix_platform"`
-    Version     string    `gorm:"column:version;type:varchar(32);not null"`
-    BuildNumber int       `gorm:"column:build_number;type:int;not null"`
-    DownloadUrl string    `gorm:"column:download_url;type:varchar(255);not null"`
-    ReleaseNote string    `gorm:"column:release_note;type:text"`
-    ForceUpdate bool      `gorm:"column:force_update;type:tinyint(1);not null;default:false"`
-    CreatedAt   time.Time `gorm:"column:created_at"`
-    UpdatedAt   time.Time `gorm:"column:updated_at"`
-}
 ```
 
 > **封面资源存储策略**：

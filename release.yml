@@ -1,8 +1,10 @@
 # Release versions - bump a component/chart version to trigger a release.
-# Format: major.minor.patch-build (e.g. 1.0.5-1)
+# backend/frontend/chart format: major.minor.patch-build (e.g. 1.0.5-1)
+# macos format: marketingVersion-buildNumber (e.g. 1.6-72)
 # CI watches this file. Changed components get new GHCR images, and any
 # component or chart change publishes a new OCI Helm chart.
 
-backend: 1.0.6-3
+backend: 1.0.6-4
 frontend: 1.0.5-2
 chart: 1.0.5-4
+macos: 1.7-1

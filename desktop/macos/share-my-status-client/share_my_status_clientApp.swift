@@ -59,6 +59,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Notify coordinator
         Task { @MainActor in
+            SparkleUpdater.shared.checkForUpdatesInBackgroundOnLaunch()
             AppCoordinator.shared.applicationDidFinishLaunching()
         }
     }
@@ -136,4 +137,3 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 }
-
