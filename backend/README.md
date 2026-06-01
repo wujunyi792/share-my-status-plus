@@ -55,6 +55,7 @@ DEFAULT_TZ=Asia/Shanghai
 ENDPOINT=https://status-sharing.example.com
 REDIRECT_DEFAULT_TARGET=https://status-sharing.example.com/status/{SharingKey}
 USER_PROFILE_URL_TEMPLATE=https://status-sharing.example.com/status/{SharingKey}
+FEISHU_SIGNATURE_URL_TEMPLATE=https://status-sharing.example.com/s/{SharingKey}
 USER_DOC_URL=https://example.com/share-my-status-doc
 
 # 数据库配置
