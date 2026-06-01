@@ -1,0 +1,28 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="clip">
+      <rect width="1024" height="1024" rx="224" fill="white"/>
+    </clipPath>
+    <filter id="markShadow" x="208" y="196" width="608" height="632" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#0F172A" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <g clip-path="url(#clip)">
+    <rect width="1024" height="1024" rx="224" fill="#FFFFFF"/>
+
+    <g filter="url(#markShadow)">
+      <path d="M326 390C374 324 446 286 524 286C612 286 690 332 736 404" stroke="#111827" stroke-width="56" stroke-linecap="round"/>
+      <path d="M698 656C650 718 580 754 502 754C414 754 336 708 290 636" stroke="#111827" stroke-width="56" stroke-linecap="round"/>
+
+      <circle cx="512" cy="512" r="150" fill="#111827"/>
+      <circle cx="512" cy="512" r="96" fill="#22C55E"/>
+      <circle cx="512" cy="512" r="38" fill="#F0FDF4"/>
+
+      <circle cx="726" cy="396" r="42" fill="#111827"/>
+      <circle cx="726" cy="396" r="15" fill="#22C55E"/>
+    </g>
+
+    <rect x="18" y="18" width="988" height="988" rx="206" stroke="#E5E7EB" stroke-width="20"/>
+  </g>
+</svg>

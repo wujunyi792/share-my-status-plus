@@ -62,6 +62,8 @@ values-dev.yaml
 
 data/*
 
+.magic
+
 # Helm dependency/build artifacts are generated in CI during packaging.
 helm/**/Chart.lock
 helm/**/charts/
