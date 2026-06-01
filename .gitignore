@@ -53,6 +53,8 @@ common/temp
 .rush
 .eslintcache
 
+.magic/
+
 
 backend/conf/model/*.yaml
 values-dev.yaml
