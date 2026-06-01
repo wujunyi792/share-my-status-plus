@@ -11,9 +11,10 @@ import (
 
 func TestBuildAccountInfoCardUsesConfirmedLayout(t *testing.T) {
 	app := &config.AppConfig{
-		Endpoint:               "https://status-sharing.mjclouds.com/",
-		UserProfileURLTemplate: "https://status-sharing.mjclouds.com/status/{SharingKey}",
-		UserDocURL:             "https://example.com/share-my-status-doc",
+		Endpoint:                   "https://status-sharing.mjclouds.com/",
+		UserProfileURLTemplate:     "https://status-sharing.mjclouds.com/status/{SharingKey}",
+		FeishuSignatureURLTemplate: "https://status-sharing.mjclouds.com/s/{SharingKey}",
+		UserDocURL:                 "https://example.com/share-my-status-doc",
 	}
 	user := &model.User{
 		SecretKey:  []byte("preview-secret-key"),
@@ -65,6 +66,7 @@ func TestBuildAccountInfoCardMissingOptionalURLs(t *testing.T) {
 
 	contents := accountFieldContents(t, card)
 	assertContains(t, contents[0], "`未配置 USER_PROFILE_URL_TEMPLATE`")
+	assertContains(t, contents[1], "`未配置 FEISHU_SIGNATURE_URL_TEMPLATE`")
 	assertContains(t, contents[4], "<font color='grey'>关闭</font>")
 	assertContains(t, contents[5], "<font color='grey'>未授权</font>")
 	assertContains(t, contents[6], "`未配置 USER_DOC_URL`")

@@ -31,7 +31,7 @@ func buildAccountInfoCard(user *model.User, app *config.AppConfig, publicEnabled
 	return buildBaseCard("blue", "📊 账户信息", "客户端上报与个人主页配置", "账户信息", []map[string]any{
 		div([]map[string]any{
 			field("🏠 个人主页", inlineOptionalURL(buildUserProfileURL(app.UserProfileURLTemplate, user.SharingKey), "USER_PROFILE_URL_TEMPLATE"), false),
-			field("✍️ 飞书签名链接", inlineCode(buildSignatureURL(app.Endpoint, user.SharingKey)), false),
+			field("✍️ 飞书签名链接", inlineOptionalURL(buildSignatureURL(app.FeishuSignatureURLTemplate, user.SharingKey), "FEISHU_SIGNATURE_URL_TEMPLATE"), false),
 			field("📮 上报地址", inlineCode(buildReportURL(app.Endpoint)), false),
 			field("🔑 Secret Key", inlineCode(string(user.SecretKey)), false),
 			field("🌐 公开访问", statusText(publicEnabled, "开启", "关闭"), true),
@@ -96,7 +96,7 @@ func buildPublicStatusCard(enabled bool, app *config.AppConfig, sharingKey strin
 			hr(),
 			div([]map[string]any{
 				field("🏠 个人主页", inlineOptionalURL(buildUserProfileURL(app.UserProfileURLTemplate, sharingKey), "USER_PROFILE_URL_TEMPLATE"), false),
-				field("✍️ 飞书签名链接", inlineCode(buildSignatureURL(app.Endpoint, sharingKey)), false),
+				field("✍️ 飞书签名链接", inlineOptionalURL(buildSignatureURL(app.FeishuSignatureURLTemplate, sharingKey), "FEISHU_SIGNATURE_URL_TEMPLATE"), false),
 				field("🌐 公开访问", statusText(true, "开启", "关闭"), true),
 			}),
 			markdownWithSize("<font color='grey'>📡 Share My Status Plus</font>", "notation"),
@@ -108,7 +108,7 @@ func buildPublicStatusCard(enabled bool, app *config.AppConfig, sharingKey strin
 		hr(),
 		div([]map[string]any{
 			field("🌐 公开访问", statusText(false, "开启", "关闭"), true),
-			field("✍️ 飞书签名链接", inlineCode(buildSignatureURL(app.Endpoint, sharingKey)), false),
+			field("✍️ 飞书签名链接", inlineOptionalURL(buildSignatureURL(app.FeishuSignatureURLTemplate, sharingKey), "FEISHU_SIGNATURE_URL_TEMPLATE"), false),
 		}),
 		markdownWithSize("<font color='grey'>📡 Share My Status Plus</font>", "notation"),
 	})
@@ -160,7 +160,7 @@ func buildRotateSharingCard(newSharingKey string, app *config.AppConfig) map[str
 		div([]map[string]any{
 			field("🔗 新 Sharing Key", inlineCode(newSharingKey), true),
 			field("🏠 个人主页", inlineOptionalURL(buildUserProfileURL(app.UserProfileURLTemplate, newSharingKey), "USER_PROFILE_URL_TEMPLATE"), false),
-			field("✍️ 飞书签名链接", inlineCode(buildSignatureURL(app.Endpoint, newSharingKey)), false),
+			field("✍️ 飞书签名链接", inlineOptionalURL(buildSignatureURL(app.FeishuSignatureURLTemplate, newSharingKey), "FEISHU_SIGNATURE_URL_TEMPLATE"), false),
 		}),
 		markdownWithSize("<font color='grey'>📡 Share My Status Plus</font>", "notation"),
 	})
@@ -309,8 +309,11 @@ func buildReportURL(endpoint string) string {
 	return strings.TrimRight(endpoint, "/") + "/api/v1/state/report"
 }
 
-func buildSignatureURL(endpoint string, sharingKey string) string {
-	return strings.TrimRight(endpoint, "/") + "/s/" + sharingKey
+func buildSignatureURL(template string, sharingKey string) string {
+	if strings.TrimSpace(template) == "" {
+		return ""
+	}
+	return strings.ReplaceAll(template, "{SharingKey}", sharingKey)
 }
 
 func buildUserProfileURL(template string, sharingKey string) string {
