@@ -15,6 +15,7 @@
     <!-- WinForms is pulled in only for the tray NotifyIcon. -->
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <AssemblyName>ShareMyStatus</AssemblyName>
     <RootNamespace>ShareMyStatusClient</RootNamespace>
     <Product>Share My Status</Product>
@@ -25,5 +26,10 @@
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Embed the icon so the tray can load a crisp small-size frame at runtime. -->
+    <Resource Include="Resources\app.ico" />
+  </ItemGroup>
 
 </Project>

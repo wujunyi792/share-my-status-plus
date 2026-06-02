@@ -90,6 +90,22 @@ public partial class App : Application
 
     private static Icon LoadTrayIcon()
     {
+        // Prefer the embedded multi-size .ico so the tray gets a crisp small frame.
+        try
+        {
+            var resource = Application.GetResourceStream(
+                new Uri("pack://application:,,,/Resources/app.ico"));
+            if (resource != null)
+            {
+                using var stream = resource.Stream;
+                return new Icon(stream, SystemInformation.SmallIconSize);
+            }
+        }
+        catch
+        {
+            // Fall through to the exe-associated icon.
+        }
+
         try
         {
             var exe = Environment.ProcessPath;
@@ -104,6 +120,7 @@ public partial class App : Application
         {
             // Fall back below.
         }
+
         return SystemIcons.Application;
     }
 
