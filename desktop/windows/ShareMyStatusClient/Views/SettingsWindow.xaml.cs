@@ -83,6 +83,20 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        if (string.Equals(endpoint, DefaultSettings.EndpointUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(this, "请填写你自己的服务器地址（当前仍是占位示例地址）。", "无法保存",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (_groups.Any(g => string.IsNullOrWhiteSpace(g.Name)))
+        {
+            MessageBox.Show(this, "存在未命名的活动分组，请填写名称或删除后再保存。", "无法保存",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(TxtSecret.Text))
         {
             var proceed = MessageBox.Show(this,
@@ -113,7 +127,12 @@ public partial class SettingsWindow : Window
     private void OnRemoveGroupClick(object sender, RoutedEventArgs e)
     {
         if (GroupsList.SelectedItem is ActivityGroupEditModel model)
+        {
+            var index = _groups.IndexOf(model);
             _groups.Remove(model);
+            if (_groups.Count > 0)
+                GroupsList.SelectedIndex = Math.Min(index, _groups.Count - 1);
+        }
     }
 
     private void OnImportClick(object sender, RoutedEventArgs e)
@@ -138,7 +157,10 @@ public partial class SettingsWindow : Window
             }
             _working.CopyFrom(imported);
             LoadIntoUi(_working);
-            MessageBox.Show(this, "配置已导入。", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+            var note = string.IsNullOrWhiteSpace(_working.SecretKey)
+                ? "配置已导入。该配置不含 Secret Key，请手动填写后保存。"
+                : "配置已导入，请确认无误后保存。";
+            MessageBox.Show(this, note, "成功", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {

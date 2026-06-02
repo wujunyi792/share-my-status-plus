@@ -59,10 +59,14 @@ public partial class App : Application
 
         SetupTray();
 
+        var launchedAtLogin = e.Args.Any(a => string.Equals(a, "--autostart", StringComparison.OrdinalIgnoreCase));
+
         if (!_config.IsValid())
         {
-            // First run (or incomplete config): guide the user to set up.
-            OpenSettings();
+            // Incomplete config: guide setup on a manual launch, but stay silent (just the
+            // tray) when auto-started at login so we don't nag the user every sign-in.
+            if (!launchedAtLogin)
+                OpenSettings();
         }
         else if (_config.ReporterEnabled)
         {
@@ -165,7 +169,10 @@ public partial class App : Application
         if (_toggleItem != null)
             _toggleItem.Text = reporting ? "停止上报" : "开始上报";
         if (_statusItem != null)
-            _statusItem.Text = _reporter.ReportingStatus;
+        {
+            var needsSetup = _config != null && !_config.IsValid();
+            _statusItem.Text = (!reporting && needsSetup) ? "未配置 — 请打开设置" : _reporter.ReportingStatus;
+        }
 
         var resources = _reporter.ClientResources;
         if (_statusPageItem != null)
@@ -208,28 +215,35 @@ public partial class App : Application
         if (_reporter == null || _config == null)
             return;
 
-        if (_reporter.IsReporting)
+        try
         {
-            await _reporter.StopAsync();
-            _config.ReporterEnabled = false;
-        }
-        else
-        {
-            if (!_config.IsValid())
+            if (_reporter.IsReporting)
             {
-                MessageBox.Show("请先在「设置」中填写服务器地址与 Secret Key。", "Share My Status");
-                OpenSettings();
-                return;
+                await _reporter.StopAsync();
+                _config.ReporterEnabled = false;
+                ShowBalloon("Share My Status", "已停止上报", ToolTipIcon.Info);
             }
-            await _reporter.StartAsync();
-            _config.ReporterEnabled = true;
-            ShowBalloon("Share My Status", "已开始上报状态", ToolTipIcon.Info);
+            else
+            {
+                if (!_config.IsValid())
+                {
+                    MessageBox.Show("请先在「设置」中填写服务器地址与 Secret Key。", "Share My Status");
+                    OpenSettings();
+                    return;
+                }
+                await _reporter.StartAsync();
+                _config.ReporterEnabled = true;
+                ShowBalloon("Share My Status", "已开始上报状态", ToolTipIcon.Info);
+            }
+
+            SaveConfig();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Toggle reporting failed", ex);
+            ShowBalloon("Share My Status", "操作失败：" + ex.Message, ToolTipIcon.Error);
         }
 
-        if (!_reporter.IsReporting && !_config.ReporterEnabled)
-            ShowBalloon("Share My Status", "已停止上报", ToolTipIcon.Info);
-
-        SaveConfig();
         UpdateTrayUi();
     }
 
@@ -256,7 +270,8 @@ public partial class App : Application
             return;
 
         _config.CopyFrom(updated);
-        _config.Save();
+        if (!SaveConfig())
+            MessageBox.Show("配置保存失败，请检查磁盘权限后重试。", "Share My Status");
         AutostartService.SetEnabled(_config.LaunchAtLogin);
         _reporter.ApplyConfiguration(_config);
         UpdateTrayUi();
@@ -326,21 +341,33 @@ public partial class App : Application
 
     private async void ExitApp()
     {
-        if (_reporter != null)
-            await _reporter.StopAsync();
-        SaveConfig();
-        Shutdown();
+        try
+        {
+            if (_reporter != null)
+                await _reporter.StopAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Stop on exit failed", ex);
+        }
+        finally
+        {
+            SaveConfig();
+            Shutdown();
+        }
     }
 
-    private void SaveConfig()
+    private bool SaveConfig()
     {
         try
         {
             _config?.Save();
+            return true;
         }
         catch (Exception ex)
         {
             _logger.Error("Failed to save configuration", ex);
+            return false;
         }
     }
 

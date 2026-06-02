@@ -19,22 +19,65 @@ public sealed class StatusReporter
     private readonly AppLogger _logger = AppLogger.Reporter;
 
     private readonly object _stateGate = new();
+    // Serializes Start/Stop/Restart so configuration changes can't interleave loops.
+    private readonly SemaphoreSlim _lifecycleLock = new(1, 1);
+
     private AppConfiguration _config = new();
 
     private CancellationTokenSource? _systemCts;
     private CancellationTokenSource? _activityCts;
+    private Task? _systemTask;
+    private Task? _activityTask;
     private string? _lastReportedActivityLabel;
 
-    public bool IsReporting { get; private set; }
-    public string ReportingStatus { get; private set; } = "未启动";
-    public Exception? LastError { get; private set; }
+    // Backing fields for cross-thread-observed state (guarded by _stateGate).
+    private bool _isReporting;
+    private string _reportingStatus = "未启动";
+    private Exception? _lastError;
 
-    public MusicSnapshot? CurrentMusic { get; private set; }
-    public SystemSnapshot? CurrentSystem { get; private set; }
-    public ActivitySnapshot? CurrentActivity { get; private set; }
+    private MusicSnapshot? _currentMusic;
+    private SystemSnapshot? _currentSystem;
+    private ActivitySnapshot? _currentActivity;
+    private ClientResources? _clientResources;
+
+    public bool IsReporting
+    {
+        get { lock (_stateGate) { return _isReporting; } }
+        private set { lock (_stateGate) { _isReporting = value; } }
+    }
+
+    public string ReportingStatus
+    {
+        get { lock (_stateGate) { return _reportingStatus; } }
+    }
+
+    public Exception? LastError
+    {
+        get { lock (_stateGate) { return _lastError; } }
+        private set { lock (_stateGate) { _lastError = value; } }
+    }
+
+    public MusicSnapshot? CurrentMusic
+    {
+        get { lock (_stateGate) { return _currentMusic; } }
+    }
+
+    public SystemSnapshot? CurrentSystem
+    {
+        get { lock (_stateGate) { return _currentSystem; } }
+    }
+
+    public ActivitySnapshot? CurrentActivity
+    {
+        get { lock (_stateGate) { return _currentActivity; } }
+    }
 
     /// <summary>Server-provided resource links (user status page / signature DIY), if fetched.</summary>
-    public ClientResources? ClientResources { get; private set; }
+    public ClientResources? ClientResources
+    {
+        get { lock (_stateGate) { return _clientResources; } }
+        private set { lock (_stateGate) { _clientResources = value; } }
+    }
 
     public DateTimeOffset? LastReportTime => _network.LastReportTime;
     public int ReportCount => _network.ReportCount;
@@ -47,10 +90,7 @@ public sealed class StatusReporter
     public void ApplyConfiguration(AppConfiguration config)
     {
         var clone = config.Clone();
-        lock (_stateGate)
-        {
-            _config = clone;
-        }
+        lock (_stateGate) { _config = clone; }
 
         _network.UpdateConfiguration(clone.EndpointUrl, clone.SecretKey);
         _cover.UpdateConfiguration(clone.EndpointUrl, clone.SecretKey);
@@ -63,7 +103,7 @@ public sealed class StatusReporter
 
         if (IsReporting)
         {
-            // Restart loops to pick up new toggles/intervals (simple and race-free).
+            // Restart loops to pick up new toggles/intervals (serialized + race-free).
             _ = RestartAsync();
         }
     }
@@ -89,15 +129,34 @@ public sealed class StatusReporter
         }
     }
 
-    private async Task RestartAsync()
-    {
-        await StopAsync().ConfigureAwait(false);
-        await StartAsync().ConfigureAwait(false);
-    }
-
-    // ---- Lifecycle ----
+    // ---- Lifecycle (serialized through _lifecycleLock) ----
 
     public async Task StartAsync()
+    {
+        await _lifecycleLock.WaitAsync().ConfigureAwait(false);
+        try { await StartCoreAsync().ConfigureAwait(false); }
+        finally { _lifecycleLock.Release(); }
+    }
+
+    public async Task StopAsync()
+    {
+        await _lifecycleLock.WaitAsync().ConfigureAwait(false);
+        try { await StopCoreAsync().ConfigureAwait(false); }
+        finally { _lifecycleLock.Release(); }
+    }
+
+    private async Task RestartAsync()
+    {
+        await _lifecycleLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await StopCoreAsync().ConfigureAwait(false);
+            await StartCoreAsync().ConfigureAwait(false);
+        }
+        finally { _lifecycleLock.Release(); }
+    }
+
+    private async Task StartCoreAsync()
     {
         AppConfiguration cfg;
         lock (_stateGate) { cfg = _config; }
@@ -125,23 +184,37 @@ public sealed class StatusReporter
         UpdateStatus();
     }
 
-    public async Task StopAsync()
+    private async Task StopCoreAsync()
     {
         _logger.Info("Stopping status reporting...");
         IsReporting = false;
 
         _systemCts?.Cancel();
-        _systemCts = null;
         _activityCts?.Cancel();
+
+        // Wait for the loops to actually exit before disposing their token sources.
+        var pending = new[] { _systemTask, _activityTask }.Where(t => t != null).Cast<Task>().ToArray();
+        if (pending.Length > 0)
+        {
+            try { await Task.WhenAll(pending).ConfigureAwait(false); }
+            catch (OperationCanceledException) { /* expected */ }
+            catch (Exception ex) { _logger.Debug($"Loop drain error: {ex.Message}"); }
+        }
+
+        _systemCts?.Dispose();
+        _systemCts = null;
+        _systemTask = null;
+        _activityCts?.Dispose();
         _activityCts = null;
+        _activityTask = null;
 
         await _media.StopAsync().ConfigureAwait(false);
 
         lock (_stateGate)
         {
-            CurrentMusic = null;
-            CurrentSystem = null;
-            CurrentActivity = null;
+            _currentMusic = null;
+            _currentSystem = null;
+            _currentActivity = null;
             _lastReportedActivityLabel = null;
         }
 
@@ -157,14 +230,14 @@ public sealed class StatusReporter
         _systemCts = cts;
         var interval = TimeSpan.FromSeconds(cfg.SystemPollingInterval);
 
-        _ = Task.Run(async () =>
+        _systemTask = Task.Run(async () =>
         {
             while (!cts.IsCancellationRequested)
             {
                 try
                 {
                     var snapshot = _system.Collect();
-                    lock (_stateGate) { CurrentSystem = snapshot; }
+                    lock (_stateGate) { _currentSystem = snapshot; }
                     RaiseChanged();
                     await SendReportAsync(ReportEvent.ForSystem(snapshot.ToSystemInfo()), "system", cts.Token)
                         .ConfigureAwait(false);
@@ -188,7 +261,7 @@ public sealed class StatusReporter
         _activityCts = cts;
         var interval = TimeSpan.FromSeconds(cfg.ActivityPollingInterval);
 
-        _ = Task.Run(async () =>
+        _activityTask = Task.Run(async () =>
         {
             while (!cts.IsCancellationRequested)
             {
@@ -200,15 +273,14 @@ public sealed class StatusReporter
                     var snapshot = _activity.Collect(groups);
                     if (snapshot != null)
                     {
-                        lock (_stateGate) { CurrentActivity = snapshot; }
-                        RaiseChanged();
-
                         bool changed;
                         lock (_stateGate)
                         {
+                            _currentActivity = snapshot;
                             changed = _lastReportedActivityLabel != snapshot.ActivityTag;
                             if (changed) _lastReportedActivityLabel = snapshot.ActivityTag;
                         }
+                        RaiseChanged();
 
                         if (changed)
                             await SendReportAsync(ReportEvent.ForActivity(snapshot.ToActivityInfo()), "activity", cts.Token)
@@ -235,16 +307,19 @@ public sealed class StatusReporter
 
     private async Task HandleMusicAsync(MusicSnapshot? music)
     {
+        if (!IsReporting)
+            return; // ignore late callbacks after stop
+
         bool artworkOnly;
         lock (_stateGate)
         {
-            var current = CurrentMusic;
-            // Same song (title+artist) => treat as artwork/state-only update; update local
-            // state but don't fire a separate report (matches macOS behaviour).
+            var current = _currentMusic;
+            // Same song (title+artist) => artwork/state-only update; update local state but
+            // don't fire a separate report (matches macOS behaviour).
             artworkOnly = music != null && current != null
                 && music.Title == current.Title
                 && music.Artist == current.Artist;
-            CurrentMusic = music;
+            _currentMusic = music;
         }
 
         RaiseChanged();
@@ -257,8 +332,11 @@ public sealed class StatusReporter
 
     private async Task ReportMusicChangeAsync()
     {
+        if (!IsReporting)
+            return;
+
         MusicSnapshot? current;
-        lock (_stateGate) { current = CurrentMusic; }
+        lock (_stateGate) { current = _currentMusic; }
 
         // No current music (e.g. playback stopped) => nothing to report, matching macOS.
         if (current == null)
@@ -296,7 +374,7 @@ public sealed class StatusReporter
         }
         catch (OperationCanceledException)
         {
-            // Shutting down; ignore.
+            return; // shutting down; don't touch status
         }
         catch (Exception ex)
         {
@@ -313,9 +391,16 @@ public sealed class StatusReporter
     {
         string status;
         AppConfiguration cfg;
-        lock (_stateGate) { cfg = _config; }
+        bool reporting;
+        Exception? error;
+        lock (_stateGate)
+        {
+            cfg = _config;
+            reporting = _isReporting;
+            error = _lastError;
+        }
 
-        if (!IsReporting)
+        if (!reporting)
         {
             status = "未启动";
         }
@@ -323,9 +408,9 @@ public sealed class StatusReporter
         {
             status = "网络未连接";
         }
-        else if (LastError != null)
+        else if (error != null)
         {
-            status = $"错误: {LastError.Message}";
+            status = $"错误: {error.Message}";
         }
         else
         {
@@ -341,7 +426,7 @@ public sealed class StatusReporter
 
     private void SetStatus(string status)
     {
-        ReportingStatus = status;
+        lock (_stateGate) { _reportingStatus = status; }
         RaiseChanged();
     }
 
@@ -357,9 +442,9 @@ public sealed class StatusReporter
         ActivitySnapshot? activity;
         lock (_stateGate)
         {
-            music = CurrentMusic;
-            system = CurrentSystem;
-            activity = CurrentActivity;
+            music = _currentMusic;
+            system = _currentSystem;
+            activity = _currentActivity;
         }
 
         if (music != null)

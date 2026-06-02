@@ -104,6 +104,7 @@ public sealed class MediaSessionService
         {
             _running = false;
             _lastEmittedKey = null;
+            _callback = null;
         }
 
         if (_manager != null)
@@ -150,6 +151,11 @@ public sealed class MediaSessionService
         GlobalSystemMediaTransportControlsSessionManager sender,
         CurrentSessionChangedEventArgs args)
     {
+        lock (_gate)
+        {
+            if (!_running)
+                return; // ignore events arriving during/after Stop
+        }
         HookSession(sender.GetCurrentSession());
         _ = RefreshAsync(forceEmit: false);
     }
@@ -192,14 +198,19 @@ public sealed class MediaSessionService
                 ? "<none>"
                 : $"{snapshot.Title}|{snapshot.Artist}|{snapshot.IsPlaying}|{snapshot.ArtworkData?.Length ?? 0}";
 
+            Action<MusicSnapshot?>? callback;
             lock (_gate)
             {
+                // Re-check running inside the lock so a concurrent Stop suppresses late emits.
+                if (!_running && !forceEmit)
+                    return;
                 if (!forceEmit && key == _lastEmittedKey)
                     return;
                 _lastEmittedKey = key;
+                callback = _callback;
             }
 
-            _callback?.Invoke(snapshot);
+            callback?.Invoke(snapshot);
         }
         catch (Exception ex)
         {

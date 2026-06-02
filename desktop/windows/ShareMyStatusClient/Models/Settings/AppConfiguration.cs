@@ -75,7 +75,16 @@ public sealed class AppConfiguration
         // Atomic write: write to temp then rename over the target (atomic on the same volume).
         var tmp = ConfigPath + ".tmp";
         File.WriteAllText(tmp, json);
-        File.Move(tmp, ConfigPath, overwrite: true);
+        try
+        {
+            File.Move(tmp, ConfigPath, overwrite: true);
+        }
+        catch
+        {
+            // Fallback for environments where the rename fails (e.g. redirected/roamed APPDATA).
+            File.Copy(tmp, ConfigPath, overwrite: true);
+            try { File.Delete(tmp); } catch { /* leftover temp is harmless */ }
+        }
     }
 
     private void Normalize()

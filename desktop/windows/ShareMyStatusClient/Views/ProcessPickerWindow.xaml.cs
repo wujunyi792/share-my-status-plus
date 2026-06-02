@@ -50,32 +50,42 @@ public partial class ProcessPickerWindow : Window
         var existing = _items.Where(i => i.IsChecked).Select(i => i.Identifier)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var apps = await Task.Run(ProcessHelper.GetWindowedProcesses);
-
-        var mediaIds = _includeMediaSources
-            ? await MediaSessionService.GetActiveSourceIdsAsync()
-            : new List<string>();
-
-        _items.Clear();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var id in mediaIds)
+        try
         {
-            if (seen.Add(id))
-                _items.Add(new PickItem(id, $"🎵 {id}", existing.Contains(id)));
-        }
+            var apps = await Task.Run(ProcessHelper.GetWindowedProcesses);
 
-        foreach (var app in apps)
+            var mediaIds = _includeMediaSources
+                ? await MediaSessionService.GetActiveSourceIdsAsync()
+                : new List<string>();
+
+            _items.Clear();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var id in mediaIds)
+            {
+                if (seen.Add(id))
+                    _items.Add(new PickItem(id, $"🎵 {id}", existing.Contains(id)));
+            }
+
+            foreach (var app in apps)
+            {
+                if (seen.Add(app.ProcessName))
+                    _items.Add(new PickItem(app.ProcessName, app.DisplayName, existing.Contains(app.ProcessName)));
+            }
+
+            LblStatus.Text = _items.Count == 0
+                ? "未发现可选应用，可手动输入。"
+                : $"共 {_items.Count} 个应用（媒体源以 🎵 标记）";
+            _view.Refresh();
+        }
+        catch (Exception ex)
         {
-            if (seen.Add(app.ProcessName))
-                _items.Add(new PickItem(app.ProcessName, app.DisplayName, existing.Contains(app.ProcessName)));
+            LblStatus.Text = "扫描失败：" + ex.Message;
         }
-
-        LblStatus.Text = _items.Count == 0
-            ? "未发现可选应用，可手动输入。"
-            : $"共 {_items.Count} 个应用（媒体源以 🎵 标记）";
-        BtnRefresh.IsEnabled = true;
-        _view.Refresh();
+        finally
+        {
+            BtnRefresh.IsEnabled = true;
+        }
     }
 
     private void OnSearchChanged(object sender, TextChangedEventArgs e)
