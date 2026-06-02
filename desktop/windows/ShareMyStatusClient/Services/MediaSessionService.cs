@@ -73,8 +73,6 @@ public sealed class MediaSessionService
             if (_running) return;
         }
 
-        _callback = callback;
-
         try
         {
             _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
@@ -88,8 +86,12 @@ public sealed class MediaSessionService
         _manager.CurrentSessionChanged += OnCurrentSessionChanged;
         HookSession(_manager.GetCurrentSession());
 
+        // Publish callback and running together so RefreshAsync (which snapshots both
+        // under _gate) never sees a half-initialized state, and events arriving before
+        // this point are dropped by the _running guard.
         lock (_gate)
         {
+            _callback = callback;
             _running = true;
             _lastEmittedKey = null;
         }

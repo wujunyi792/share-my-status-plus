@@ -208,17 +208,23 @@ public partial class SettingsWindow : Window
         try
         {
             var (ok, message) = await _testConnection(endpoint, secret);
+            if (!IsLoaded)
+                return; // window closed while awaiting
             LblTest.Foreground = ok ? Brushes.Green : Brushes.OrangeRed;
             LblTest.Text = (ok ? "✓ " : "✗ ") + message;
         }
         catch (Exception ex)
         {
-            LblTest.Foreground = Brushes.OrangeRed;
-            LblTest.Text = "✗ " + ex.Message;
+            if (IsLoaded)
+            {
+                LblTest.Foreground = Brushes.OrangeRed;
+                LblTest.Text = "✗ " + ex.Message;
+            }
         }
         finally
         {
-            BtnTest.IsEnabled = true;
+            if (IsLoaded)
+                BtnTest.IsEnabled = true;
         }
     }
 
