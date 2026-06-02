@@ -33,6 +33,9 @@ public sealed class StatusReporter
     public SystemSnapshot? CurrentSystem { get; private set; }
     public ActivitySnapshot? CurrentActivity { get; private set; }
 
+    /// <summary>Server-provided resource links (user status page / signature DIY), if fetched.</summary>
+    public ClientResources? ClientResources { get; private set; }
+
     public DateTimeOffset? LastReportTime => _network.LastReportTime;
     public int ReportCount => _network.ReportCount;
 
@@ -55,10 +58,34 @@ public sealed class StatusReporter
 
         _logger.Info("Configuration applied");
 
+        // Refresh server resource links in the background (best-effort).
+        _ = RefreshClientResourcesAsync();
+
         if (IsReporting)
         {
             // Restart loops to pick up new toggles/intervals (simple and race-free).
             _ = RestartAsync();
+        }
+    }
+
+    /// <summary>Validate the given endpoint + secret against the server (used by the settings dialog).</summary>
+    public Task<(bool Ok, string Message)> TestConnectionAsync(string endpointUrl, string secretKey) =>
+        _network.TestConnectionAsync(endpointUrl, secretKey, CancellationToken.None);
+
+    public async Task RefreshClientResourcesAsync()
+    {
+        try
+        {
+            var resources = await _network.FetchClientResourcesAsync(CancellationToken.None).ConfigureAwait(false);
+            if (resources != null)
+            {
+                ClientResources = resources;
+                RaiseChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"Client resources fetch failed: {ex.Message}");
         }
     }
 

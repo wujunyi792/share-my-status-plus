@@ -49,6 +49,69 @@ public sealed class NetworkService
     /// <summary>A best-effort "is the machine online" check (matches macOS NWPathMonitor intent).</summary>
     public static bool IsConnected => NetworkInterface.GetIsNetworkAvailable();
 
+    private static string? BaseUrlOf(string endpointUrl) =>
+        Uri.TryCreate(endpointUrl, UriKind.Absolute, out var uri) ? $"{uri.Scheme}://{uri.Authority}" : null;
+
+    /// <summary>Validates an endpoint + secret by hitting the authenticated client/resources route.</summary>
+    public async Task<(bool Ok, string Message)> TestConnectionAsync(string endpointUrl, string secretKey, CancellationToken ct)
+    {
+        if (!IsConnected)
+            return (false, "网络未连接");
+        if (string.IsNullOrWhiteSpace(endpointUrl) || BaseUrlOf(endpointUrl) is not { } baseUrl)
+            return (false, "服务器地址无效");
+        if (string.IsNullOrWhiteSpace(secretKey))
+            return (false, "Secret Key 为空");
+
+        using var message = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/api/v1/client/resources");
+        message.Headers.TryAddWithoutValidation("X-Secret-Key", secretKey);
+        message.Headers.TryAddWithoutValidation("Accept", "application/json");
+
+        try
+        {
+            using var response = await _http.SendAsync(message, ct).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+                return (false, "认证失败：Secret Key 不正确");
+            if (!response.IsSuccessStatusCode)
+                return (false, $"服务器返回 HTTP {(int)response.StatusCode}");
+            return (true, "连接成功，配置有效");
+        }
+        catch (OperationCanceledException)
+        {
+            return (false, "连接超时");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"连接失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>Fetches server-provided client resource links (user doc / signature DIY URL).</summary>
+    public async Task<ClientResources?> FetchClientResourcesAsync(CancellationToken ct)
+    {
+        string endpoint, secret;
+        lock (_gate) { endpoint = _endpointUrl; secret = _secretKey; }
+
+        if (string.IsNullOrEmpty(endpoint) || string.IsNullOrEmpty(secret) || BaseUrlOf(endpoint) is not { } baseUrl)
+            return null;
+
+        using var message = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/api/v1/client/resources");
+        message.Headers.TryAddWithoutValidation("X-Secret-Key", secret);
+        message.Headers.TryAddWithoutValidation("Accept", "application/json");
+
+        try
+        {
+            using var response = await _http.SendAsync(message, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                return null;
+            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            return JsonSerializer.Deserialize<ClientResources>(body, ApiJson.Options);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public async Task<BatchReportResponse> ReportStatusAsync(BatchReportRequest request, CancellationToken ct)
     {
         string endpoint, secret;

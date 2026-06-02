@@ -1,0 +1,20 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.cs]
+indent_size = 4
+# Prefer file-scoped namespaces, var when apparent, expression bodies where natural.
+csharp_style_namespace_declarations = file_scoped:suggestion
+dotnet_sort_system_directives_first = true
+
+[*.{xml,xaml,csproj,props,targets}]
+indent_size = 2
+
+[*.{yml,yaml}]
+indent_size = 2

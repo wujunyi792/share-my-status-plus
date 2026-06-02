@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text;
 using ShareMyStatusClient.Interop;
 using ShareMyStatusClient.Models.Domain;
 using ShareMyStatusClient.Models.Settings;
@@ -76,9 +75,12 @@ public sealed class ActivityDetectorService
         if (length <= 0)
             return null;
 
-        var sb = new StringBuilder(length + 1);
-        NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
-        var title = sb.ToString();
+        var buffer = new char[length + 1];
+        var copied = NativeMethods.GetWindowText(hwnd, buffer, buffer.Length);
+        if (copied <= 0)
+            return null;
+
+        var title = new string(buffer, 0, copied);
         return string.IsNullOrWhiteSpace(title) ? null : title;
     }
 

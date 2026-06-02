@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Media;
 using Microsoft.Win32;
 using ShareMyStatusClient.Models.Settings;
 
@@ -10,13 +11,18 @@ public partial class SettingsWindow : Window
 {
     private readonly AppConfiguration _working;
     private readonly Action<AppConfiguration> _onApply;
+    private readonly Func<string, string, Task<(bool Ok, string Message)>> _testConnection;
     private readonly ObservableCollection<ActivityGroupEditModel> _groups = new();
 
-    public SettingsWindow(AppConfiguration current, Action<AppConfiguration> onApply)
+    public SettingsWindow(
+        AppConfiguration current,
+        Action<AppConfiguration> onApply,
+        Func<string, string, Task<(bool Ok, string Message)>> testConnection)
     {
         InitializeComponent();
         _working = current.Clone();
         _onApply = onApply;
+        _testConnection = testConnection;
         GroupsList.ItemsSource = _groups;
         LoadIntoUi(_working);
     }
@@ -167,6 +173,73 @@ public partial class SettingsWindow : Window
             MessageBox.Show(this, $"文件写入失败: {ex.Message}", "导出失败",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private async void OnTestClick(object sender, RoutedEventArgs e)
+    {
+        var endpoint = TxtEndpoint.Text.Trim();
+        var secret = TxtSecret.Text.Trim();
+
+        BtnTest.IsEnabled = false;
+        LblTest.Foreground = Brushes.Gray;
+        LblTest.Text = "正在测试…";
+        try
+        {
+            var (ok, message) = await _testConnection(endpoint, secret);
+            LblTest.Foreground = ok ? Brushes.Green : Brushes.OrangeRed;
+            LblTest.Text = (ok ? "✓ " : "✗ ") + message;
+        }
+        catch (Exception ex)
+        {
+            LblTest.Foreground = Brushes.OrangeRed;
+            LblTest.Text = "✗ " + ex.Message;
+        }
+        finally
+        {
+            BtnTest.IsEnabled = true;
+        }
+    }
+
+    private void OnPickMusicClick(object sender, RoutedEventArgs e)
+    {
+        var existing = ParseLines(TxtWhitelist.Text);
+        var picked = PickApps("选择媒体应用 (音乐白名单)", includeMediaSources: true);
+        if (picked == null)
+            return;
+
+        var merged = existing
+            .Concat(picked)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        TxtWhitelist.Text = string.Join(Environment.NewLine, merged);
+    }
+
+    private void OnPickActivityClick(object sender, RoutedEventArgs e)
+    {
+        if (GroupsList.SelectedItem is not ActivityGroupEditModel model)
+        {
+            MessageBox.Show(this, "请先在左侧选择一个分组。", "提示",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var picked = PickApps("选择应用 (添加到分组)", includeMediaSources: false);
+        if (picked == null)
+            return;
+
+        var existing = model.ProcessNamesText
+            .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var merged = existing
+            .Concat(picked.Select(p => p.ToLowerInvariant()))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        model.ProcessNamesText = string.Join(Environment.NewLine, merged);
+    }
+
+    private IReadOnlyList<string>? PickApps(string title, bool includeMediaSources)
+    {
+        var picker = new ProcessPickerWindow(title, includeMediaSources) { Owner = this };
+        return picker.ShowDialog() == true ? picker.SelectedIdentifiers : null;
     }
 
     private void OnResetClick(object sender, RoutedEventArgs e)

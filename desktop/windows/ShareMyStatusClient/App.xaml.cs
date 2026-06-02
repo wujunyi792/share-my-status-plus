@@ -20,6 +20,7 @@ namespace ShareMyStatusClient;
 public partial class App : Application
 {
     private const string MutexName = "ShareMyStatus.SingleInstance.{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}";
+    private const string ReleasesUrl = "https://github.com/wujunyi792/share-my-status-plus/releases";
 
     private readonly AppLogger _logger = AppLogger.App;
 
@@ -28,9 +29,12 @@ public partial class App : Application
     private NotifyIcon? _trayIcon;
     private ToolStripMenuItem? _toggleItem;
     private ToolStripMenuItem? _statusItem;
+    private ToolStripMenuItem? _statusPageItem;
+    private ToolStripMenuItem? _signatureItem;
     private StatusReporter? _reporter;
     private AppConfiguration? _config;
     private SettingsWindow? _settingsWindow;
+    private string? _lastNotifiedError;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -55,8 +59,15 @@ public partial class App : Application
 
         SetupTray();
 
-        if (_config.ReporterEnabled && _config.IsValid())
+        if (!_config.IsValid())
+        {
+            // First run (or incomplete config): guide the user to set up.
+            OpenSettings();
+        }
+        else if (_config.ReporterEnabled)
+        {
             _ = _reporter.StartAsync();
+        }
 
         UpdateTrayUi();
     }
@@ -74,7 +85,23 @@ public partial class App : Application
         _toggleItem = new ToolStripMenuItem("开始上报", null, OnToggleClick);
         menu.Items.Add(_toggleItem);
         menu.Items.Add(new ToolStripMenuItem("设置...", null, (_, _) => OpenSettings()));
+        menu.Items.Add(new ToolStripSeparator());
+
+        _statusPageItem = new ToolStripMenuItem("打开我的状态页", null, (_, _) => OpenStatusPage())
+        {
+            Enabled = false,
+        };
+        menu.Items.Add(_statusPageItem);
+        _signatureItem = new ToolStripMenuItem("自定义飞书签名", null, (_, _) => OpenSignaturePage())
+        {
+            Enabled = false,
+        };
+        menu.Items.Add(_signatureItem);
+        menu.Items.Add(new ToolStripSeparator());
+
         menu.Items.Add(new ToolStripMenuItem("打开日志文件夹", null, (_, _) => OpenLogs()));
+        menu.Items.Add(new ToolStripMenuItem("检查更新", null, (_, _) => OpenUrl(ReleasesUrl)));
+        menu.Items.Add(new ToolStripMenuItem("关于", null, (_, _) => ShowAbout()));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("退出", null, (_, _) => ExitApp()));
 
@@ -140,10 +167,39 @@ public partial class App : Application
         if (_statusItem != null)
             _statusItem.Text = _reporter.ReportingStatus;
 
+        var resources = _reporter.ClientResources;
+        if (_statusPageItem != null)
+            _statusPageItem.Enabled = !string.IsNullOrEmpty(resources?.UserDocUrl);
+        if (_signatureItem != null)
+            _signatureItem.Enabled = !string.IsNullOrEmpty(resources?.FeishuSignatureDiyUrl);
+
+        // Tooltip: status line plus a live summary (NotifyIcon.Text is capped at 63 chars).
         var tip = $"Share My Status — {_reporter.ReportingStatus}";
-        // NotifyIcon.Text is limited to 63 characters.
-        _trayIcon.Text = tip.Length > 63 ? tip[..63] : tip;
+        if (reporting)
+        {
+            var summary = _reporter.GetStatusSummary();
+            if (summary != "无状态数据")
+                tip = $"{_reporter.ReportingStatus}\n{summary}";
+        }
+        _trayIcon.Text = Truncate(tip, 63);
+
+        // Surface report errors as a balloon, once per distinct error.
+        var error = _reporter.LastError?.Message;
+        if (reporting && !string.IsNullOrEmpty(error))
+        {
+            if (error != _lastNotifiedError)
+            {
+                _lastNotifiedError = error;
+                ShowBalloon("上报出错", error!, ToolTipIcon.Warning);
+            }
+        }
+        else if (string.IsNullOrEmpty(error))
+        {
+            _lastNotifiedError = null;
+        }
     }
+
+    private static string Truncate(string s, int max) => s.Length > max ? s[..max] : s;
 
     // ---- Commands ----
 
@@ -167,7 +223,11 @@ public partial class App : Application
             }
             await _reporter.StartAsync();
             _config.ReporterEnabled = true;
+            ShowBalloon("Share My Status", "已开始上报状态", ToolTipIcon.Info);
         }
+
+        if (!_reporter.IsReporting && !_config.ReporterEnabled)
+            ShowBalloon("Share My Status", "已停止上报", ToolTipIcon.Info);
 
         SaveConfig();
         UpdateTrayUi();
@@ -184,7 +244,7 @@ public partial class App : Application
             return;
         }
 
-        _settingsWindow = new SettingsWindow(_config, ApplyConfigFromSettings);
+        _settingsWindow = new SettingsWindow(_config, ApplyConfigFromSettings, _reporter.TestConnectionAsync);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
@@ -200,6 +260,52 @@ public partial class App : Application
         AutostartService.SetEnabled(_config.LaunchAtLogin);
         _reporter.ApplyConfiguration(_config);
         UpdateTrayUi();
+    }
+
+    private void OpenStatusPage()
+    {
+        var url = _reporter?.ClientResources?.UserDocUrl;
+        if (!string.IsNullOrEmpty(url))
+            OpenUrl(url!);
+    }
+
+    private void OpenSignaturePage()
+    {
+        var url = _reporter?.ClientResources?.FeishuSignatureDiyUrl;
+        if (!string.IsNullOrEmpty(url))
+            OpenUrl(url!);
+    }
+
+    private void OpenUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to open URL {url}", ex);
+        }
+    }
+
+    private void ShowAbout()
+    {
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0";
+        MessageBox.Show(
+            $"Share My Status — Windows 客户端\n版本 {version}\n\n采集音乐 / 系统 / 活动并上报到你配置的服务器。\n{ReleasesUrl}",
+            "关于 Share My Status");
+    }
+
+    private void ShowBalloon(string title, string text, ToolTipIcon icon)
+    {
+        try
+        {
+            _trayIcon?.ShowBalloonTip(4000, title, text, icon);
+        }
+        catch
+        {
+            // Balloons are best-effort.
+        }
     }
 
     private void OpenLogs()

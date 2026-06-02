@@ -29,6 +29,35 @@ public sealed class MediaSessionService
         get { lock (_gate) { return _running; } }
     }
 
+    /// <summary>Enumerates the SourceAppUserModelId of every current media session
+    /// (so the settings UI can offer them as whitelist candidates).</summary>
+    public static async Task<List<string>> GetActiveSourceIdsAsync()
+    {
+        try
+        {
+            var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            var ids = new List<string>();
+            foreach (var session in manager.GetSessions())
+            {
+                try
+                {
+                    var id = session.SourceAppUserModelId;
+                    if (!string.IsNullOrEmpty(id))
+                        ids.Add(id);
+                }
+                catch
+                {
+                    // ignore individual sessions we can't read
+                }
+            }
+            return ids.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
     public void UpdateWhitelist(IEnumerable<string> ids)
     {
         lock (_gate)

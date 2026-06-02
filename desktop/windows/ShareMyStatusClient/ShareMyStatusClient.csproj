@@ -11,6 +11,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
     <UseWPF>true</UseWPF>
     <!-- WinForms is pulled in only for the tray NotifyIcon. -->
     <UseWindowsForms>true</UseWindowsForms>

@@ -34,7 +34,12 @@
                                  ToolTip="例如 https://your-server/api/v1/state/report"/>
 
                         <TextBlock Text="Secret Key (上报密钥)" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                        <TextBox x:Name="TxtSecret" Margin="0,0,0,16"/>
+                        <TextBox x:Name="TxtSecret" Margin="0,0,0,8"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <Button x:Name="BtnTest" Content="测试连接" Width="100" Click="OnTestClick"/>
+                            <TextBlock x:Name="LblTest" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
 
                         <TextBlock Text="上报模块" FontWeight="SemiBold" Margin="0,0,0,6"/>
                         <CheckBox x:Name="ChkMusic" Content="音乐 (正在播放)" Margin="0,2"/>
@@ -85,8 +90,10 @@
                         <TextBlock Text="进程名 (每行一个, 如 chrome.exe)" FontWeight="SemiBold" Margin="0,0,0,4"/>
                         <TextBox Text="{Binding ProcessNamesText, UpdateSourceTrigger=PropertyChanged}"
                                  AcceptsReturn="True" TextWrapping="NoWrap"
-                                 VerticalScrollBarVisibility="Auto" Height="300"
+                                 VerticalScrollBarVisibility="Auto" Height="270"
                                  FontFamily="Consolas, Cascadia Mono"/>
+                        <Button Content="从运行中的应用选择…" HorizontalAlignment="Left"
+                                Margin="0,8,0,0" Click="OnPickActivityClick"/>
                     </StackPanel>
                 </Grid>
             </TabItem>
@@ -98,8 +105,10 @@
                         每行一个媒体源标识 (SourceAppUserModelId 或 exe 名, 如 Spotify.exe)。
                         留空表示允许所有播放器。
                     </TextBlock>
+                    <Button Content="从运行中的应用选择…" HorizontalAlignment="Left"
+                            Margin="0,0,0,8" Click="OnPickMusicClick"/>
                     <TextBox x:Name="TxtWhitelist" AcceptsReturn="True" TextWrapping="NoWrap"
-                             VerticalScrollBarVisibility="Auto" Height="420"
+                             VerticalScrollBarVisibility="Auto" Height="390"
                              FontFamily="Consolas, Cascadia Mono"/>
                 </StackPanel>
             </TabItem>
