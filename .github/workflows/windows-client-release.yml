@@ -1,0 +1,110 @@
+name: Manual Windows Client Build & Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-client-release-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  PROJECT: desktop/windows/ShareMyStatusClient/ShareMyStatusClient.csproj
+  APP_NAME: "Share My Status"
+
+jobs:
+  build_windows_client:
+    name: Build & Release
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # -----------------------------------------------------------------
+      # Version + build number from release.yml (windows: marketing-build)
+      # -----------------------------------------------------------------
+      - name: Read windows version from release.yml
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          WIN_RELEASE=$(grep '^windows:' release.yml | awk '{print $2}')
+          if [ -z "${WIN_RELEASE}" ]; then
+            echo "::error::release.yml must contain windows: <marketingVersion-buildNumber>, e.g. 1.0-1"
+            exit 1
+          fi
+          if ! echo "${WIN_RELEASE}" | grep -Eq '^[0-9]+(\.[0-9]+){1,2}-[0-9]+$'; then
+            echo "::error::Invalid windows version '${WIN_RELEASE}'. Expected marketingVersion-buildNumber, e.g. 1.0-1 or 1.0.0-1."
+            exit 1
+          fi
+          VERSION="${WIN_RELEASE%-*}"
+          BUILD_NUMBER="${WIN_RELEASE##*-}"
+          if [ "${BUILD_NUMBER}" -le 0 ]; then
+            echo "::error::Invalid windows build number '${BUILD_NUMBER}'. It must be a positive integer."
+            exit 1
+          fi
+          # Normalize to a 3-part marketing version for FileVersion (X.Y -> X.Y.0).
+          DOTS=$(echo "${VERSION}" | awk -F. '{print NF-1}')
+          if [ "${DOTS}" -eq 1 ]; then
+            FILE_VERSION="${VERSION}.${BUILD_NUMBER}"
+          else
+            FILE_VERSION="${VERSION%.*}.${BUILD_NUMBER}"
+          fi
+          TAG_NAME="desktop-windows-v${VERSION}-${BUILD_NUMBER}"
+          ARTIFACT_BASE="share-my-status-client-windows-v${VERSION}-${BUILD_NUMBER}"
+          {
+            echo "VERSION=$VERSION"
+            echo "BUILD_NUMBER=$BUILD_NUMBER"
+            echo "FILE_VERSION=$FILE_VERSION"
+            echo "TAG_NAME=$TAG_NAME"
+            echo "ARTIFACT_BASE=$ARTIFACT_BASE"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version=$VERSION Build=$BUILD_NUMBER FileVersion=$FILE_VERSION Tag=$TAG_NAME"
+
+      - name: Restore
+        run: dotnet restore "${env:PROJECT}"
+
+      - name: Publish (self-contained, single file, win-x64)
+        shell: pwsh
+        run: |
+          dotnet publish "${env:PROJECT}" `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:Version=${{ steps.version.outputs.VERSION }} `
+            -p:FileVersion=${{ steps.version.outputs.FILE_VERSION }} `
+            -p:AssemblyVersion=${{ steps.version.outputs.FILE_VERSION }} `
+            -o publish
+
+      - name: Package zip
+        shell: pwsh
+        run: |
+          $zip = "${{ steps.version.outputs.ARTIFACT_BASE }}.zip"
+          Compress-Archive -Path publish/* -DestinationPath $zip -Force
+          Get-FileHash $zip -Algorithm SHA256 | Format-List
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG_NAME }}
+          name: "${{ env.APP_NAME }} for Windows v${{ steps.version.outputs.VERSION }} (build ${{ steps.version.outputs.BUILD_NUMBER }})"
+          body: |
+            Windows desktop client — self-contained, no .NET runtime required.
+
+            Unzip and run `ShareMyStatus.exe`. Configure your server endpoint and
+            Secret Key from the tray icon → 设置.
+          files: ${{ steps.version.outputs.ARTIFACT_BASE }}.zip
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

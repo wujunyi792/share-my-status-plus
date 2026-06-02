@@ -1,0 +1,107 @@
+<Window x:Class="ShareMyStatusClient.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Share My Status 设置"
+        Width="600" Height="660"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize"
+        MinWidth="520" MinHeight="560"
+        FontFamily="Segoe UI, Microsoft YaHei">
+    <DockPanel Margin="0">
+        <!-- Bottom action bar -->
+        <Border DockPanel.Dock="Bottom" Background="#F3F3F3" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
+            <Grid Margin="12,10">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                    <Button x:Name="BtnImport" Content="导入配置" Width="90" Margin="0,0,8,0" Click="OnImportClick"/>
+                    <Button x:Name="BtnExport" Content="导出配置" Width="90" Margin="0,0,8,0" Click="OnExportClick"/>
+                    <Button x:Name="BtnReset" Content="恢复默认" Width="90" Click="OnResetClick"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="BtnSave" Content="保存" Width="90" Margin="0,0,8,0" IsDefault="True" Click="OnSaveClick"/>
+                    <Button x:Name="BtnCancel" Content="取消" Width="90" IsCancel="True" Click="OnCancelClick"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TabControl Margin="10">
+            <!-- General -->
+            <TabItem Header="常规">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12">
+                        <TextBlock Text="服务器地址 (完整上报 Endpoint)" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <TextBox x:Name="TxtEndpoint" Margin="0,0,0,12"
+                                 ToolTip="例如 https://your-server/api/v1/state/report"/>
+
+                        <TextBlock Text="Secret Key (上报密钥)" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <TextBox x:Name="TxtSecret" Margin="0,0,0,16"/>
+
+                        <TextBlock Text="上报模块" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <CheckBox x:Name="ChkMusic" Content="音乐 (正在播放)" Margin="0,2"/>
+                        <CheckBox x:Name="ChkSystem" Content="系统 (电池 / CPU / 内存)" Margin="0,2"/>
+                        <CheckBox x:Name="ChkActivity" Content="活动 (前台应用 → 标签)" Margin="0,2,0,16"/>
+
+                        <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">
+                            <Run Text="系统采样间隔: "/>
+                            <Run Text="{Binding ElementName=SldSystem, Path=Value, StringFormat={}{0:0} 秒, Mode=OneWay}"/>
+                        </TextBlock>
+                        <Slider x:Name="SldSystem" Minimum="5" Maximum="300" TickFrequency="5"
+                                IsSnapToTickEnabled="True" Margin="0,0,0,12"/>
+
+                        <TextBlock FontWeight="SemiBold" Margin="0,0,0,4">
+                            <Run Text="活动采样间隔: "/>
+                            <Run Text="{Binding ElementName=SldActivity, Path=Value, StringFormat={}{0:0} 秒, Mode=OneWay}"/>
+                        </TextBlock>
+                        <Slider x:Name="SldActivity" Minimum="5" Maximum="300" TickFrequency="5"
+                                IsSnapToTickEnabled="True" Margin="0,0,0,16"/>
+
+                        <CheckBox x:Name="ChkAutostart" Content="开机自动启动" Margin="0,2"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Activity groups -->
+            <TabItem Header="活动分组">
+                <Grid Margin="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <DockPanel Grid.Column="0" Margin="0,0,10,0">
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button x:Name="BtnAddGroup" Content="新增" Width="70" Margin="0,0,8,0" Click="OnAddGroupClick"/>
+                            <Button x:Name="BtnRemoveGroup" Content="删除" Width="70" Click="OnRemoveGroupClick"/>
+                        </StackPanel>
+                        <ListBox x:Name="GroupsList" DisplayMemberPath="Name"/>
+                    </DockPanel>
+
+                    <StackPanel Grid.Column="1" DataContext="{Binding SelectedItem, ElementName=GroupsList}">
+                        <TextBlock Text="分组名称 (即上报的标签)" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12"/>
+
+                        <CheckBox Content="启用此分组" IsChecked="{Binding IsEnabled}" Margin="0,0,0,12"/>
+
+                        <TextBlock Text="进程名 (每行一个, 如 chrome.exe)" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <TextBox Text="{Binding ProcessNamesText, UpdateSourceTrigger=PropertyChanged}"
+                                 AcceptsReturn="True" TextWrapping="NoWrap"
+                                 VerticalScrollBarVisibility="Auto" Height="300"
+                                 FontFamily="Consolas, Cascadia Mono"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- Music whitelist -->
+            <TabItem Header="音乐白名单">
+                <StackPanel Margin="12">
+                    <TextBlock TextWrapping="Wrap" Margin="0,0,0,8" Foreground="#555">
+                        每行一个媒体源标识 (SourceAppUserModelId 或 exe 名, 如 Spotify.exe)。
+                        留空表示允许所有播放器。
+                    </TextBlock>
+                    <TextBox x:Name="TxtWhitelist" AcceptsReturn="True" TextWrapping="NoWrap"
+                             VerticalScrollBarVisibility="Auto" Height="420"
+                             FontFamily="Consolas, Cascadia Mono"/>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

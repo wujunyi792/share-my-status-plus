@@ -2,10 +2,13 @@
 # backend/frontend/chart format: major.minor.patch-build (e.g. 1.0.5-1)
 # macos format: marketingVersion-buildNumber (e.g. 1.7-72).
 # macos buildNumber must keep increasing across releases for Sparkle updates.
+# windows format: marketingVersion-buildNumber (e.g. 1.0-1).
 # CI watches this file. Changed components get new GHCR images, and any
 # component or chart change publishes a new OCI Helm chart.
+# Desktop clients (macos/windows) are released via their manual workflows.
 
 backend: 1.0.6-4
 frontend: 1.0.5-2
 chart: 1.0.5-4
 macos: 1.7-72
+windows: 1.0-1

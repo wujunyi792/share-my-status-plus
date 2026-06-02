@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- TFM with platform version >= 10.0.17763 exposes the Windows.* WinRT
+         projections (GlobalSystemMediaTransportControlsSessionManager, etc.). -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <!-- GSMTC media APIs first appeared in Windows 10 1809 (17763). -->
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <UseWPF>true</UseWPF>
+    <!-- WinForms is pulled in only for the tray NotifyIcon. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>ShareMyStatus</AssemblyName>
+    <RootNamespace>ShareMyStatusClient</RootNamespace>
+    <Product>Share My Status</Product>
+    <Company>Share My Status</Company>
+    <!-- Version is overwritten by CI from release.yml (windows: marketing-build). -->
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+</Project>
