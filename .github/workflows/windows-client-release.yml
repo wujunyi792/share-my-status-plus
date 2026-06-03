@@ -92,6 +92,7 @@ jobs:
         run: >
           vpk download github
           --repoUrl https://github.com/${{ github.repository }}
+          --channel win
           --token ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pack (Velopack)
@@ -103,12 +104,14 @@ jobs:
           --mainExe ${{ env.MAIN_EXE }}
           --packTitle "${{ env.APP_NAME }}"
           --packAuthors "${{ env.APP_NAME }}"
+          --channel win
           --icon desktop/windows/ShareMyStatusClient/Resources/app.ico
 
       - name: Upload to GitHub Release (Velopack)
         run: >
           vpk upload github
           --repoUrl https://github.com/${{ github.repository }}
+          --channel win
           --token ${{ secrets.GITHUB_TOKEN }}
           --publish
           --releaseName "${{ env.APP_NAME }} for Windows v${{ steps.version.outputs.VERSION }} (build ${{ steps.version.outputs.BUILD_NUMBER }})"
