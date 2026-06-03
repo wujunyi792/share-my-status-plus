@@ -22,6 +22,8 @@
     <RootNamespace>ShareMyStatusClient</RootNamespace>
     <Product>Share My Status</Product>
     <Company>Share My Status</Company>
+    <!-- Custom entry point so Velopack hooks run before any WPF UI is created. -->
+    <StartupObject>ShareMyStatusClient.Program</StartupObject>
     <!-- Version is overwritten by CI from release.yml (windows: marketing-build). -->
     <Version>1.0.0</Version>
     <FileVersion>1.0.0.0</FileVersion>
@@ -32,6 +34,18 @@
   <ItemGroup>
     <!-- Embed the icon so the tray can load a crisp small-size frame at runtime. -->
     <Resource Include="Resources\app.ico" />
+  </ItemGroup>
+
+  <!-- App.xaml as a Page (not ApplicationDefinition) so we can supply our own Main. -->
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Velopack: silent auto-update (Sparkle-equivalent for Windows).
+         Pinned for reproducibility; bump together with the vpk tool in CI. -->
+    <PackageReference Include="Velopack" Version="0.0.1053" />
   </ItemGroup>
 
 </Project>

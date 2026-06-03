@@ -8,6 +8,7 @@ using ShareMyStatusClient.Models.Settings;
 using ShareMyStatusClient.Services;
 using ShareMyStatusClient.Utilities;
 using ShareMyStatusClient.Views;
+using Velopack;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
 
@@ -20,7 +21,8 @@ namespace ShareMyStatusClient;
 public partial class App : Application
 {
     private const string MutexName = "ShareMyStatus.SingleInstance.{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}";
-    private const string ReleasesUrl = "https://github.com/wujunyi792/share-my-status-plus/releases";
+    private const string RepoUrl = "https://github.com/wujunyi792/share-my-status-plus";
+    private const string ReleasesUrl = RepoUrl + "/releases";
 
     private readonly AppLogger _logger = AppLogger.App;
 
@@ -31,8 +33,10 @@ public partial class App : Application
     private ToolStripMenuItem? _statusItem;
     private ToolStripMenuItem? _statusPageItem;
     private ToolStripMenuItem? _signatureItem;
+    private ToolStripMenuItem? _updateItem;
     private StatusReporter? _reporter;
     private AppConfiguration? _config;
+    private UpdateService? _updateService;
     private SettingsWindow? _settingsWindow;
     private string? _lastNotifiedError;
 
@@ -54,6 +58,7 @@ public partial class App : Application
         _reporter = new StatusReporter();
         _reporter.Changed += OnReporterChanged;
         _reporter.ApplyConfiguration(_config);
+        _updateService = new UpdateService(RepoUrl);
 
         AutostartService.SetEnabled(_config.LaunchAtLogin);
 
@@ -74,6 +79,9 @@ public partial class App : Application
         }
 
         UpdateTrayUi();
+
+        // Best-effort silent update check shortly after launch.
+        _ = CheckUpdatesAsync(silent: true);
     }
 
     // ---- Tray ----
@@ -104,7 +112,8 @@ public partial class App : Application
         menu.Items.Add(new ToolStripSeparator());
 
         menu.Items.Add(new ToolStripMenuItem("打开日志文件夹", null, (_, _) => OpenLogs()));
-        menu.Items.Add(new ToolStripMenuItem("检查更新", null, (_, _) => OpenUrl(ReleasesUrl)));
+        _updateItem = new ToolStripMenuItem("检查更新", null, (_, _) => _ = CheckUpdatesAsync(silent: false));
+        menu.Items.Add(_updateItem);
         menu.Items.Add(new ToolStripMenuItem("关于", null, (_, _) => ShowAbout()));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("退出", null, (_, _) => ExitApp()));
@@ -300,6 +309,67 @@ public partial class App : Application
         catch (Exception ex)
         {
             _logger.Error($"Failed to open URL {url}", ex);
+        }
+    }
+
+    private async Task CheckUpdatesAsync(bool silent)
+    {
+        if (_updateService == null)
+            return;
+
+        if (!_updateService.IsInstalled)
+        {
+            // Loose/dev build: no in-place update channel, fall back to manual download.
+            if (!silent)
+                OpenUrl(ReleasesUrl);
+            return;
+        }
+
+        UpdateInfo? info;
+        try
+        {
+            info = await _updateService.CheckAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Update check failed", ex);
+            if (!silent)
+                MessageBox.Show("检查更新失败，请稍后重试。", "Share My Status");
+            return;
+        }
+
+        if (info == null)
+        {
+            if (!silent)
+                MessageBox.Show("已是最新版本。", "Share My Status");
+            return;
+        }
+
+        var version = info.TargetFullRelease?.Version?.ToString() ?? "新版本";
+
+        if (silent)
+        {
+            if (_updateItem != null)
+                _updateItem.Text = $"更新到 v{version}";
+            ShowBalloon("发现新版本 v" + version, $"点击托盘菜单「更新到 v{version}」立即更新", ToolTipIcon.Info);
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            $"发现新版本 v{version}。\n下载并重启更新吗？", "Share My Status",
+            MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        if (!confirm)
+            return;
+
+        try
+        {
+            ShowBalloon("Share My Status", "正在下载更新…", ToolTipIcon.Info);
+            await _updateService.DownloadAndRestartAsync(info); // process exits and relaunches
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Update apply failed", ex);
+            MessageBox.Show("更新失败：" + ex.Message, "Share My Status");
         }
     }
 

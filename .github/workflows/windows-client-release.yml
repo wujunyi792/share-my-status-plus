@@ -13,10 +13,14 @@ concurrency:
 env:
   PROJECT: desktop/windows/ShareMyStatusClient/ShareMyStatusClient.csproj
   APP_NAME: "Share My Status"
+  PACK_ID: ShareMyStatus
+  MAIN_EXE: ShareMyStatus.exe
+  # Keep the vpk tool version in lockstep with the Velopack PackageReference.
+  VPK_VERSION: "0.0.1053"
 
 jobs:
   build_windows_client:
-    name: Build & Release
+    name: Build, Pack (Velopack) & Release
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -51,60 +55,61 @@ jobs:
             echo "::error::Invalid windows build number '${BUILD_NUMBER}'. It must be a positive integer."
             exit 1
           fi
-          # Normalize to a 3-part marketing version for FileVersion (X.Y -> X.Y.0).
+          # Velopack requires a 3-part SemVer; encode the build number as the patch.
           DOTS=$(echo "${VERSION}" | awk -F. '{print NF-1}')
           if [ "${DOTS}" -eq 1 ]; then
-            FILE_VERSION="${VERSION}.${BUILD_NUMBER}"
+            SEMVER="${VERSION}.${BUILD_NUMBER}"
           else
-            FILE_VERSION="${VERSION%.*}.${BUILD_NUMBER}"
+            SEMVER="${VERSION%.*}.${BUILD_NUMBER}"
           fi
           TAG_NAME="desktop-windows-v${VERSION}-${BUILD_NUMBER}"
-          ARTIFACT_BASE="share-my-status-client-windows-v${VERSION}-${BUILD_NUMBER}"
           {
             echo "VERSION=$VERSION"
             echo "BUILD_NUMBER=$BUILD_NUMBER"
-            echo "FILE_VERSION=$FILE_VERSION"
+            echo "SEMVER=$SEMVER"
             echo "TAG_NAME=$TAG_NAME"
-            echo "ARTIFACT_BASE=$ARTIFACT_BASE"
           } >> "$GITHUB_OUTPUT"
-          echo "Version=$VERSION Build=$BUILD_NUMBER FileVersion=$FILE_VERSION Tag=$TAG_NAME"
+          echo "Version=$VERSION Build=$BUILD_NUMBER SemVer=$SEMVER Tag=$TAG_NAME"
 
-      - name: Restore
-        run: dotnet restore "${env:PROJECT}"
+      - name: Install Velopack CLI (vpk)
+        run: dotnet tool install --global vpk --version ${{ env.VPK_VERSION }}
 
-      - name: Publish (self-contained, single file, win-x64)
+      - name: Publish (self-contained, win-x64)
         shell: pwsh
         run: |
           dotnet publish "${env:PROJECT}" `
             -c Release `
             -r win-x64 `
             --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:EnableCompressionInSingleFile=true `
-            -p:Version=${{ steps.version.outputs.VERSION }} `
-            -p:FileVersion=${{ steps.version.outputs.FILE_VERSION }} `
-            -p:AssemblyVersion=${{ steps.version.outputs.FILE_VERSION }} `
+            -p:Version=${{ steps.version.outputs.SEMVER }} `
+            -p:FileVersion=${{ steps.version.outputs.SEMVER }} `
+            -p:AssemblyVersion=${{ steps.version.outputs.SEMVER }} `
             -o publish
 
-      - name: Package zip
-        shell: pwsh
-        run: |
-          $zip = "${{ steps.version.outputs.ARTIFACT_BASE }}.zip"
-          Compress-Archive -Path publish/* -DestinationPath $zip -Force
-          Get-FileHash $zip -Algorithm SHA256 | Format-List
+      # Pull existing releases so Velopack can author a delta package (best-effort).
+      - name: Download previous releases for delta
+        continue-on-error: true
+        run: >
+          vpk download github
+          --repoUrl https://github.com/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.TAG_NAME }}
-          name: "${{ env.APP_NAME }} for Windows v${{ steps.version.outputs.VERSION }} (build ${{ steps.version.outputs.BUILD_NUMBER }})"
-          body: |
-            Windows desktop client — self-contained, no .NET runtime required.
+      - name: Pack (Velopack)
+        run: >
+          vpk pack
+          --packId ${{ env.PACK_ID }}
+          --packVersion ${{ steps.version.outputs.SEMVER }}
+          --packDir publish
+          --mainExe ${{ env.MAIN_EXE }}
+          --packTitle "${{ env.APP_NAME }}"
+          --packAuthors "${{ env.APP_NAME }}"
+          --icon desktop/windows/ShareMyStatusClient/Resources/app.ico
 
-            Unzip and run `ShareMyStatus.exe`. Configure your server endpoint and
-            Secret Key from the tray icon → 设置.
-          files: ${{ steps.version.outputs.ARTIFACT_BASE }}.zip
-          fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload to GitHub Release (Velopack)
+        run: >
+          vpk upload github
+          --repoUrl https://github.com/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
+          --publish
+          --releaseName "${{ env.APP_NAME }} for Windows v${{ steps.version.outputs.VERSION }} (build ${{ steps.version.outputs.BUILD_NUMBER }})"
+          --tag ${{ steps.version.outputs.TAG_NAME }}
