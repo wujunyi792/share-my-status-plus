@@ -36,6 +36,15 @@
     <Resource Include="Resources\app.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- UseWindowsForms + ImplicitUsings injects global System.Windows.Forms /
+         System.Drawing usings, which collide with WPF (MessageBox, Brushes) and
+         Microsoft.Win32 (Open/SaveFileDialog). Drop those globals; the only file
+         that needs WinForms/Drawing (App.xaml.cs) imports them explicitly. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
   <!-- App.xaml as a Page (not ApplicationDefinition) so we can supply our own Main. -->
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />

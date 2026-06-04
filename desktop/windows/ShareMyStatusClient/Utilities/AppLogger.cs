@@ -38,7 +38,8 @@ public sealed class AppLogger
     private void Write(string level, string message)
     {
         var line = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] [{_category}] {message}";
-        System.Diagnostics.Debug.WriteLine(line);
+        // global:: needed because this class has a static field named "System".
+        global::System.Diagnostics.Debug.WriteLine(line);
         try
         {
             lock (Gate)
