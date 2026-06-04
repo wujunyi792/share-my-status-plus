@@ -1,0 +1,81 @@
+name: Windows Client CI (build & artifact)
+
+# Builds the Windows client on a Windows runner and uploads installable +
+# portable artifacts for manual verification (e.g. in a VM). Does NOT publish a
+# GitHub Release — use windows-client-release.yml for real releases.
+
+on:
+  pull_request:
+    paths:
+      - 'desktop/windows/**'
+      - '.github/workflows/windows-client-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PROJECT: desktop/windows/ShareMyStatusClient/ShareMyStatusClient.csproj
+  SOLUTION: desktop/windows/ShareMyStatus.sln
+  APP_NAME: "Share My Status"
+  PACK_ID: ShareMyStatus
+  MAIN_EXE: ShareMyStatus.exe
+  VPK_VERSION: "0.0.1053"
+
+jobs:
+  build:
+    name: Build & upload artifacts
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore "${{ env.SOLUTION }}"
+
+      - name: Build
+        run: dotnet build "${{ env.SOLUTION }}" -c Release --no-restore
+
+      - name: Publish (self-contained, win-x64)
+        run: >
+          dotnet publish "${{ env.PROJECT }}"
+          -c Release -r win-x64 --self-contained true --no-restore
+          -o publish
+
+      # Portable build first, so it's downloadable even if packaging fails.
+      - name: Upload portable build
+        uses: actions/upload-artifact@v4
+        with:
+          name: share-my-status-windows-portable
+          path: publish/**
+          if-no-files-found: error
+
+      - name: Install Velopack CLI (vpk)
+        run: dotnet tool install --global vpk --version ${{ env.VPK_VERSION }}
+
+      - name: Pack installer (Velopack)
+        shell: pwsh
+        run: |
+          $ver = "0.0.${{ github.run_number }}"
+          vpk pack `
+            --packId ${{ env.PACK_ID }} `
+            --packVersion $ver `
+            --packDir publish `
+            --mainExe ${{ env.MAIN_EXE }} `
+            --packTitle "${{ env.APP_NAME }}" `
+            --packAuthors "${{ env.APP_NAME }}" `
+            --channel win `
+            --icon desktop/windows/ShareMyStatusClient/Resources/app.ico
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: share-my-status-windows-installer
+          path: Releases/**
+          if-no-files-found: error
