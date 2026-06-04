@@ -46,6 +46,51 @@ public partial class SettingsWindow : Window
         var reporting = _reporter.IsReporting;
         LblReportStatus.Text = _reporter.ReportingStatus;
         BtnToggleReport.Content = reporting ? "⏸ 停止上报" : "▶ 开始上报";
+        UpdateLiveStatus(reporting);
+    }
+
+    private void UpdateLiveStatus(bool reporting)
+    {
+        if (!reporting)
+        {
+            LblMusic.Text = LblSystem.Text = LblActivity.Text = "（未启动上报，点上方「开始上报」）";
+            return;
+        }
+
+        var music = _reporter.CurrentMusic;
+        if (music != null)
+        {
+            var line = $"{music.Artist} - {music.Title}" + (music.IsPlaying ? "" : "（已暂停）");
+            if (!string.IsNullOrEmpty(music.Album) && music.Album != "Unknown Album")
+                line += $"\n专辑：{music.Album}";
+            LblMusic.Text = line;
+        }
+        else
+        {
+            LblMusic.Text = "未在播放（或当前播放源不在白名单）";
+        }
+
+        var sys = _reporter.CurrentSystem;
+        if (sys != null)
+        {
+            var parts = new List<string>();
+            if (sys.BatteryPercentage is { } b)
+                parts.Add($"🔋 电池 {b}%{(sys.IsCharging == true ? "（充电中）" : "")}");
+            if (sys.CpuPercentage is { } c)
+                parts.Add($"💻 CPU {c}%");
+            if (sys.MemoryPercentage is { } m)
+                parts.Add($"🧠 内存 {m}%");
+            LblSystem.Text = parts.Count > 0 ? string.Join("    ", parts) : "采集中…";
+        }
+        else
+        {
+            LblSystem.Text = "采集中…";
+        }
+
+        var act = _reporter.CurrentActivity;
+        LblActivity.Text = act != null
+            ? $"{act.ActivityTag}：{act.ActiveApplication}{(act.IsIdle ? "（空闲）" : "")}"
+            : "采集中…";
     }
 
     private async void OnToggleReportClick(object sender, RoutedEventArgs e)

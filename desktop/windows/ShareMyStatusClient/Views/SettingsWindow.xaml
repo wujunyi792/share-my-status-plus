@@ -34,6 +34,34 @@
         </Border>
 
         <TabControl Margin="10">
+            <!-- Live status -->
+            <TabItem Header="实时状态">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16">
+                        <TextBlock Text="🎵 音乐" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <Border Background="#FAFAFA" BorderBrush="#EEE" BorderThickness="1" CornerRadius="4"
+                                Padding="10" Margin="0,0,0,14">
+                            <TextBlock x:Name="LblMusic" TextWrapping="Wrap" Foreground="#333" Text="—"/>
+                        </Border>
+
+                        <TextBlock Text="💻 系统" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <Border Background="#FAFAFA" BorderBrush="#EEE" BorderThickness="1" CornerRadius="4"
+                                Padding="10" Margin="0,0,0,14">
+                            <TextBlock x:Name="LblSystem" TextWrapping="Wrap" Foreground="#333" Text="—"/>
+                        </Border>
+
+                        <TextBlock Text="👤 活动" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <Border Background="#FAFAFA" BorderBrush="#EEE" BorderThickness="1" CornerRadius="4"
+                                Padding="10" Margin="0,0,0,14">
+                            <TextBlock x:Name="LblActivity" TextWrapping="Wrap" Foreground="#333" Text="—"/>
+                        </Border>
+
+                        <TextBlock TextWrapping="Wrap" Foreground="#999" FontSize="11"
+                                   Text="数据每个采样周期实时刷新（系统默认 10s、活动 5s、音乐换歌即时）。"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <!-- General -->
             <TabItem Header="常规">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
