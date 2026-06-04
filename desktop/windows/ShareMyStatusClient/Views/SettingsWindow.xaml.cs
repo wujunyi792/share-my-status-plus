@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Media;
 using Microsoft.Win32;
 using ShareMyStatusClient.Models.Settings;
+using ShareMyStatusClient.Services;
 
 namespace ShareMyStatusClient.Views;
 
@@ -12,19 +13,54 @@ public partial class SettingsWindow : Window
     private readonly AppConfiguration _working;
     private readonly Action<AppConfiguration> _onApply;
     private readonly Func<string, string, Task<(bool Ok, string Message)>> _testConnection;
+    private readonly StatusReporter _reporter;
+    private readonly Func<Task> _onStopReporting;
     private readonly ObservableCollection<ActivityGroupEditModel> _groups = new();
 
     public SettingsWindow(
         AppConfiguration current,
         Action<AppConfiguration> onApply,
-        Func<string, string, Task<(bool Ok, string Message)>> testConnection)
+        Func<string, string, Task<(bool Ok, string Message)>> testConnection,
+        StatusReporter reporter,
+        Func<Task> onStopReporting)
     {
         InitializeComponent();
         _working = current.Clone();
         _onApply = onApply;
         _testConnection = testConnection;
+        _reporter = reporter;
+        _onStopReporting = onStopReporting;
         GroupsList.ItemsSource = _groups;
         LoadIntoUi(_working);
+
+        _reporter.Changed += OnReporterChanged;
+        Closed += (_, _) => _reporter.Changed -= OnReporterChanged;
+        UpdateReportingUi();
+    }
+
+    private void OnReporterChanged(object? sender, EventArgs e) =>
+        Dispatcher.BeginInvoke(new Action(UpdateReportingUi));
+
+    private void UpdateReportingUi()
+    {
+        var reporting = _reporter.IsReporting;
+        LblReportStatus.Text = _reporter.ReportingStatus;
+        BtnToggleReport.Content = reporting ? "⏸ 停止上报" : "▶ 开始上报";
+    }
+
+    private async void OnToggleReportClick(object sender, RoutedEventArgs e)
+    {
+        if (_reporter.IsReporting)
+        {
+            // Stop the current reporting (no config needed).
+            await _onStopReporting();
+        }
+        else
+        {
+            // Apply the edited config; a valid one auto-starts reporting. Keep the window open
+            // so the user can watch the status flip.
+            ApplyCurrent();
+        }
     }
 
     private void LoadIntoUi(AppConfiguration cfg)
@@ -75,26 +111,35 @@ public partial class SettingsWindow : Window
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
+        // Window is shown modeless from the tray, so don't touch DialogResult.
+        if (ApplyCurrent())
+            Close();
+    }
+
+    /// <summary>Validate and apply the edited config (which auto-starts reporting when valid).
+    /// Returns false if validation failed (and a message was shown).</summary>
+    private bool ApplyCurrent()
+    {
         var endpoint = TxtEndpoint.Text.Trim();
         if (string.IsNullOrWhiteSpace(endpoint) || !Uri.TryCreate(endpoint, UriKind.Absolute, out _))
         {
             MessageBox.Show(this, "服务器地址格式无效，请填写完整的上报 Endpoint。", "无法保存",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
+            return false;
         }
 
         if (string.Equals(endpoint, DefaultSettings.EndpointUrl, StringComparison.OrdinalIgnoreCase))
         {
             MessageBox.Show(this, "请填写你自己的服务器地址（当前仍是占位示例地址）。", "无法保存",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
+            return false;
         }
 
         if (_groups.Any(g => string.IsNullOrWhiteSpace(g.Name)))
         {
             MessageBox.Show(this, "存在未命名的活动分组，请填写名称或删除后再保存。", "无法保存",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
+            return false;
         }
 
         if (string.IsNullOrWhiteSpace(TxtSecret.Text))
@@ -103,13 +148,11 @@ public partial class SettingsWindow : Window
                 "Secret Key 为空，上报将无法启动。仍要保存吗？", "提示",
                 MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (proceed != MessageBoxResult.Yes)
-                return;
+                return false;
         }
 
-        var cfg = BuildConfig();
-        _onApply(cfg);
-        // Window is shown modeless from the tray, so don't touch DialogResult.
-        Close();
+        _onApply(BuildConfig());
+        return true;
     }
 
     private void OnCancelClick(object sender, RoutedEventArgs e)

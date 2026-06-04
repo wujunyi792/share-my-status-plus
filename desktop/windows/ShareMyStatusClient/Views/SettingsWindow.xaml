@@ -21,6 +21,18 @@
             </Grid>
         </Border>
 
+        <!-- Always-visible reporting status + start/stop toggle -->
+        <Border DockPanel.Dock="Top" Background="#E8F5E9" BorderBrush="#C8E6C9" BorderThickness="0,0,0,1" Padding="12,10">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="上报状态：" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="LblReportStatus" VerticalAlignment="Center" Text="未启动"/>
+                </StackPanel>
+                <Button x:Name="BtnToggleReport" HorizontalAlignment="Right" Width="120"
+                        Content="▶ 开始上报" Click="OnToggleReportClick"/>
+            </Grid>
+        </Border>
+
         <TabControl Margin="10">
             <!-- General -->
             <TabItem Header="常规">

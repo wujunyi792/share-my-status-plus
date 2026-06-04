@@ -319,7 +319,8 @@ public partial class App : Application
             return;
         }
 
-        _settingsWindow = new SettingsWindow(_config, ApplyConfigFromSettings, _reporter.TestConnectionAsync);
+        _settingsWindow = new SettingsWindow(
+            _config, ApplyConfigFromSettings, _reporter.TestConnectionAsync, _reporter, StopReportingAsync);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
@@ -346,6 +347,16 @@ public partial class App : Application
             _ = StartReportingWithFeedbackAsync();
         else
             UpdateTrayUi();
+    }
+
+    private async Task StopReportingAsync()
+    {
+        if (_reporter == null || _config == null)
+            return;
+        await _reporter.StopAsync();
+        _config.ReporterEnabled = false;
+        SaveConfig();
+        UpdateTrayUi();
     }
 
     private async Task StartReportingWithFeedbackAsync()
