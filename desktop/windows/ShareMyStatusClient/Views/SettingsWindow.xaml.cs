@@ -135,6 +135,58 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private void OnPasteClick(object sender, RoutedEventArgs e)
+    {
+        var initial = string.Empty;
+        try
+        {
+            if (Clipboard.ContainsText())
+                initial = Clipboard.GetText();
+        }
+        catch
+        {
+            // Clipboard may be locked; fall back to empty.
+        }
+
+        var win = new TextInputWindow(
+            "粘贴配置",
+            "把配置 JSON 粘贴到下面（已尝试自动填入剪贴板内容），然后点确定。",
+            initial) { Owner = this };
+        if (win.ShowDialog() != true || string.IsNullOrWhiteSpace(win.Result))
+            return;
+
+        var imported = _working.Clone();
+        var error = imported.ImportFromJson(win.Result);
+        if (error != null)
+        {
+            MessageBox.Show(this, error, "粘贴失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        _working.CopyFrom(imported);
+        LoadIntoUi(_working);
+        var note = string.IsNullOrWhiteSpace(_working.SecretKey)
+            ? "配置已粘贴。该配置不含 Secret Key，请手动填写后保存。"
+            : "配置已粘贴，请确认无误后保存。";
+        MessageBox.Show(this, note, "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void OnCopyClipboardClick(object sender, RoutedEventArgs e)
+    {
+        var includeSecret = MessageBox.Show(this,
+            "是否在复制的配置中包含 Secret Key？\n\n选择「否」可安全分享配置。", "复制配置",
+            MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        try
+        {
+            Clipboard.SetText(BuildConfig().ExportToJson(includeSecret));
+            MessageBox.Show(this, "配置已复制到剪贴板。", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "复制失败：" + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void OnImportClick(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog

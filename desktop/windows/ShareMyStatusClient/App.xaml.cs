@@ -98,6 +98,18 @@ public partial class App : Application
 
         UpdateTrayUi();
 
+        // One-time hint: Windows hides new tray icons in the overflow (▲), so users often
+        // can't find where the app went. Tell them once.
+        if (!_config.HasShownTrayHint)
+        {
+            _config.HasShownTrayHint = true;
+            SaveConfig();
+            ShowBalloon(
+                "Share My Status 正在运行",
+                "图标在屏幕右下角通知区域（可能折叠在 ▲ 里）。点此或右键它即可设置 / 开始 / 停止上报。",
+                ToolTipIcon.Info);
+        }
+
         // Best-effort silent update check shortly after launch.
         _ = CheckUpdatesAsync(silent: true);
     }
@@ -149,6 +161,14 @@ public partial class App : Application
             ContextMenuStrip = menu,
         };
         _trayIcon.DoubleClick += (_, _) => OpenSettings();
+        // Left single-click also opens settings (common Windows tray behaviour).
+        _trayIcon.MouseClick += (_, args) =>
+        {
+            if (args.Button == MouseButtons.Left)
+                OpenSettings();
+        };
+        // Clicking a notification opens settings (e.g. the first-run "where's the icon" hint).
+        _trayIcon.BalloonTipClicked += (_, _) => OpenSettings();
     }
 
     private static Icon LoadTrayIcon()
@@ -311,10 +331,36 @@ public partial class App : Application
             return;
 
         _config.CopyFrom(updated);
-        if (!SaveConfig())
-            MessageBox.Show("配置保存失败，请检查磁盘权限后重试。", "Share My Status");
         AutostartService.SetEnabled(_config.LaunchAtLogin);
         _reporter.ApplyConfiguration(_config);
+
+        // Auto-start reporting after a valid save so users don't have to hunt for the
+        // tray toggle (a common point of confusion).
+        if (_config.IsValid() && !_reporter.IsReporting)
+            _config.ReporterEnabled = true;
+
+        if (!SaveConfig())
+            MessageBox.Show("配置保存失败，请检查磁盘权限后重试。", "Share My Status");
+
+        if (_config.ReporterEnabled && _config.IsValid() && !_reporter.IsReporting)
+            _ = StartReportingWithFeedbackAsync();
+        else
+            UpdateTrayUi();
+    }
+
+    private async Task StartReportingWithFeedbackAsync()
+    {
+        if (_reporter == null)
+            return;
+        try
+        {
+            await _reporter.StartAsync();
+            ShowBalloon("Share My Status", "配置已保存，已开始上报。右键通知区域图标可随时停止。", ToolTipIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Auto-start after save failed", ex);
+        }
         UpdateTrayUi();
     }
 

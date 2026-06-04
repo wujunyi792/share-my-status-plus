@@ -12,13 +12,10 @@
         <!-- Bottom action bar -->
         <Border DockPanel.Dock="Bottom" Background="#F3F3F3" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
             <Grid Margin="12,10">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                    <Button x:Name="BtnImport" Content="导入配置" Width="90" Margin="0,0,8,0" Click="OnImportClick"/>
-                    <Button x:Name="BtnExport" Content="导出配置" Width="90" Margin="0,0,8,0" Click="OnExportClick"/>
-                    <Button x:Name="BtnReset" Content="恢复默认" Width="90" Click="OnResetClick"/>
-                </StackPanel>
+                <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="#666"
+                           Text="保存后将自动开始上报"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="BtnSave" Content="保存" Width="90" Margin="0,0,8,0" IsDefault="True" Click="OnSaveClick"/>
+                    <Button x:Name="BtnSave" Content="保存并上报" Width="110" Margin="0,0,8,0" IsDefault="True" Click="OnSaveClick"/>
                     <Button x:Name="BtnCancel" Content="取消" Width="90" IsCancel="True" Click="OnCancelClick"/>
                 </StackPanel>
             </Grid>
@@ -60,7 +57,27 @@
                         <Slider x:Name="SldActivity" Minimum="5" Maximum="300" TickFrequency="5"
                                 IsSnapToTickEnabled="True" Margin="0,0,0,16"/>
 
-                        <CheckBox x:Name="ChkAutostart" Content="开机自动启动" Margin="0,2"/>
+                        <CheckBox x:Name="ChkAutostart" Content="开机自动启动" Margin="0,2,0,16"/>
+
+                        <Separator Margin="0,0,0,12"/>
+                        <TextBlock Text="配置管理" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <Border Background="#FFF8E1" BorderBrush="#FFE082" BorderThickness="1" CornerRadius="4"
+                                Padding="10" Margin="0,0,0,10">
+                            <TextBlock TextWrapping="Wrap" Foreground="#6D4C41">
+                                <Run Text="💡 点「保存并上报」后会自动开始上报。"/>
+                                <LineBreak/>
+                                <Run Text="之后可在屏幕右下角"/>
+                                <Run Text="系统托盘(通知区域，图标可能折叠在 ▲ 里)" FontWeight="SemiBold"/>
+                                <Run Text="右键「Share My Status」图标，随时开始 / 停止上报或再次打开设置。"/>
+                            </TextBlock>
+                        </Border>
+                        <WrapPanel>
+                            <Button Content="粘贴配置" Width="100" Margin="0,0,8,8" Click="OnPasteClick"/>
+                            <Button Content="复制配置" Width="100" Margin="0,0,8,8" Click="OnCopyClipboardClick"/>
+                            <Button Content="从文件导入" Width="100" Margin="0,0,8,8" Click="OnImportClick"/>
+                            <Button Content="导出到文件" Width="100" Margin="0,0,8,8" Click="OnExportClick"/>
+                            <Button Content="恢复默认" Width="100" Margin="0,0,8,8" Click="OnResetClick"/>
+                        </WrapPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

@@ -30,6 +30,9 @@ public sealed class AppConfiguration
     /// <summary>Whether the app should launch at Windows sign-in.</summary>
     public bool LaunchAtLogin { get; set; }
 
+    /// <summary>Whether the one-time "running in the tray" hint has been shown.</summary>
+    public bool HasShownTrayHint { get; set; }
+
     // ---- Persistence ----
 
     private static readonly JsonSerializerOptions FileJson = new()
@@ -120,6 +123,7 @@ public sealed class AppConfiguration
         ActivityPollingInterval = ActivityPollingInterval,
         ReporterEnabled = ReporterEnabled,
         LaunchAtLogin = LaunchAtLogin,
+        HasShownTrayHint = HasShownTrayHint,
     };
 
     /// <summary>Copy editable fields from another instance (used when applying the settings dialog).</summary>
