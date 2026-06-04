@@ -8,8 +8,8 @@
     <!-- GSMTC media APIs first appeared in Windows 10 1809 (17763). -->
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
-    <!-- Declared so `dotnet restore` resolves win-x64 assets and `publish -r win-x64
-         --no-restore` works (the CI build/publish split relies on this). -->
+    <!-- Declared so `dotnet restore` resolves win-x64 assets and a later restore-less
+         publish for win-x64 works (the CI build/publish split relies on this). -->
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
