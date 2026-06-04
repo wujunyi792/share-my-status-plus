@@ -394,9 +394,9 @@ public sealed class StatusReporter : IDisposable
             ok = true;
             _logger.Info($"[{source}] report sent: accepted={response.Accepted ?? 0}");
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return false; // shutting down; don't touch status
+            return false; // genuine shutdown cancellation; don't touch status
         }
         catch (Exception ex)
         {

@@ -133,29 +133,49 @@ public sealed class NetworkService : IDisposable
         using var message = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = content };
         message.Headers.TryAddWithoutValidation("X-Secret-Key", secret);
 
-        using var response = await _http.SendAsync(message, ct).ConfigureAwait(false);
-
-        switch ((int)response.StatusCode)
+        HttpResponseMessage response;
+        try
         {
-            case >= 200 and <= 299:
+            response = await _http.SendAsync(message, ct).ConfigureAwait(false);
+        }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // HttpClient.Timeout elapsed (not a real cancellation) — surface as an error.
+            throw new NetworkException("请求超时");
+        }
+
+        using (response)
+        {
+            switch ((int)response.StatusCode)
             {
-                var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                var parsed = JsonSerializer.Deserialize<BatchReportResponse>(body, ApiJson.Options)
-                             ?? new BatchReportResponse();
-                lock (_gate)
+                case >= 200 and <= 299:
                 {
-                    LastReportTime = DateTimeOffset.Now;
-                    ReportCount += request.Events.Count;
+                    string body;
+                    try
+                    {
+                        body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                    }
+                    catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        throw new NetworkException("请求超时");
+                    }
+                    var parsed = JsonSerializer.Deserialize<BatchReportResponse>(body, ApiJson.Options)
+                                 ?? new BatchReportResponse();
+                    lock (_gate)
+                    {
+                        LastReportTime = DateTimeOffset.Now;
+                        ReportCount += request.Events.Count;
+                    }
+                    _logger.Debug($"Report ok: accepted={parsed.Accepted ?? 0}, deduped={parsed.Deduped ?? 0}");
+                    return parsed;
                 }
-                _logger.Debug($"Report ok: accepted={parsed.Accepted ?? 0}, deduped={parsed.Deduped ?? 0}");
-                return parsed;
+                case 401:
+                    throw new NetworkException("认证失败");
+                case 429:
+                    throw new NetworkException("请求过于频繁");
+                default:
+                    throw new NetworkException($"HTTP错误: {(int)response.StatusCode}");
             }
-            case 401:
-                throw new NetworkException("认证失败");
-            case 429:
-                throw new NetworkException("请求过于频繁");
-            default:
-                throw new NetworkException($"HTTP错误: {(int)response.StatusCode}");
         }
     }
 
