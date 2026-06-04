@@ -85,15 +85,6 @@ public sealed class ReportEvent
     };
 }
 
-/// <summary>Latest merged status snapshot (state_service QueryState response payload).</summary>
-public sealed class StatusSnapshot
-{
-    public SystemInfo? System { get; set; }
-    public MusicInfo? Music { get; set; }
-    public ActivityInfo? Activity { get; set; }
-    public long LastUpdateTs { get; set; }
-}
-
 // ---- state_service.thrift ----
 
 public sealed class BatchReportRequest
@@ -106,12 +97,6 @@ public sealed class BatchReportResponse
     public BaseResponse? Base { get; set; }
     public int? Accepted { get; set; }
     public int? Deduped { get; set; }
-}
-
-public sealed class QueryStateResponse
-{
-    public BaseResponse? Base { get; set; }
-    public StatusSnapshot? Snapshot { get; set; }
 }
 
 // ---- cover_service.thrift ----

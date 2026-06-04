@@ -25,14 +25,12 @@ public sealed class ActivityDetectorService
         if (processName == null)
             return null;
 
-        var windowTitle = GetWindowTitle(hwnd);
         var idle = GetIdleSeconds();
         var tag = MapActivityTag(processName, groups);
 
         return new ActivitySnapshot(
             ActiveApplication: appName ?? processName,
             ProcessName: processName,
-            WindowTitle: windowTitle,
             IdleTimeSeconds: idle,
             ActivityTag: tag,
             Timestamp: DateTimeOffset.Now);
@@ -67,21 +65,6 @@ public sealed class ActivityDetectorService
             _logger.Debug($"Failed to resolve foreground process: {ex.Message}");
             return (null, null);
         }
-    }
-
-    private static string? GetWindowTitle(IntPtr hwnd)
-    {
-        var length = NativeMethods.GetWindowTextLength(hwnd);
-        if (length <= 0)
-            return null;
-
-        var buffer = new char[length + 1];
-        var copied = NativeMethods.GetWindowText(hwnd, buffer, buffer.Length);
-        if (copied <= 0)
-            return null;
-
-        var title = new string(buffer, 0, copied);
-        return string.IsNullOrWhiteSpace(title) ? null : title;
     }
 
     private static double GetIdleSeconds()

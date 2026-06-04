@@ -1,4 +1,5 @@
 using ShareMyStatusClient.Models.Api;
+using ShareMyStatusClient.Models.Settings;
 
 namespace ShareMyStatusClient.Models.Domain;
 
@@ -52,7 +53,6 @@ public sealed record MusicSnapshot(
 public sealed record ActivitySnapshot(
     string ActiveApplication,
     string? ProcessName,
-    string? WindowTitle,
     double IdleTimeSeconds,
     string ActivityTag,
     DateTimeOffset Timestamp)
@@ -63,7 +63,7 @@ public sealed record ActivitySnapshot(
         Ts = Timestamp.ToUnixTimeMilliseconds(),
     };
 
-    public bool IsIdle => IdleTimeSeconds > 300; // matches macOS idleTimeThreshold
+    public bool IsIdle => IdleTimeSeconds > DefaultSettings.IdleTimeThreshold;
 }
 
 /// <summary>A user-defined activity group: a label plus the process names that map to it.</summary>

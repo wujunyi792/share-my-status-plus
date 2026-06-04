@@ -17,6 +17,9 @@ env:
   MAIN_EXE: ShareMyStatus.exe
   # Keep the vpk tool version in lockstep with the Velopack PackageReference.
   VPK_VERSION: "0.0.1053"
+  # Velopack runtime dependency: Setup bootstraps the .NET 8 Desktop Runtime
+  # (covers WPF + WinForms) so the app ships framework-dependent and stays small.
+  VELO_FRAMEWORK: "net8.0-x64-desktop"
 
 jobs:
   build_windows_client:
@@ -74,13 +77,13 @@ jobs:
       - name: Install Velopack CLI (vpk)
         run: dotnet tool install --global vpk --version ${{ env.VPK_VERSION }}
 
-      - name: Publish (self-contained, win-x64)
+      - name: Publish (framework-dependent, win-x64)
         shell: pwsh
         run: |
           dotnet publish "${env:PROJECT}" `
             -c Release `
             -r win-x64 `
-            --self-contained true `
+            --self-contained false `
             -p:Version=${{ steps.version.outputs.SEMVER }} `
             -p:FileVersion=${{ steps.version.outputs.SEMVER }} `
             -p:AssemblyVersion=${{ steps.version.outputs.SEMVER }} `
@@ -104,6 +107,7 @@ jobs:
           --mainExe ${{ env.MAIN_EXE }}
           --packTitle "${{ env.APP_NAME }}"
           --packAuthors "${{ env.APP_NAME }}"
+          --framework ${{ env.VELO_FRAMEWORK }}
           --channel win
           --icon desktop/windows/ShareMyStatusClient/Resources/app.ico
 

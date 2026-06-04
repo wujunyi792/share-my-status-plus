@@ -93,10 +93,12 @@ dotnet run --project ShareMyStatusClient/ShareMyStatusClient.csproj
 本地复现分发包（Velopack，需 `dotnet tool install --global vpk`）：
 
 ```powershell
+# framework-dependent 发布(包小);Setup 会在目标机自动引导安装 .NET 8 Desktop Runtime
 dotnet publish ShareMyStatusClient/ShareMyStatusClient.csproj `
-  -c Release -r win-x64 --self-contained true -o publish
+  -c Release -r win-x64 --self-contained false -o publish
 vpk pack --packId ShareMyStatus --packVersion 1.0.0 `
-  --packDir publish --mainExe ShareMyStatus.exe --packTitle "Share My Status"
+  --packDir publish --mainExe ShareMyStatus.exe --packTitle "Share My Status" `
+  --framework net8.0-x64-desktop
 ```
 
 产物在 `Releases/`，其中 `ShareMyStatus-win-Setup.exe` 即安装器；安装后应用以系统托盘常驻（无主窗口）。
@@ -108,10 +110,14 @@ bump 根目录 `release.yml` 的 `windows: <marketingVersion-buildNumber>`（如
 然后手动触发 GitHub Actions 工作流 **“Manual Windows Client Build & Release”**
 （`.github/workflows/windows-client-release.yml`）。CI 流程：
 
-1. 自包含发布 `win-x64`；
+1. **framework-dependent** 发布 `win-x64`（包小;运行时由安装器引导）；
 2. `vpk download`（拉取历史 Release 以生成增量包，best-effort）；
-3. `vpk pack`（生成 Velopack 安装器 `*-Setup.exe`、全量/增量 `.nupkg` 与 `releases.win.json`）；
+3. `vpk pack --framework net8.0-x64-desktop`（生成 Velopack 安装器 `*-Setup.exe`、全量/增量 `.nupkg` 与 `releases.win.json`;Setup 会在目标机自动安装缺失的 .NET 8 Desktop Runtime）；
 4. `vpk upload github`（创建 `desktop-windows-v<version>-<build>` 的 Release 并上传以上资产）。
+
+> **体积**：改用 framework-dependent 后安装包从 ~215MB(自包含)降到 ~6–10MB;
+> 目标机首次安装若缺 .NET 8 Desktop Runtime,Setup 会自动联网安装(约 55MB,一次性、系统级复用)。
+> 已装运行时的机器零额外下载。WPF 不支持 IL Trimming,故不启用 PublishTrimmed/InvariantGlobalization。
 
 客户端通过 Velopack `GithubSource` 读取这些资产实现自动更新，构成 macOS Sparkle 的等价闭环。
 

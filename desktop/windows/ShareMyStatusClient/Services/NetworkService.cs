@@ -14,7 +14,7 @@ public sealed class NetworkException : Exception
 }
 
 /// <summary>HTTP client for reporting status to the backend (state_service BatchReport).</summary>
-public sealed class NetworkService
+public sealed class NetworkService : IDisposable
 {
     private readonly AppLogger _logger = AppLogger.Network;
     private readonly HttpClient _http;
@@ -158,4 +158,6 @@ public sealed class NetworkService
                 throw new NetworkException($"HTTP错误: {(int)response.StatusCode}");
         }
     }
+
+    public void Dispose() => _http.Dispose();
 }

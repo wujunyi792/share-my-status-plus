@@ -21,6 +21,9 @@ env:
   PACK_ID: ShareMyStatus
   MAIN_EXE: ShareMyStatus.exe
   VPK_VERSION: "0.0.1053"
+  # Velopack runtime dependency: Setup bootstraps the .NET 8 Desktop Runtime
+  # (covers WPF + WinForms) so the app ships framework-dependent and stays small.
+  VELO_FRAMEWORK: "net8.0-x64-desktop"
 
 jobs:
   build:
@@ -42,10 +45,10 @@ jobs:
       - name: Build
         run: dotnet build "${{ env.SOLUTION }}" -c Release --no-restore
 
-      - name: Publish (self-contained, win-x64)
+      - name: Publish (framework-dependent, win-x64)
         run: >
           dotnet publish "${{ env.PROJECT }}"
-          -c Release -r win-x64 --self-contained true --no-restore
+          -c Release -r win-x64 --self-contained false --no-restore
           -o publish
 
       # Portable build first, so it's downloadable even if packaging fails.
@@ -70,6 +73,7 @@ jobs:
             --mainExe ${{ env.MAIN_EXE }} `
             --packTitle "${{ env.APP_NAME }}" `
             --packAuthors "${{ env.APP_NAME }}" `
+            --framework ${{ env.VELO_FRAMEWORK }} `
             --channel win `
             --icon desktop/windows/ShareMyStatusClient/Resources/app.ico
 

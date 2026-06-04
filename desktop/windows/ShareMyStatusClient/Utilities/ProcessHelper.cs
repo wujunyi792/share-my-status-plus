@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace ShareMyStatusClient.Utilities;
 
 /// <summary>A user-facing running application: its exe name plus a friendly display name.</summary>
-public sealed record RunningApp(string ProcessName, string DisplayName, bool IsMedia = false);
+public sealed record RunningApp(string ProcessName, string DisplayName);
 
 public static class ProcessHelper
 {

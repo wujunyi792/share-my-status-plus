@@ -9,7 +9,7 @@ namespace ShareMyStatusClient.Services;
 /// Coordinates the collection services and reports to the backend. Mirrors the macOS
 /// StatusReporter: system + activity are polled on dedicated loops, music is event-driven.
 /// </summary>
-public sealed class StatusReporter
+public sealed class StatusReporter : IDisposable
 {
     private readonly SystemMonitorService _system = new();
     private readonly ActivityDetectorService _activity = new();
@@ -21,6 +21,9 @@ public sealed class StatusReporter
     private readonly object _stateGate = new();
     // Serializes Start/Stop/Restart so configuration changes can't interleave loops.
     private readonly SemaphoreSlim _lifecycleLock = new(1, 1);
+    // Serializes event-driven music handling so concurrent GSMTC callbacks can't
+    // reorder or double-report.
+    private readonly SemaphoreSlim _musicLock = new(1, 1);
 
     private AppConfiguration _config = new();
 
@@ -78,9 +81,6 @@ public sealed class StatusReporter
         get { lock (_stateGate) { return _clientResources; } }
         private set { lock (_stateGate) { _clientResources = value; } }
     }
-
-    public DateTimeOffset? LastReportTime => _network.LastReportTime;
-    public int ReportCount => _network.ReportCount;
 
     /// <summary>Raised whenever observable state changes (status, current snapshots).</summary>
     public event EventHandler? Changed;
@@ -273,18 +273,23 @@ public sealed class StatusReporter
                     var snapshot = _activity.Collect(groups);
                     if (snapshot != null)
                     {
-                        bool changed;
+                        string? lastLabel;
                         lock (_stateGate)
                         {
                             _currentActivity = snapshot;
-                            changed = _lastReportedActivityLabel != snapshot.ActivityTag;
-                            if (changed) _lastReportedActivityLabel = snapshot.ActivityTag;
+                            lastLabel = _lastReportedActivityLabel;
                         }
                         RaiseChanged();
 
-                        if (changed)
-                            await SendReportAsync(ReportEvent.ForActivity(snapshot.ToActivityInfo()), "activity", cts.Token)
+                        if (lastLabel != snapshot.ActivityTag)
+                        {
+                            // Only mark the label as reported after a successful send, so a
+                            // failed report doesn't permanently suppress re-reporting it.
+                            var ok = await SendReportAsync(ReportEvent.ForActivity(snapshot.ToActivityInfo()), "activity", cts.Token)
                                 .ConfigureAwait(false);
+                            if (ok)
+                                lock (_stateGate) { _lastReportedActivityLabel = snapshot.ActivityTag; }
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -310,24 +315,39 @@ public sealed class StatusReporter
         if (!IsReporting)
             return; // ignore late callbacks after stop
 
-        bool artworkOnly;
-        lock (_stateGate)
+        // Serialize concurrent GSMTC callbacks so reports can't reorder or duplicate.
+        await _musicLock.WaitAsync().ConfigureAwait(false);
+        try
         {
-            var current = _currentMusic;
-            // Same song (title+artist) => artwork/state-only update; update local state but
-            // don't fire a separate report (matches macOS behaviour).
-            artworkOnly = music != null && current != null
-                && music.Title == current.Title
-                && music.Artist == current.Artist;
-            _currentMusic = music;
+            if (!IsReporting)
+                return;
+
+            bool artworkOnly;
+            lock (_stateGate)
+            {
+                var current = _currentMusic;
+                var sameSong = music != null && current != null
+                    && music.Title == current.Title
+                    && music.Artist == current.Artist;
+                // GSMTC often delivers the thumbnail in a later event than the metadata.
+                // If the cover only just arrived for the same song, still report it once so
+                // the cover isn't lost (the macOS client coordinates this via waitingForArtwork).
+                var artworkNewlyArrived = sameSong
+                    && (current!.ArtworkData == null || current.ArtworkData.Length == 0)
+                    && music!.ArtworkData is { Length: > 0 };
+                artworkOnly = sameSong && !artworkNewlyArrived;
+                _currentMusic = music;
+            }
+
+            RaiseChanged();
+
+            if (!artworkOnly)
+                await ReportMusicChangeAsync().ConfigureAwait(false);
         }
-
-        RaiseChanged();
-
-        if (artworkOnly)
-            return;
-
-        await ReportMusicChangeAsync().ConfigureAwait(false);
+        finally
+        {
+            _musicLock.Release();
+        }
     }
 
     private async Task ReportMusicChangeAsync()
@@ -361,20 +381,22 @@ public sealed class StatusReporter
 
     // ---- Reporting ----
 
-    private async Task SendReportAsync(ReportEvent ev, string source, CancellationToken ct)
+    private async Task<bool> SendReportAsync(ReportEvent ev, string source, CancellationToken ct)
     {
         var request = new BatchReportRequest();
         request.Events.Add(ev);
 
+        var ok = false;
         try
         {
             var response = await _network.ReportStatusAsync(request, ct).ConfigureAwait(false);
             LastError = null;
+            ok = true;
             _logger.Info($"[{source}] report sent: accepted={response.Accepted ?? 0}");
         }
         catch (OperationCanceledException)
         {
-            return; // shutting down; don't touch status
+            return false; // shutting down; don't touch status
         }
         catch (Exception ex)
         {
@@ -383,6 +405,7 @@ public sealed class StatusReporter
         }
 
         UpdateStatus();
+        return ok;
     }
 
     // ---- Status ----
@@ -415,7 +438,8 @@ public sealed class StatusReporter
         else
         {
             var modules = new List<string>();
-            if (cfg.MusicReportingEnabled) modules.Add("音乐");
+            // For music, reflect whether the media listener actually started (matches macOS).
+            if (cfg.MusicReportingEnabled && _media.IsActive) modules.Add("音乐");
             if (cfg.SystemReportingEnabled) modules.Add("系统");
             if (cfg.ActivityReportingEnabled) modules.Add("活动");
             status = modules.Count == 0 ? "无活动模块" : "正在上报: " + string.Join(", ", modules);
@@ -467,5 +491,16 @@ public sealed class StatusReporter
             parts.Add($"{(activity.IsIdle ? "😴" : "👤")} {activity.ActivityTag}: {activity.ActiveApplication}");
 
         return parts.Count == 0 ? "无状态数据" : string.Join("\n", parts);
+    }
+
+    /// <summary>Releases owned services and synchronization primitives.
+    /// Caller must have stopped reporting first (App does this on exit).</summary>
+    public void Dispose()
+    {
+        _network.Dispose();
+        _cover.Dispose();
+        _media.Dispose();
+        _lifecycleLock.Dispose();
+        _musicLock.Dispose();
     }
 }

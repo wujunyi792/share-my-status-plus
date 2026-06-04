@@ -10,7 +10,7 @@ namespace ShareMyStatusClient.Services;
 /// Deduplicates and uploads album artwork (cover_service). Hash is the lower-case
 /// MD5 hex of the raw image bytes — identical to the macOS client and the backend.
 /// </summary>
-public sealed class CoverService
+public sealed class CoverService : IDisposable
 {
     private readonly AppLogger _logger = AppLogger.Cover;
     private readonly HttpClient _http;
@@ -118,6 +118,8 @@ public sealed class CoverService
         _logger.Info($"Cover uploaded successfully: {hash}");
         return hash;
     }
+
+    public void Dispose() => _http.Dispose();
 }
 
 public sealed class CoverException : Exception

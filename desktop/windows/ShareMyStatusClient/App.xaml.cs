@@ -29,6 +29,7 @@ public partial class App : Application
     private Mutex? _singleInstanceMutex;
     private bool _ownsMutex;
     private NotifyIcon? _trayIcon;
+    private Icon? _trayIconImage;
     private ToolStripMenuItem? _toggleItem;
     private ToolStripMenuItem? _statusItem;
     private ToolStripMenuItem? _statusPageItem;
@@ -43,6 +44,23 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Last-resort handlers so background/fire-and-forget failures are logged, not lost.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            _logger.Error("Unhandled UI exception", args.Exception);
+            args.Handled = true;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception ex)
+                _logger.Error("Unhandled domain exception", ex);
+        };
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            _logger.Error("Unobserved task exception", args.Exception);
+            args.SetObserved();
+        };
 
         _singleInstanceMutex = new Mutex(true, MutexName, out _ownsMutex);
         if (!_ownsMutex)
@@ -118,9 +136,14 @@ public partial class App : Application
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem("退出", null, (_, _) => ExitApp()));
 
+        var trayIcon = LoadTrayIcon();
+        // SystemIcons.Application is a shared singleton and must not be disposed; only
+        // hold a reference to icons we created so we can release their GDI handle on exit.
+        _trayIconImage = ReferenceEquals(trayIcon, SystemIcons.Application) ? null : trayIcon;
+
         _trayIcon = new NotifyIcon
         {
-            Icon = LoadTrayIcon(),
+            Icon = trayIcon,
             Visible = true,
             Text = "Share My Status",
             ContextMenuStrip = menu,
@@ -215,7 +238,16 @@ public partial class App : Application
         }
     }
 
-    private static string Truncate(string s, int max) => s.Length > max ? s[..max] : s;
+    private static string Truncate(string s, int max)
+    {
+        if (s.Length <= max)
+            return s;
+        var end = max;
+        // Don't split a UTF-16 surrogate pair (would produce an invalid char).
+        if (char.IsHighSurrogate(s[end - 1]))
+            end--;
+        return s[..end];
+    }
 
     // ---- Commands ----
 
@@ -443,12 +475,22 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        if (_reporter != null)
+            _reporter.Changed -= OnReporterChanged;
+
         if (_trayIcon != null)
         {
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
             _trayIcon = null;
         }
+
+        // Dispose the icon we created (after the tray no longer uses it).
+        _trayIconImage?.Dispose();
+        _trayIconImage = null;
+
+        // Reporting was already stopped in ExitApp; release owned services.
+        _reporter?.Dispose();
 
         if (_singleInstanceMutex != null)
         {

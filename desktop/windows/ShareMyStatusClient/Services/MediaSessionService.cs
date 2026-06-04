@@ -11,8 +11,10 @@ namespace ShareMyStatusClient.Services;
 /// across Spotify, browsers, native players, etc. This is the Windows analogue of the
 /// macOS MediaRemote adapter, but uses a supported public API.
 /// </summary>
-public sealed class MediaSessionService
+public sealed class MediaSessionService : IDisposable
 {
+    private static readonly TimeSpan WinRtTimeout = TimeSpan.FromSeconds(5);
+
     private readonly AppLogger _logger = AppLogger.Media;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private readonly object _gate = new();
@@ -35,7 +37,8 @@ public sealed class MediaSessionService
     {
         try
         {
-            var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync()
+                .AsTask().WaitAsync(WinRtTimeout);
             var ids = new List<string>();
             foreach (var session in manager.GetSessions())
             {
@@ -75,7 +78,8 @@ public sealed class MediaSessionService
 
         try
         {
-            _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            _manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync()
+                .AsTask().WaitAsync(WinRtTimeout);
         }
         catch (Exception ex)
         {
@@ -238,7 +242,7 @@ public sealed class MediaSessionService
         GlobalSystemMediaTransportControlsSessionMediaProperties props;
         try
         {
-            props = await session.TryGetMediaPropertiesAsync();
+            props = await session.TryGetMediaPropertiesAsync().AsTask().WaitAsync(WinRtTimeout);
         }
         catch (Exception ex)
         {
@@ -278,14 +282,14 @@ public sealed class MediaSessionService
 
         try
         {
-            using var stream = await reference.OpenReadAsync();
+            using var stream = await reference.OpenReadAsync().AsTask().WaitAsync(WinRtTimeout);
             if (stream == null || stream.Size == 0)
                 return null;
 
             using var reader = new DataReader(stream);
             // LoadAsync returns the number of bytes actually buffered; reading more
             // than that throws, so size the buffer to the loaded length.
-            var loaded = await reader.LoadAsync((uint)stream.Size);
+            var loaded = await reader.LoadAsync((uint)stream.Size).AsTask().WaitAsync(WinRtTimeout);
             if (loaded == 0)
                 return null;
             var bytes = new byte[loaded];
@@ -298,4 +302,7 @@ public sealed class MediaSessionService
             return null;
         }
     }
+
+    /// <summary>Releases the refresh semaphore. Call after StopAsync.</summary>
+    public void Dispose() => _refreshLock.Dispose();
 }
