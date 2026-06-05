@@ -320,7 +320,8 @@ public partial class App : Application
         }
 
         _settingsWindow = new SettingsWindow(
-            _config, ApplyConfigFromSettings, _reporter.TestConnectionAsync, _reporter, StopReportingAsync);
+            _config, ApplyConfigFromSettings, _reporter.TestConnectionAsync, _reporter, StopReportingAsync,
+            () => CheckUpdatesAsync(silent: false));
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();

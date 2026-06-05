@@ -15,6 +15,7 @@ public partial class SettingsWindow : Window
     private readonly Func<string, string, Task<(bool Ok, string Message)>> _testConnection;
     private readonly StatusReporter _reporter;
     private readonly Func<Task> _onStopReporting;
+    private readonly Func<Task> _onCheckUpdate;
     private readonly ObservableCollection<ActivityGroupEditModel> _groups = new();
 
     public SettingsWindow(
@@ -22,7 +23,8 @@ public partial class SettingsWindow : Window
         Action<AppConfiguration> onApply,
         Func<string, string, Task<(bool Ok, string Message)>> testConnection,
         StatusReporter reporter,
-        Func<Task> onStopReporting)
+        Func<Task> onStopReporting,
+        Func<Task> onCheckUpdate)
     {
         InitializeComponent();
         _working = current.Clone();
@@ -30,12 +32,30 @@ public partial class SettingsWindow : Window
         _testConnection = testConnection;
         _reporter = reporter;
         _onStopReporting = onStopReporting;
+        _onCheckUpdate = onCheckUpdate;
         GroupsList.ItemsSource = _groups;
         LoadIntoUi(_working);
+
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        LblVersion.Text = $"当前版本 v{version?.ToString(3) ?? "1.0.0"}";
 
         _reporter.Changed += OnReporterChanged;
         Closed += (_, _) => _reporter.Changed -= OnReporterChanged;
         UpdateReportingUi();
+    }
+
+    private async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
+    {
+        BtnCheckUpdate.IsEnabled = false;
+        try
+        {
+            await _onCheckUpdate();
+        }
+        finally
+        {
+            if (IsLoaded)
+                BtnCheckUpdate.IsEnabled = true;
+        }
     }
 
     private void OnReporterChanged(object? sender, EventArgs e) =>

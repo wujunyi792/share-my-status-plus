@@ -58,6 +58,13 @@
 
                         <TextBlock TextWrapping="Wrap" Foreground="#999" FontSize="11"
                                    Text="数据每个采样周期实时刷新（系统默认 10s、活动 5s、音乐换歌即时）。"/>
+
+                        <Separator Margin="0,14,0,10"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="LblVersion" VerticalAlignment="Center" Foreground="#666"/>
+                            <Button x:Name="BtnCheckUpdate" Content="检查更新" Width="100" Margin="12,0,0,0"
+                                    Click="OnCheckUpdateClick"/>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
