@@ -1,0 +1,122 @@
+name: Manual Windows Client Build & Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-client-release-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  PROJECT: desktop/windows/ShareMyStatusClient/ShareMyStatusClient.csproj
+  APP_NAME: "Share My Status"
+  PACK_ID: ShareMyStatus
+  MAIN_EXE: ShareMyStatus.exe
+  # Keep the vpk tool version in lockstep with the Velopack PackageReference.
+  VPK_VERSION: "0.0.1053"
+  # Velopack runtime dependency: Setup bootstraps the .NET 8 Desktop Runtime
+  # (covers WPF + WinForms) so the app ships framework-dependent and stays small.
+  VELO_FRAMEWORK: "net8.0-x64-desktop"
+
+jobs:
+  build_windows_client:
+    name: Build, Pack (Velopack) & Release
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # -----------------------------------------------------------------
+      # Version + build number from release.yml (windows: marketing-build)
+      # -----------------------------------------------------------------
+      - name: Read windows version from release.yml
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          WIN_RELEASE=$(grep '^windows:' release.yml | awk '{print $2}')
+          if [ -z "${WIN_RELEASE}" ]; then
+            echo "::error::release.yml must contain windows: <marketingVersion-buildNumber>, e.g. 1.0-1"
+            exit 1
+          fi
+          if ! echo "${WIN_RELEASE}" | grep -Eq '^[0-9]+(\.[0-9]+){1,2}-[0-9]+$'; then
+            echo "::error::Invalid windows version '${WIN_RELEASE}'. Expected marketingVersion-buildNumber, e.g. 1.0-1 or 1.0.0-1."
+            exit 1
+          fi
+          VERSION="${WIN_RELEASE%-*}"
+          BUILD_NUMBER="${WIN_RELEASE##*-}"
+          if [ "${BUILD_NUMBER}" -le 0 ]; then
+            echo "::error::Invalid windows build number '${BUILD_NUMBER}'. It must be a positive integer."
+            exit 1
+          fi
+          # Velopack requires a 3-part SemVer; encode the build number as the patch.
+          DOTS=$(echo "${VERSION}" | awk -F. '{print NF-1}')
+          if [ "${DOTS}" -eq 1 ]; then
+            SEMVER="${VERSION}.${BUILD_NUMBER}"
+          else
+            SEMVER="${VERSION%.*}.${BUILD_NUMBER}"
+          fi
+          TAG_NAME="desktop-windows-v${VERSION}-${BUILD_NUMBER}"
+          {
+            echo "VERSION=$VERSION"
+            echo "BUILD_NUMBER=$BUILD_NUMBER"
+            echo "SEMVER=$SEMVER"
+            echo "TAG_NAME=$TAG_NAME"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version=$VERSION Build=$BUILD_NUMBER SemVer=$SEMVER Tag=$TAG_NAME"
+
+      - name: Install Velopack CLI (vpk)
+        run: dotnet tool install --global vpk --version ${{ env.VPK_VERSION }}
+
+      - name: Publish (framework-dependent, win-x64)
+        shell: pwsh
+        run: |
+          dotnet publish "${env:PROJECT}" `
+            -c Release `
+            -r win-x64 `
+            --self-contained false `
+            -p:Version=${{ steps.version.outputs.SEMVER }} `
+            -p:FileVersion=${{ steps.version.outputs.SEMVER }} `
+            -p:AssemblyVersion=${{ steps.version.outputs.SEMVER }} `
+            -o publish
+
+      # Pull existing releases so Velopack can author a delta package (best-effort).
+      - name: Download previous releases for delta
+        continue-on-error: true
+        run: >
+          vpk download github
+          --repoUrl https://github.com/${{ github.repository }}
+          --channel win
+          --token ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pack (Velopack)
+        run: >
+          vpk pack
+          --packId ${{ env.PACK_ID }}
+          --packVersion ${{ steps.version.outputs.SEMVER }}
+          --packDir publish
+          --mainExe ${{ env.MAIN_EXE }}
+          --packTitle "${{ env.APP_NAME }}"
+          --packAuthors "${{ env.APP_NAME }}"
+          --framework ${{ env.VELO_FRAMEWORK }}
+          --channel win
+          --icon desktop/windows/ShareMyStatusClient/Resources/app.ico
+
+      - name: Upload to GitHub Release (Velopack)
+        run: >
+          vpk upload github
+          --repoUrl https://github.com/${{ github.repository }}
+          --channel win
+          --token ${{ secrets.GITHUB_TOKEN }}
+          --publish
+          --releaseName "${{ env.APP_NAME }} for Windows v${{ steps.version.outputs.VERSION }} (build ${{ steps.version.outputs.BUILD_NUMBER }})"
+          --tag ${{ steps.version.outputs.TAG_NAME }}

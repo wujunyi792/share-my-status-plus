@@ -1,0 +1,14 @@
+# .NET build output
+bin/
+obj/
+publish/
+*.user
+*.suo
+
+# Rider / VS
+.idea/
+.vs/
+
+# Build artifacts
+*.zip
+artifacts/
