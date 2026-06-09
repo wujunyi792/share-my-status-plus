@@ -3,6 +3,17 @@
 Windows 桌面客户端，采集本机的**音乐播放、系统指标、前台活动**并上报到后端，
 与 macOS 客户端共用同一套上报协议（`idl/` 下的 Thrift 契约）和后端服务。
 
+## 下载（稳定入口）
+
+两个平台各有一个**固定滚动标签**，永远指向各自的最新版（不受对方发版影响）：
+
+- **Windows**：[`ShareMyStatus-win-Setup.exe`](https://github.com/wujunyi792/share-my-status-plus/releases/download/desktop-windows-latest/ShareMyStatus-win-Setup.exe)
+  （或看 [releases/desktop-windows-latest](https://github.com/wujunyi792/share-my-status-plus/releases/tag/desktop-windows-latest)）
+- **macOS**：[releases/desktop-macos-latest](https://github.com/wujunyi792/share-my-status-plus/releases/tag/desktop-macos-latest)
+
+> 不要用仓库的 “Latest release” 入口下载——一个仓库只有一个 Latest，会被另一平台的发版覆盖。
+> 详见下方「跨平台发版解耦」。
+
 - 语言/框架：**.NET 8 + WPF**（设置窗口） + **WinForms NotifyIcon**（系统托盘）
 - 音乐采集：**Windows System Media Transport Controls (GSMTC)** —— 官方公共 API，
   免授权，覆盖 Spotify / 网易云 / QQ 音乐 / 浏览器内播放 / 系统播放器等
@@ -129,6 +140,29 @@ bump 根目录 `release.yml` 的 `windows: <marketingVersion-buildNumber>`（如
 > **版本固定说明**：`Velopack` 包版本与 CI 里的 `vpk` 工具版本通过
 > `ShareMyStatusClient.csproj` 的 `PackageReference` 与 workflow 的 `VPK_VERSION` 锁定为同一值
 > （当前 `0.0.1053`）。若首次在 Windows 上 `dotnet restore` 失败，按当时最新稳定版同步 bump 这两处即可。
+
+## 跨平台发版解耦
+
+GitHub 一个仓库只有一个 “Latest release”，而 mac 与 win 的发版各自独立，谁后发谁就抢走
+Latest。这会出问题，因为两端自动更新对 Latest 的依赖不同：
+
+- **Windows / Velopack**：`GithubSource` 会**按时间倒序遍历所有 release，跳过没有
+  `releases.win.json` 的**，所以天生不依赖 Latest 徽章——mac 发版不会打断 Windows 更新。
+- **macOS / Sparkle**：只读死一个 feed URL、**不遍历**。原来指向 `releases/latest/.../appcast.xml`，
+  一旦 Latest 变成 Windows release 就 404，**Windows 发版会打断 macOS 更新**。
+
+解耦方案（两个固定滚动标签）：
+
+| 标签 | 内容 | 谁用 |
+|------|------|------|
+| `desktop-macos-latest` | `appcast.xml`（feed 锚点）+ dmg | macOS Sparkle 的 `SUFeedURL` 指向它；mac 下载入口 |
+| `desktop-windows-latest` | `Setup.exe` + portable | Windows 稳定下载入口（更新仍由 Velopack 遍历版本化 release） |
+
+- 各平台发版 workflow 每次**刷新自己的滚动标签**（版本化 release 仍照常产出，供归档/Velopack）。
+- Windows 发版 workflow 额外把**最新 mac release 重设为 Latest**，作为对**尚未升级到新
+  `SUFeedURL` 的旧 mac 客户端**的兜底（它们仍读 `releases/latest`）。
+- macOS 的 `SUFeedURL` 已改为 `desktop-macos-latest`，**需重新发一版 mac 才对存量用户生效**；
+  生效后 mac 完全与 Latest 解耦。
 
 ## 路线图 / 已知限制
 

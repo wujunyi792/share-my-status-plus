@@ -8,9 +8,11 @@
 	     This file lives outside the synchronized source folder so it is never
 	     treated as a bundle resource. -->
 
-	<!-- Stable feed URL: always resolves to the appcast.xml of the latest GitHub Release. -->
+	<!-- Stable per-platform feed: a fixed rolling tag that always holds the newest macOS
+	     appcast. Decoupled from the repo's single "Latest" release so Windows releases can't
+	     break the macOS update feed (and vice versa). -->
 	<key>SUFeedURL</key>
-	<string>https://github.com/wujunyi792/share-my-status-plus/releases/latest/download/appcast.xml</string>
+	<string>https://github.com/wujunyi792/share-my-status-plus/releases/download/desktop-macos-latest/appcast.xml</string>
 
 	<!-- EdDSA public key. The matching private key signs each release's appcast in CI. -->
 	<key>SUPublicEDKey</key>
