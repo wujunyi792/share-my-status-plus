@@ -120,3 +120,34 @@ jobs:
           --publish
           --releaseName "${{ env.APP_NAME }} for Windows v${{ steps.version.outputs.VERSION }} (build ${{ steps.version.outputs.BUILD_NUMBER }})"
           --tag ${{ steps.version.outputs.TAG_NAME }}
+
+      # Stable Windows download entry, decoupled from the repo's single "Latest" release.
+      - name: Refresh rolling Windows download tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release delete desktop-windows-latest --yes --cleanup-tag || true
+          gh release create desktop-windows-latest \
+            --target "$GITHUB_SHA" --latest=false \
+            --title "Share My Status — Windows (最新)" \
+            --notes "始终指向最新 Windows 安装包的稳定下载入口。下载 ShareMyStatus-win-Setup.exe 双击安装；自动更新由应用内 Velopack 负责（与本标签无关）。" \
+            Releases/ShareMyStatus-win-Setup.exe Releases/ShareMyStatus-win-Portable.zip
+
+      # Windows must NOT hold the GitHub "Latest" badge: macOS Sparkle (older clients) reads
+      # releases/latest/download/appcast.xml. Velopack scans all releases so it's unaffected.
+      - name: Keep "Latest" on newest macOS release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mac_id=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
+            --jq '[.[] | select(.prerelease==false) | select(.tag_name|startswith("desktop-macos-v"))] | sort_by(.created_at) | last | .id')
+          if [ -n "$mac_id" ] && [ "$mac_id" != "null" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/releases/$mac_id" -f make_latest=true >/dev/null
+            echo "Re-asserted macOS release $mac_id as Latest."
+          else
+            echo "No macOS release found; leaving Latest as-is."
+          fi

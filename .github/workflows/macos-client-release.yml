@@ -66,7 +66,7 @@ jobs:
 
       - name: Guard Sparkle build number monotonicity
         env:
-          APPCAST_URL: https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml
+          APPCAST_URL: https://github.com/${{ github.repository }}/releases/download/desktop-macos-latest/appcast.xml
           NEW_BUILD_NUMBER: ${{ steps.version.outputs.BUILD_NUMBER }}
         run: |
           set -euo pipefail
@@ -309,7 +309,7 @@ jobs:
           <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
             <channel>
               <title>${APP_NAME}</title>
-              <link>https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml</link>
+              <link>https://github.com/${{ github.repository }}/releases/download/desktop-macos-latest/appcast.xml</link>
               <description>Most recent updates to ${APP_NAME}.</description>
               <language>zh</language>
               <item>
@@ -355,6 +355,21 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Refresh the fixed rolling tag that the app's SUFeedURL points at, so the macOS
+      # update feed is decoupled from the repo's single "Latest" release. The appcast's
+      # <enclosure> still points to the versioned release's DMG (absolute URL).
+      - name: Refresh rolling macOS feed/download tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release delete desktop-macos-latest --yes --cleanup-tag || true
+          gh release create desktop-macos-latest \
+            --target "$GITHUB_SHA" --latest=false \
+            --title "Share My Status — macOS (最新)" \
+            --notes "Sparkle 自动更新 feed 锚点 + 最新 macOS 安装包稳定下载入口。" \
+            "$DMG_PATH" "$DMG_PATH.sha256" "$APPCAST_PATH"
 
       - name: Clean up keychain
         if: always()
