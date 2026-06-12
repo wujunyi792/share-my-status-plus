@@ -300,8 +300,12 @@ public sealed class MediaSessionService : IDisposable
         string? sourceId = null;
         try { sourceId = session.SourceAppUserModelId; } catch { /* ignore */ }
 
-        // Empty whitelist = allow all (matches macOS semantics).
-        if (whitelist.Count > 0 && (sourceId == null || !whitelist.Contains(sourceId)))
+        // Empty whitelist = allow all (matches macOS semantics). Otherwise filter by the
+        // SMTC source id — BUT only when the source actually reports one. Some popular
+        // players (QQ Music / NetEase) expose an EMPTY SourceAppUserModelId, which can
+        // never be added to a whitelist; filtering them out would silently drop the very
+        // apps users care about. So a blank-id source is always allowed.
+        if (whitelist.Count > 0 && !string.IsNullOrEmpty(sourceId) && !whitelist.Contains(sourceId))
             return null;
 
         GlobalSystemMediaTransportControlsSessionMediaProperties props;

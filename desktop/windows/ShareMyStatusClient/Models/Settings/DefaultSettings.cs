@@ -11,7 +11,10 @@ public static class DefaultSettings
 {
     /// <summary>Bumped when the built-in default activity groups / whitelist expand, so existing
     /// users' saved configs can additively merge in the new entries on next launch.</summary>
-    public const int CurrentConfigVersion = 2;
+    // v3: re-run migration to clear any leftover exe-name music whitelist that the
+    // stricter v2 SetEquals check failed to migrate (it only matched the exact 9-entry
+    // legacy default; users who'd pared it down stayed broken).
+    public const int CurrentConfigVersion = 3;
 
     // ---- Network ----
 

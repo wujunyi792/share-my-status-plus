@@ -35,10 +35,13 @@ public sealed class UpdateService
         return await _manager.CheckForUpdatesAsync().ConfigureAwait(false);
     }
 
-    /// <summary>Downloads the update and relaunches into the new version (process exits).</summary>
-    public async Task DownloadAndRestartAsync(UpdateInfo info)
-    {
-        await _manager.DownloadUpdatesAsync(info).ConfigureAwait(false);
-        _manager.ApplyUpdatesAndRestart(info);
-    }
+    /// <summary>Downloads the update package. Does not touch the running app yet, so the
+    /// caller can finish any UI cleanup before the process is replaced.</summary>
+    public Task DownloadAsync(UpdateInfo info) => _manager.DownloadUpdatesAsync(info);
+
+    /// <summary>Applies a previously-downloaded update and relaunches into the new version
+    /// (this process is terminated, so do all cleanup before calling). <paramref name="restartArgs"/>
+    /// are passed to the relaunched process — used to flag a post-update launch.</summary>
+    public void ApplyAndRestart(UpdateInfo info, string[]? restartArgs = null)
+        => _manager.ApplyUpdatesAndRestart(info, restartArgs);
 }

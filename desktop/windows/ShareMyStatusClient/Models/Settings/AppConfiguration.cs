@@ -111,13 +111,17 @@ public sealed class AppConfiguration
                     existing.ProcessNames.Add(p);
         }
 
-        // Migrate the old non-empty default whitelist (only if the user never customized it)
-        // to empty = allow all — so valid players whose SMTC source id != exe name (e.g.
-        // NetEase) are no longer silently dropped.
+        // Migrate the old exe-name default whitelist to empty (= allow all), so valid
+        // players whose SMTC source id != exe name (e.g. NetEase / QQ Music, which report
+        // an EMPTY source id) are no longer silently dropped. We clear it whenever every
+        // remaining entry is one of the shipped legacy exe-name defaults — i.e. the user
+        // never added a real SMTC source id of their own (via the picker). SetEquals was
+        // too strict: a user who'd only ever pared the default list down (e.g. to
+        // cloudmusic.exe + qqmusic.exe) stayed broken forever.
         MusicAppWhitelist ??= new List<string>();
-        if (MusicAppWhitelist.Count > 0 &&
-            new HashSet<string>(MusicAppWhitelist, StringComparer.OrdinalIgnoreCase)
-                .SetEquals(DefaultSettings.LegacyDefaultMusicWhitelist))
+        var legacyDefaults = new HashSet<string>(
+            DefaultSettings.LegacyDefaultMusicWhitelist, StringComparer.OrdinalIgnoreCase);
+        if (MusicAppWhitelist.Count > 0 && MusicAppWhitelist.All(legacyDefaults.Contains))
         {
             MusicAppWhitelist.Clear();
         }
