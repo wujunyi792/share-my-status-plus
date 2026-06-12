@@ -25,19 +25,14 @@ public sealed class UpdateService
     public string? CurrentVersion => _manager.CurrentVersion?.ToString();
 
     /// <summary>Checks for an update. Returns null when up-to-date or not installed.</summary>
+    /// <summary>Checks for an update. Returns null only when genuinely up-to-date (or not
+    /// installed). Throws on failure (e.g. network error) so callers can distinguish
+    /// "up to date" from "couldn't check".</summary>
     public async Task<UpdateInfo?> CheckAsync()
     {
         if (!_manager.IsInstalled)
             return null;
-        try
-        {
-            return await _manager.CheckForUpdatesAsync().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error("Update check failed", ex);
-            return null;
-        }
+        return await _manager.CheckForUpdatesAsync().ConfigureAwait(false);
     }
 
     /// <summary>Downloads the update and relaunches into the new version (process exits).</summary>

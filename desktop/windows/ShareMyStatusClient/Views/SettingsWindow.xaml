@@ -13,10 +13,10 @@
         <Border DockPanel.Dock="Bottom" Background="#F3F3F3" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
             <Grid Margin="12,10">
                 <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="#666"
-                           Text="保存后将自动开始上报"/>
+                           Text="保存后自动开始上报，窗口保持打开"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="BtnSave" Content="保存并上报" Width="110" Margin="0,0,8,0" IsDefault="True" Click="OnSaveClick"/>
-                    <Button x:Name="BtnCancel" Content="取消" Width="90" IsCancel="True" Click="OnCancelClick"/>
+                    <Button x:Name="BtnCancel" Content="关闭" Width="90" IsCancel="True" Click="OnCancelClick"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -33,7 +33,7 @@
             </Grid>
         </Border>
 
-        <TabControl Margin="10">
+        <TabControl x:Name="Tabs" Margin="10">
             <!-- Live status -->
             <TabItem Header="实时状态">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -166,8 +166,12 @@
             <TabItem Header="音乐白名单">
                 <StackPanel Margin="12">
                     <TextBlock TextWrapping="Wrap" Margin="0,0,0,8" Foreground="#555">
-                        每行一个媒体源标识 (SourceAppUserModelId 或 exe 名, 如 Spotify.exe)。
-                        留空表示允许所有播放器。
+                        <Run Text="留空 = 允许所有播放器(推荐)。" FontWeight="SemiBold"/>
+                        <LineBreak/>
+                        只在想限制时才填，每行一个媒体源标识。注意这里要填的是
+                        <Run Text="SourceAppUserModelId" FontWeight="SemiBold"/>（系统媒体会话标识），
+                        <Run Text="不是进程 exe 名" FontWeight="SemiBold"/>——很多播放器（如网易云）两者并不相同，
+                        手填容易填错。请用下方「从运行中的应用选择…」，它会列出当前正在播放的真实标识。
                     </TextBlock>
                     <Button Content="从运行中的应用选择…" HorizontalAlignment="Left"
                             Margin="0,0,0,8" Click="OnPickMusicClick"/>

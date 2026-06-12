@@ -57,10 +57,19 @@ public sealed class NetworkService : IDisposable
     {
         if (!IsConnected)
             return (false, "网络未连接");
-        if (string.IsNullOrWhiteSpace(endpointUrl) || BaseUrlOf(endpointUrl) is not { } baseUrl)
+        if (string.IsNullOrWhiteSpace(endpointUrl) || !Uri.TryCreate(endpointUrl, UriKind.Absolute, out var endpointUri))
             return (false, "服务器地址无效");
+        var baseUrl = $"{endpointUri.Scheme}://{endpointUri.Authority}";
         if (string.IsNullOrWhiteSpace(secretKey))
             return (false, "Secret Key 为空");
+
+        // Catch the most common mistake: entering a bare host with no report path. The host may
+        // be reachable, but reports POST to the full endpoint and would 404. Validate the path.
+        var path = endpointUri.AbsolutePath.Trim('/');
+        if (path.Length == 0)
+            return (false, "地址缺少上报路径，应类似 https://你的域名/api/v1/state/report");
+        if (!endpointUri.AbsolutePath.Contains("/state/report", StringComparison.OrdinalIgnoreCase))
+            return (false, "地址路径不像上报接口，通常应以 /api/v1/state/report 结尾");
 
         using var message = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/api/v1/client/resources");
         message.Headers.TryAddWithoutValidation("X-Secret-Key", secretKey);
