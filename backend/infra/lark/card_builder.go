@@ -50,15 +50,9 @@ func buildAccountInfoCard(user *model.User, app *config.AppConfig, publicEnabled
 	})
 }
 
-func buildConfigCard(configJSON string, user *model.User, app *config.AppConfig, platform string) map[string]any {
-	platformLabel := "macOS"
-	otherHint := inlineCode("/config windows")
-	if platform == "windows" {
-		platformLabel = "Windows"
-		otherHint = inlineCode("/config mac")
-	}
-	return buildBaseCard("blue", "⚙️ 客户端配置（"+platformLabel+"）", "复制完整 JSON 导入客户端", "客户端配置", []map[string]any{
-		markdown("**"+platformLabel+" 推荐配置已生成**\n\n复制下面完整 JSON，粘贴到客户端设置底部的配置导入入口。\n\n<font color='grey'>其它平台请发送 "+otherHint+"。</font>"),
+func buildConfigCard(configJSON string, user *model.User, app *config.AppConfig) map[string]any {
+	return buildBaseCard("blue", "⚙️ 客户端配置", "复制完整 JSON 导入客户端", "客户端配置", []map[string]any{
+		markdown("**推荐配置已生成**\n\n复制下面完整 JSON，粘贴到客户端设置底部的配置导入入口（macOS / Windows 通用）。"),
 		hr(),
 		markdown("```json\n" + configJSON + "\n```"),
 		hr(),
