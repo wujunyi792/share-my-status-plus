@@ -168,7 +168,62 @@ class AppConfiguration: ObservableObject {
     
     // Convenience Methods
     func isValidConfiguration() -> Bool {
-        return !secretKey.isEmpty && !endpointURL.isEmpty && URL(string: endpointURL) != nil
+        return !secretKey.isEmpty && AppConfiguration.isUsableEndpoint(endpointURL)
+    }
+
+    /// Hostnames that ship as placeholders and must never receive real data / the secret key.
+    nonisolated static let placeholderEndpointHosts: Set<String> = [
+        "api.example.com", "example.com", "your-server.example.com",
+    ]
+
+    /// A usable report endpoint: http(s) with a real, non-placeholder host. Used both to gate
+    /// "start reporting" and to gate the authenticated client/resources probe (so the secret is
+    /// never sent to a half-baked or placeholder address). nonisolated so the (actor-based)
+    /// ClientResourceService can call it.
+    nonisolated static func isUsableEndpoint(_ urlString: String) -> Bool {
+        guard !urlString.isEmpty,
+              let url = URL(string: urlString),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              let host = url.host, !host.isEmpty,
+              !placeholderEndpointHosts.contains(host.lowercased()) else {
+            return false
+        }
+        return true
+    }
+
+    /// Validate an endpoint + secret against the server by hitting the authenticated
+    /// client/resources route — the macOS analogue of the Windows "测试连接" button.
+    nonisolated static func testConnection(endpointURL: String, secretKey: String) async -> (ok: Bool, message: String) {
+        guard isUsableEndpoint(endpointURL) else {
+            return (false, "服务器地址无效或仍是占位示例地址")
+        }
+        guard !secretKey.isEmpty else { return (false, "Secret Key 为空") }
+        guard let url = URL(string: endpointURL), let scheme = url.scheme, let host = url.host else {
+            return (false, "服务器地址无效")
+        }
+        if !url.path.contains("/state/report") {
+            return (false, "地址缺少上报路径，应类似 https://你的域名/api/v1/state/report")
+        }
+        let portPart = url.port.map { ":\($0)" } ?? ""
+        guard let probeURL = URL(string: "\(scheme)://\(host)\(portPart)/api/v1/client/resources") else {
+            return (false, "服务器地址无效")
+        }
+        var request = URLRequest(url: probeURL)
+        request.httpMethod = "GET"
+        request.setValue(secretKey, forHTTPHeaderField: "X-Secret-Key")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 15
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else { return (false, "无效的响应") }
+            switch http.statusCode {
+            case 200...299: return (true, "连接成功，配置有效")
+            case 401: return (false, "认证失败：Secret Key 不正确")
+            default: return (false, "服务器返回 HTTP \(http.statusCode)")
+            }
+        } catch {
+            return (false, "连接失败：\(error.localizedDescription)")
+        }
     }
     
     func resetToDefaults() {

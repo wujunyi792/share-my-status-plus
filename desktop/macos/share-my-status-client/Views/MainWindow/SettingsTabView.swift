@@ -6,6 +6,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import ServiceManagement
 
 /// Settings tab view for app configuration
 struct SettingsTabView: View {
@@ -13,6 +14,7 @@ struct SettingsTabView: View {
     @EnvironmentObject var coordinator: AppCoordinator
     @State private var accessibilityGranted = AccessibilityPermissionChecker.isAccessibilityGranted()
     @State private var showAccessibilityHelp = false
+    @State private var launchAtLogin = (SMAppService.mainApp.status == .enabled)
 
     // Import/Export states
     @State private var showExportOptions = false
@@ -28,6 +30,10 @@ struct SettingsTabView: View {
 
     // Secret key visibility
     @State private var isSecretKeyVisible = false
+
+    // Test connection
+    @State private var testingConnection = false
+    @State private var testConnectionResult: (ok: Bool, message: String)? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,15 +96,23 @@ struct SettingsTabView: View {
                             .buttonStyle(.borderless)
                             .help("刷新权限状态")
 
-                            // Settings button (when not granted)
+                            // Authorize button (when not granted) — try the native system prompt
+                            // first; if the user previously denied (prompt won't reappear),
+                            // fall back to opening the Accessibility settings + instructions.
                             if !accessibilityGranted {
                                 Button(action: {
-                                    AccessibilityPermissionChecker.openAccessibilitySettings()
+                                    AccessibilityPermissionChecker.requestAccessibility()
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                        accessibilityGranted = AccessibilityPermissionChecker.isAccessibilityGranted()
+                                        if !accessibilityGranted {
+                                            AccessibilityPermissionChecker.openAccessibilitySettings()
+                                        }
+                                    }
                                 }) {
                                     HStack(spacing: 4) {
                                         Image(systemName: "gearshape.fill")
                                             .imageScale(.small)
-                                        Text("打开设置")
+                                        Text("授权")
                                             .font(.caption2)
                                     }
                                 }
@@ -122,6 +136,15 @@ struct SettingsTabView: View {
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 4)
+                    .onAppear {
+                        accessibilityGranted = AccessibilityPermissionChecker.isAccessibilityGranted()
+                        launchAtLogin = (SMAppService.mainApp.status == .enabled)
+                    }
+                    // Auto-refresh when returning to the app (e.g. after granting in System Settings),
+                    // so the status no longer sticks at "未授权" until manual refresh.
+                    .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                        accessibilityGranted = AccessibilityPermissionChecker.isAccessibilityGranted()
+                    }
                 }
 
                 // Network Settings
@@ -156,6 +179,36 @@ struct SettingsTabView: View {
                                 .buttonStyle(.borderless)
                                 .help(isSecretKeyVisible ? "隐藏密钥" : "显示密钥")
                             }
+                        }
+
+                        // 测试连接（命中 /api/v1/client/resources，即时验证地址+密钥）
+                        HStack(spacing: 10) {
+                            Button(action: {
+                                testingConnection = true
+                                testConnectionResult = nil
+                                let endpoint = configuration.endpointURL
+                                let secret = configuration.secretKey
+                                Task {
+                                    let r = await AppConfiguration.testConnection(endpointURL: endpoint, secretKey: secret)
+                                    await MainActor.run {
+                                        testConnectionResult = r
+                                        testingConnection = false
+                                    }
+                                }
+                            }) {
+                                Text(testingConnection ? "测试中…" : "测试连接")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(testingConnection)
+
+                            if let result = testConnectionResult {
+                                Text((result.ok ? "✓ " : "✗ ") + result.message)
+                                    .font(.caption)
+                                    .foregroundColor(result.ok ? .green : .orange)
+                                    .lineLimit(2)
+                            }
+                            Spacer()
                         }
                     }
                     .padding(.vertical, 8)
@@ -205,6 +258,25 @@ struct SettingsTabView: View {
                 // Feature Settings
                 GroupBox("功能设置") {
                     VStack(alignment: .leading, spacing: 15) {
+                        // Launch at login (macOS 13+ via ServiceManagement)
+                        Toggle("开机自动启动", isOn: $launchAtLogin)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .onChange(of: launchAtLogin) { newValue in
+                                do {
+                                    if newValue {
+                                        try SMAppService.mainApp.register()
+                                    } else {
+                                        try SMAppService.mainApp.unregister()
+                                    }
+                                } catch {
+                                    // Revert if the system rejected the change.
+                                    launchAtLogin = (SMAppService.mainApp.status == .enabled)
+                                }
+                            }
+
+                        Divider()
+
                         // Music Reporting
                         Toggle("音乐信息上报", isOn: $configuration.musicReportingEnabled)
                             .font(.subheadline)

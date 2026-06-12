@@ -426,10 +426,6 @@ private struct ModernMusicCard: View {
                         .lineLimit(1)
                 }
                 
-                // Duration indicator (if available)
-                Text("1分钟前")
-                    .font(.caption2)
-                    .foregroundColor(Color.secondary)
             }
             
             Spacer()
@@ -845,10 +841,6 @@ private struct CompactActivityCard: View {
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 
-                // Time indicator
-                Text("2分钟前")
-                    .font(.caption2)
-                    .foregroundColor(Color.secondary)
             }
         }
         .padding(12)

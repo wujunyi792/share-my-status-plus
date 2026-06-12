@@ -28,6 +28,9 @@ actor ClientResourceService {
 
     func fetchResources() async throws -> ClientResources? {
         guard !baseURL.isEmpty, !secretKey.isEmpty else { return nil }
+        // Never send the secret key to a half-baked / placeholder address (e.g. while the user
+        // is still editing the endpoint, or if it's left at the example default).
+        guard AppConfiguration.isUsableEndpoint(baseURL) else { return nil }
         guard let url = URL(string: "\(baseURL)/api/v1/client/resources") else {
             throw URLError(.badURL)
         }
