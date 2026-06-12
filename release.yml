@@ -7,7 +7,7 @@
 # component or chart change publishes a new OCI Helm chart.
 # Desktop clients (macos/windows) are released via their manual workflows.
 
-backend: 1.0.6-6
+backend: 1.0.6-7
 frontend: 1.0.5-2
 chart: 1.0.5-4
 macos: 1.7-74
