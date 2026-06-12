@@ -3,27 +3,24 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
-using ShareMyStatusClient.Services;
 using ShareMyStatusClient.Utilities;
 
 namespace ShareMyStatusClient.Views;
 
-/// <summary>A reusable multi-select picker over currently running windowed apps
-/// (optionally including active media sources). Returns selected identifiers.</summary>
+/// <summary>A reusable multi-select picker over currently running windowed apps.
+/// Returns selected process executable names.</summary>
 public partial class ProcessPickerWindow : Window
 {
-    private readonly bool _includeMediaSources;
     private readonly ObservableCollection<PickItem> _items = new();
     private readonly ICollectionView _view;
     private string _search = string.Empty;
 
     public IReadOnlyList<string> SelectedIdentifiers { get; private set; } = Array.Empty<string>();
 
-    public ProcessPickerWindow(string title, bool includeMediaSources)
+    public ProcessPickerWindow(string title)
     {
         InitializeComponent();
         Title = title;
-        _includeMediaSources = includeMediaSources;
 
         _view = CollectionViewSource.GetDefaultView(_items);
         _view.Filter = FilterItem;
@@ -54,18 +51,8 @@ public partial class ProcessPickerWindow : Window
         {
             var apps = await Task.Run(ProcessHelper.GetWindowedProcesses);
 
-            var mediaIds = _includeMediaSources
-                ? await MediaSessionService.GetActiveSourceIdsAsync()
-                : new List<string>();
-
             _items.Clear();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var id in mediaIds)
-            {
-                if (seen.Add(id))
-                    _items.Add(new PickItem(id, $"🎵 {id}", existing.Contains(id)));
-            }
 
             foreach (var app in apps)
             {
@@ -75,7 +62,7 @@ public partial class ProcessPickerWindow : Window
 
             LblStatus.Text = _items.Count == 0
                 ? "未发现可选应用，可手动输入。"
-                : $"共 {_items.Count} 个应用（媒体源以 🎵 标记）";
+                : $"共 {_items.Count} 个应用";
             _view.Refresh();
         }
         catch (Exception ex)

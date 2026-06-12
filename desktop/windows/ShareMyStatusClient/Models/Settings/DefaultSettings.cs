@@ -4,16 +4,13 @@ namespace ShareMyStatusClient.Models.Settings;
 
 /// <summary>
 /// Centralized default settings, the Windows counterpart of the macOS DefaultSettings.
-/// Apps are identified by process executable name (activity) or by the media session's
-/// SourceAppUserModelId (music) — both compared case-insensitively.
+/// Activity apps are identified by process executable name (compared case-insensitively);
+/// music is always whatever the system media session reports (no whitelist on Windows).
 /// </summary>
 public static class DefaultSettings
 {
-    /// <summary>Bumped when the built-in default activity groups / whitelist expand, so existing
-    /// users' saved configs can additively merge in the new entries on next launch.</summary>
-    // v3: re-run migration to clear any leftover exe-name music whitelist that the
-    // stricter v2 SetEquals check failed to migrate (it only matched the exact 9-entry
-    // legacy default; users who'd pared it down stayed broken).
+    /// <summary>Bumped when the built-in default activity groups expand, so existing users'
+    /// saved configs additively merge in the new process names on next launch.</summary>
     public const int CurrentConfigVersion = 3;
 
     // ---- Network ----
@@ -44,23 +41,10 @@ public static class DefaultSettings
     /// <summary>Tag used when no enabled activity group matches the foreground app.</summary>
     public const string DefaultActivityTag = "其他";
 
-    // ---- Music app whitelist ----
-    // Empty = allow ALL media sources. This is the default because the whitelist matches a
-    // player's SourceAppUserModelId (the SMTC session id), which is NOT the same as the
-    // process exe name — guessing exe names dropped valid players (e.g. NetEase, whose SMTC
-    // id != "cloudmusic.exe"). Users who want to restrict can add real source ids via the
-    // "从运行中的应用选择…" picker, which lists the actual SMTC session ids.
-    public static List<string> MusicAppWhitelist() => new();
-
-    /// <summary>The previously-shipped non-empty default whitelist. Used to detect configs
-    /// the user never customized, so they can be migrated to empty (= allow all).</summary>
-    public static readonly string[] LegacyDefaultMusicWhitelist =
-    {
-        "Spotify.exe", "cloudmusic.exe", "QQMusic.exe", "kugou.exe", "foobar2000.exe",
-        "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App",
-        "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic",
-        "msedge.exe", "chrome.exe",
-    };
+    // ---- Music ----
+    // There is no music app whitelist on Windows: the SMTC SourceAppUserModelId is an
+    // unreliable filter key (empty for QQ Music / NetEase, exe-name for others), so we
+    // always report whatever is playing. The on/off switch is MusicReportingEnabled.
 
     // ---- Activity groups (process exe names, lower-cased) ----
     // Order matters: the first enabled group containing the process wins.

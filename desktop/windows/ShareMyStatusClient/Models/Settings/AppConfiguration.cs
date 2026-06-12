@@ -18,7 +18,6 @@ public sealed class AppConfiguration
     public bool SystemReportingEnabled { get; set; } = DefaultSettings.SystemReportingEnabled;
     public bool ActivityReportingEnabled { get; set; } = DefaultSettings.ActivityReportingEnabled;
 
-    public List<string> MusicAppWhitelist { get; set; } = DefaultSettings.MusicAppWhitelist();
     public List<ActivityGroup> ActivityGroups { get; set; } = DefaultSettings.ActivityGroups();
 
     public double SystemPollingInterval { get; set; } = DefaultSettings.SystemPollingInterval;
@@ -92,8 +91,8 @@ public sealed class AppConfiguration
         return new AppConfiguration();
     }
 
-    /// <summary>Add any default activity-group process names / music whitelist entries that
-    /// aren't already present. Never removes user entries.</summary>
+    /// <summary>Add any default activity-group process names that aren't already present.
+    /// Never removes user entries.</summary>
     private void MergeNewDefaults()
     {
         ActivityGroups ??= new List<ActivityGroup>();
@@ -109,21 +108,6 @@ public sealed class AppConfiguration
             foreach (var p in dg.ProcessNames)
                 if (have.Add(p))
                     existing.ProcessNames.Add(p);
-        }
-
-        // Migrate the old exe-name default whitelist to empty (= allow all), so valid
-        // players whose SMTC source id != exe name (e.g. NetEase / QQ Music, which report
-        // an EMPTY source id) are no longer silently dropped. We clear it whenever every
-        // remaining entry is one of the shipped legacy exe-name defaults — i.e. the user
-        // never added a real SMTC source id of their own (via the picker). SetEquals was
-        // too strict: a user who'd only ever pared the default list down (e.g. to
-        // cloudmusic.exe + qqmusic.exe) stayed broken forever.
-        MusicAppWhitelist ??= new List<string>();
-        var legacyDefaults = new HashSet<string>(
-            DefaultSettings.LegacyDefaultMusicWhitelist, StringComparer.OrdinalIgnoreCase);
-        if (MusicAppWhitelist.Count > 0 && MusicAppWhitelist.All(legacyDefaults.Contains))
-        {
-            MusicAppWhitelist.Clear();
         }
     }
 
@@ -148,7 +132,6 @@ public sealed class AppConfiguration
 
     private void Normalize()
     {
-        MusicAppWhitelist ??= new List<string>();
         ActivityGroups ??= new List<ActivityGroup>();
         foreach (var g in ActivityGroups)
         {
@@ -173,7 +156,6 @@ public sealed class AppConfiguration
         MusicReportingEnabled = MusicReportingEnabled,
         SystemReportingEnabled = SystemReportingEnabled,
         ActivityReportingEnabled = ActivityReportingEnabled,
-        MusicAppWhitelist = new List<string>(MusicAppWhitelist),
         ActivityGroups = ActivityGroups.Select(g => g.Clone()).ToList(),
         SystemPollingInterval = SystemPollingInterval,
         ActivityPollingInterval = ActivityPollingInterval,
@@ -191,7 +173,6 @@ public sealed class AppConfiguration
         MusicReportingEnabled = other.MusicReportingEnabled;
         SystemReportingEnabled = other.SystemReportingEnabled;
         ActivityReportingEnabled = other.ActivityReportingEnabled;
-        MusicAppWhitelist = new List<string>(other.MusicAppWhitelist);
         ActivityGroups = other.ActivityGroups.Select(g => g.Clone()).ToList();
         SystemPollingInterval = other.SystemPollingInterval;
         ActivityPollingInterval = other.ActivityPollingInterval;
@@ -205,7 +186,6 @@ public sealed class AppConfiguration
         MusicReportingEnabled = DefaultSettings.MusicReportingEnabled;
         SystemReportingEnabled = DefaultSettings.SystemReportingEnabled;
         ActivityReportingEnabled = DefaultSettings.ActivityReportingEnabled;
-        MusicAppWhitelist = DefaultSettings.MusicAppWhitelist();
         ActivityGroups = DefaultSettings.ActivityGroups();
         SystemPollingInterval = DefaultSettings.SystemPollingInterval;
         ActivityPollingInterval = DefaultSettings.ActivityPollingInterval;
@@ -223,7 +203,6 @@ public sealed class AppConfiguration
             MusicReportingEnabled = MusicReportingEnabled,
             SystemReportingEnabled = SystemReportingEnabled,
             ActivityReportingEnabled = ActivityReportingEnabled,
-            MusicAppWhitelist = new List<string>(MusicAppWhitelist),
             ActivityGroups = ActivityGroups.Select(g => g.Clone()).ToList(),
             SystemPollingInterval = SystemPollingInterval,
             ActivityPollingInterval = ActivityPollingInterval,
@@ -259,7 +238,6 @@ public sealed class AppConfiguration
         MusicReportingEnabled = cfg.MusicReportingEnabled;
         SystemReportingEnabled = cfg.SystemReportingEnabled;
         ActivityReportingEnabled = cfg.ActivityReportingEnabled;
-        MusicAppWhitelist = cfg.MusicAppWhitelist ?? new List<string>();
         ActivityGroups = (cfg.ActivityGroups ?? new List<ActivityGroup>()).Select(g => g.Clone()).ToList();
         SystemPollingInterval = cfg.SystemPollingInterval;
         ActivityPollingInterval = cfg.ActivityPollingInterval;
@@ -276,7 +254,6 @@ public sealed class ExportableConfiguration
     public bool MusicReportingEnabled { get; set; }
     public bool SystemReportingEnabled { get; set; }
     public bool ActivityReportingEnabled { get; set; }
-    public List<string>? MusicAppWhitelist { get; set; }
     public List<ActivityGroup>? ActivityGroups { get; set; }
     public double SystemPollingInterval { get; set; }
     public double ActivityPollingInterval { get; set; }
