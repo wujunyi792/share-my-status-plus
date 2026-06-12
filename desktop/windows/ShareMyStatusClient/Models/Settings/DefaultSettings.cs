@@ -41,27 +41,22 @@ public static class DefaultSettings
     /// <summary>Tag used when no enabled activity group matches the foreground app.</summary>
     public const string DefaultActivityTag = "其他";
 
-    // ---- Music app whitelist (SourceAppUserModelId / exe name) ----
-    // An empty whitelist means "allow all sources" (same semantics as macOS).
+    // ---- Music app whitelist ----
+    // Empty = allow ALL media sources. This is the default because the whitelist matches a
+    // player's SourceAppUserModelId (the SMTC session id), which is NOT the same as the
+    // process exe name — guessing exe names dropped valid players (e.g. NetEase, whose SMTC
+    // id != "cloudmusic.exe"). Users who want to restrict can add real source ids via the
+    // "从运行中的应用选择…" picker, which lists the actual SMTC session ids.
+    public static List<string> MusicAppWhitelist() => new();
 
-    public static List<string> MusicAppWhitelist() => new()
+    /// <summary>The previously-shipped non-empty default whitelist. Used to detect configs
+    /// the user never customized, so they can be migrated to empty (= allow all).</summary>
+    public static readonly string[] LegacyDefaultMusicWhitelist =
     {
-        "Spotify.exe",
-        "cloudmusic.exe",      // 网易云音乐
-        "QQMusic.exe",         // QQ 音乐
-        "kugou.exe",           // 酷狗
-        "kuwo.exe",            // 酷我
-        "foobar2000.exe",
-        "AIMP.exe",
-        "musicbee.exe",
-        "iTunes.exe",
-        "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", // Apple Music (Store)
-        "AppleMusic.exe",
-        "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic", // Media Player / Groove
-        "Microsoft.Media.Player.exe",
-        "msedge.exe",
-        "chrome.exe",
-        "firefox.exe",
+        "Spotify.exe", "cloudmusic.exe", "QQMusic.exe", "kugou.exe", "foobar2000.exe",
+        "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App",
+        "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic",
+        "msedge.exe", "chrome.exe",
     };
 
     // ---- Activity groups (process exe names, lower-cased) ----

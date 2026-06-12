@@ -111,14 +111,15 @@ public sealed class AppConfiguration
                     existing.ProcessNames.Add(p);
         }
 
-        // Only extend a non-empty whitelist (empty = "allow all", must stay that way).
+        // Migrate the old non-empty default whitelist (only if the user never customized it)
+        // to empty = allow all — so valid players whose SMTC source id != exe name (e.g.
+        // NetEase) are no longer silently dropped.
         MusicAppWhitelist ??= new List<string>();
-        if (MusicAppWhitelist.Count > 0)
+        if (MusicAppWhitelist.Count > 0 &&
+            new HashSet<string>(MusicAppWhitelist, StringComparer.OrdinalIgnoreCase)
+                .SetEquals(DefaultSettings.LegacyDefaultMusicWhitelist))
         {
-            var have = new HashSet<string>(MusicAppWhitelist, StringComparer.OrdinalIgnoreCase);
-            foreach (var m in DefaultSettings.MusicAppWhitelist())
-                if (have.Add(m))
-                    MusicAppWhitelist.Add(m);
+            MusicAppWhitelist.Clear();
         }
     }
 
