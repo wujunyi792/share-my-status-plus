@@ -3,6 +3,8 @@ package middleware
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"share-my-status/infra"
@@ -15,6 +17,24 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
+
+// cachedAuthUser 是 SecretKeyAuth 缓存到 Redis 的最小用户信息。
+type cachedAuthUser struct {
+	ID         uint64 `json:"id"`
+	OpenID     string `json:"o"`
+	SharingKey string `json:"s"`
+	Status     int    `json:"st"`
+}
+
+// secretKeyAuthCacheTTL：上报热路径鉴权缓存有效期。短 TTL 在性能与状态变更/密钥轮转
+// 的及时性之间取平衡（轮转后旧 key 最多在此窗口内仍可被缓存命中）。
+const secretKeyAuthCacheTTL = 60 * time.Second
+
+func setAuthContext(c *app.RequestContext, userID uint64, openID, sharingKey string) {
+	c.Set("user_id", userID)
+	c.Set("open_id", openID)
+	c.Set("sharing_key", sharingKey)
+}
 
 // SecretKeyAuth Secret Key认证中间件
 func SecretKeyAuth() app.HandlerFunc {
@@ -29,9 +49,32 @@ func SecretKeyAuth() app.HandlerFunc {
 			return
 		}
 
-		// 查询用户
+		deps := infra.GetGlobalAppDependencies()
+		// 这是全库最高频的查询（每个客户端 5-10s 上报一次）。用 Redis 缓存按 secret key
+		// 哈希后的用户信息，避免每次上报都打一次 DB。缓存键用 sha256，不落明文密钥。
+		h := sha256.Sum256([]byte(secretKey))
+		cacheKey := "authcache:" + hex.EncodeToString(h[:])
+		rdb := deps.RedisClient
+
+		if rdb != nil {
+			if val, cErr := rdb.Get(ctx, cacheKey).Result(); cErr == nil {
+				var cu cachedAuthUser
+				if json.Unmarshal([]byte(val), &cu) == nil {
+					if cu.Status != 1 {
+						c.JSON(http.StatusForbidden, utils.H{"code": 403, "message": "User account is disabled"})
+						c.Abort()
+						return
+					}
+					setAuthContext(c, cu.ID, cu.OpenID, cu.SharingKey)
+					c.Next(ctx)
+					return
+				}
+			}
+		}
+
+		// 缓存未命中：查询用户
 		var user model.User
-		err := infra.GetGlobalAppDependencies().DB.Where("secret_key = ?", secretKey).First(&user).Error
+		err := deps.DB.WithContext(ctx).Where("secret_key = ?", secretKey).First(&user).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				c.JSON(http.StatusUnauthorized, utils.H{
@@ -49,6 +92,15 @@ func SecretKeyAuth() app.HandlerFunc {
 			return
 		}
 
+		// 写入缓存（仅缓存命中到的有效用户，避免缓存被无效 key 污染）
+		if rdb != nil {
+			if b, mErr := json.Marshal(cachedAuthUser{
+				ID: user.ID, OpenID: user.OpenID, SharingKey: user.SharingKey, Status: user.Status,
+			}); mErr == nil {
+				rdb.Set(ctx, cacheKey, b, secretKeyAuthCacheTTL)
+			}
+		}
+
 		// 检查用户状态
 		if user.Status != 1 {
 			c.JSON(http.StatusForbidden, utils.H{
@@ -59,11 +111,7 @@ func SecretKeyAuth() app.HandlerFunc {
 			return
 		}
 
-		// 将用户信息存储到上下文中
-		c.Set("user_id", user.ID)
-		c.Set("open_id", user.OpenID)
-		c.Set("sharing_key", user.SharingKey)
-
+		setAuthContext(c, user.ID, user.OpenID, user.SharingKey)
 		c.Next(ctx)
 	}
 }

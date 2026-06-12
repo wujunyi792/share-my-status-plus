@@ -28,6 +28,10 @@ func main() {
 	}
 	infra.GlobalAppDependencies = deps
 
+	// 启动定时任务调度器（注册并运行 state_history / cover_assets 等清理任务）。
+	// 此前从未调用 Start()，导致所有清理任务都不执行、相关表无限增长。
+	deps.Scheduler.Start()
+
 	// 启动飞书WebSocket连接
 	go func() {
 		if _err := deps.LarkWSClient.Start(ctx); _err != nil {

@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"share-my-status/domain/user"
 	"share-my-status/infra/ws"
@@ -111,26 +112,39 @@ func (s *StateService) processEvent(ctx context.Context, userID uint64, event *c
 		Activity:     event.Activity,
 	}
 
-	// 获取现有状态并进行合并
-	var currentState model.CurrentState
-	err := s.db.Where("user_id = ?", userID).First(&currentState).Error
-
-	var mergedSnapshot *common.StatusSnapshot
-	isNotFound, err := dbutil.HandleRecordNotFoundError(err)
-	if isNotFound {
-		// 如果是首次创建，直接使用新快照
-		mergedSnapshot = newSnapshot
-	} else if err != nil {
-		return fmt.Errorf("failed to get current state: %w", err)
-	} else {
-		// 合并现有状态和新快照
-		existingSnapshot := currentState.Snapshot.Data()
-		mergedSnapshot = s.mergeSnapshots(&existingSnapshot, newSnapshot)
+	// 单条原子 upsert：用 PostgreSQL 顶层 jsonb `||` 做模块级覆盖合并，等价于原来的
+	// read → mergeSnapshots → write，但合并为一条语句完成。
+	// 由于 StatusSnapshot 的 system/music/activity 都带 json omitempty，本次未上报的模块
+	// 不会出现在 EXCLUDED 里、从而保留旧值；上报的模块整体覆盖；lastUpdateTs 总被更新。
+	// 这消除了此前「两次 SELECT + 全行 Save」的开销，以及并发上报互相覆盖丢更新、
+	// 并发首报主键冲突 500 的问题。RETURNING 拿到合并后的快照用于广播。
+	snapshotJSON, err := json.Marshal(newSnapshot)
+	if err != nil {
+		return fmt.Errorf("failed to marshal snapshot: %w", err)
 	}
 
-	// 更新当前状态（保存合并后的完整状态）
-	if err := s.updateCurrentState(ctx, userID, mergedSnapshot); err != nil {
-		return fmt.Errorf("failed to update current state: %w", err)
+	var row struct {
+		Snapshot []byte `gorm:"column:snapshot"`
+	}
+	err = s.db.WithContext(ctx).Raw(
+		`INSERT INTO current_state (user_id, snapshot, updated_at)
+		 VALUES (?, ?::jsonb, now())
+		 ON CONFLICT (user_id) DO UPDATE
+		   SET snapshot = current_state.snapshot || EXCLUDED.snapshot, updated_at = now()
+		 RETURNING snapshot`,
+		userID, string(snapshotJSON),
+	).Scan(&row).Error
+	if err != nil {
+		return fmt.Errorf("failed to upsert current state: %w", err)
+	}
+
+	// 合并结果（用于广播）；解析失败则退回本次上报的快照。
+	mergedSnapshot := newSnapshot
+	if len(row.Snapshot) > 0 {
+		var merged common.StatusSnapshot
+		if uErr := json.Unmarshal(row.Snapshot, &merged); uErr == nil {
+			mergedSnapshot = &merged
+		}
 	}
 
 	// 只有当事件包含音乐信息时才需要保存历史记录（用于音乐统计）
@@ -157,59 +171,28 @@ func (s *StateService) processEvent(ctx context.Context, userID uint64, event *c
 	return nil
 }
 
-// updateCurrentState 更新当前状态
-// 直接保存传入的完整快照，不做合并处理（合并逻辑在调用方完成）
-func (s *StateService) updateCurrentState(ctx context.Context, userID uint64, snapshot *common.StatusSnapshot) error {
-	var currentState model.CurrentState
-	err := s.db.Where("user_id = ?", userID).First(&currentState).Error
-
-	isNotFound, err := dbutil.HandleRecordNotFoundError(err)
-	if isNotFound {
-		// 创建新的当前状态记录
-		currentState = model.CurrentState{
-			UserID:   userID,
-			Snapshot: datatypes.NewJSONType(*snapshot),
-		}
-		return s.db.Create(&currentState).Error
-	} else if err != nil {
-		return err
-	}
-
-	// 更新现有记录
-	currentState.Snapshot = datatypes.NewJSONType(*snapshot)
-	return s.db.Save(&currentState).Error
-}
-
-// mergeSnapshots 合并两个状态快照
-// 新的合并策略：对每次上报的音乐、系统和活动信息分别作为一个整体做覆盖
-// 如果新快照中某个模块不为空，则整体替换旧快照中的对应模块
+// mergeSnapshots 合并两个状态快照（模块级整体覆盖）。
+// 生产写路径已改用 PostgreSQL 的 jsonb `||` 在 SQL 侧原子完成同样的合并；本函数保留作为
+// 该合并语义的可执行规范，并由 state_service_test.go 守护，确保两者行为一致。
 func (s *StateService) mergeSnapshots(existing *common.StatusSnapshot, new *common.StatusSnapshot) *common.StatusSnapshot {
-	// 创建合并后的快照，从现有快照开始
 	merged := &common.StatusSnapshot{
 		LastUpdateTs: new.LastUpdateTs, // 总是使用新的时间戳
 	}
-
-	// 系统信息：如果新快照中有 System，整体覆盖；否则保留旧的
 	if new.System != nil {
 		merged.System = new.System
 	} else {
 		merged.System = existing.System
 	}
-
-	// 音乐信息：如果新快照中有 Music，整体覆盖；否则保留旧的
 	if new.Music != nil {
 		merged.Music = new.Music
 	} else {
 		merged.Music = existing.Music
 	}
-
-	// 活动信息：如果新快照中有 Activity，整体覆盖；否则保留旧的
 	if new.Activity != nil {
 		merged.Activity = new.Activity
 	} else {
 		merged.Activity = existing.Activity
 	}
-
 	return merged
 }
 
