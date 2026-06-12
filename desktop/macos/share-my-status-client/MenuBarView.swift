@@ -181,8 +181,11 @@ struct MenuBarView: View {
                 Button(action: {
                     if reporter.isReporting {
                         reporter.stopReporting()
-                    } else {
+                    } else if configuration.isValidConfiguration() {
                         reporter.startReporting()
+                    } else {
+                        // 配置不完整：直接打开设置窗口引导用户填写，而不是静默「点了没反应」。
+                        openWindow(id: "main")
                     }
                 }) {
                     HStack {
@@ -205,6 +208,33 @@ struct MenuBarView: View {
                     .contentShape(Rectangle())  // Make entire area clickable
                 }
                 .buttonStyle(MenuBarButtonStyle())
+
+                // 服务端 client/resources 返回的快捷入口（有链接才显示）
+                if let docUrl = coordinator.clientResources?.userDocUrl,
+                   let url = URL(string: docUrl) {
+                    Button(action: { NSWorkspace.shared.open(url) }) {
+                        HStack {
+                            Image(systemName: "globe")
+                            Text("打开我的状态页")
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(MenuBarButtonStyle())
+                }
+
+                if let sigUrl = coordinator.clientResources?.feishuSignatureDiyUrl,
+                   let url = URL(string: sigUrl) {
+                    Button(action: { NSWorkspace.shared.open(url) }) {
+                        HStack {
+                            Image(systemName: "signature")
+                            Text("自定义飞书签名")
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(MenuBarButtonStyle())
+                }
 
                 Button(action: {
                     SparkleUpdater.shared.checkForUpdates()
