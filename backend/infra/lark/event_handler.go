@@ -204,9 +204,14 @@ func (h *EventHandler) parseCommand(message string) *Command {
 		"轮转个人主页":        {Action: "rotate", Params: []string{"sharing-key"}},
 		"帮助":            {Action: "help", Params: []string{}},
 		"推荐配置":          {Action: "config", Params: []string{}},
+		"mac推荐配置":       {Action: "config", Params: []string{"mac"}},
+		"macos推荐配置":     {Action: "config", Params: []string{"mac"}},
+		"windows推荐配置":   {Action: "config", Params: []string{"windows"}},
+		"win推荐配置":       {Action: "config", Params: []string{"windows"}},
 	}
 
-	if cmd, ok := alias[text]; ok {
+	// 别名按小写匹配,使 "Windows推荐配置"/"windows推荐配置" 等价(中文不受影响)。
+	if cmd, ok := alias[lower]; ok {
 		return cmd
 	}
 
@@ -227,11 +232,21 @@ func (h *EventHandler) executeCommand(ctx context.Context, user *model.User, com
 	case "rotate":
 		return h.executeRotateCommand(ctx, user, userService, command.Params)
 	case "config":
-		if len(command.Params) != 0 {
-			return cardResponse(buildParamErrorCard([]string{"/config"}, "/config")), nil
+		platform := "mac"
+		if len(command.Params) == 1 {
+			switch command.Params[0] {
+			case "windows", "win":
+				platform = "windows"
+			case "mac", "macos", "osx":
+				platform = "mac"
+			default:
+				return cardResponse(buildParamErrorCard([]string{"/config", "/config windows", "/config mac"}, "/config windows")), nil
+			}
+		} else if len(command.Params) > 1 {
+			return cardResponse(buildParamErrorCard([]string{"/config", "/config windows", "/config mac"}, "/config windows")), nil
 		}
-		configJSON := h.buildRecommendedConfigJSON(user, &h.config.App)
-		return cardResponse(buildConfigCard(configJSON, user, &h.config.App)), nil
+		configJSON := h.buildRecommendedConfigJSON(user, &h.config.App, platform)
+		return cardResponse(buildConfigCard(configJSON, user, &h.config.App, platform)), nil
 	case "help":
 		if len(command.Params) != 0 {
 			return cardResponse(buildParamErrorCard([]string{"/help"}, "/help")), nil
@@ -476,137 +491,32 @@ func (h *EventHandler) replyInteractiveMessage(ctx context.Context, messageID st
 	return nil
 }
 
-// 构建推荐配置 JSON
-func (h *EventHandler) buildRecommendedConfigJSON(user *model.User, cfg *config.AppConfig) string {
-	activityGroups := []map[string]any{
-		{
-			"bundleIds": []string{
-				"com.apple.iWork.Pages",
-				"com.apple.iWork.Numbers",
-				"com.apple.iWork.Keynote",
-				"com.microsoft.Word",
-				"com.microsoft.Excel",
-				"com.microsoft.Powerpoint",
-				"com.microsoft.onenote.mac",
-				"com.microsoft.Outlook",
-				"com.microsoft.teams",
-				"com.electron.lark",
-				"com.volcengine.corplink",
-				"com.raycast.macos",
-				"com.share-my-status.client",
-				"cn.trae.app",
-				"com.trae.app",
-				"com.microsoft.OneDrive",
-			},
-			"isEnabled": true,
-			"name":      "在工作&研究",
-		},
-		{
-			"bundleIds": []string{
-				"com.microsoft.VSCode",
-				"com.sublimetext.3",
-				"com.apple.dt.Xcode",
-				"com.SweetScape.010Editor",
-				"me.qii404.another-redis-desktop-manager",
-				"cn.apifox.app",
-				"com.todesktop.230313mzl4w4u92",
-				"com.jetbrains.goland",
-				"com.jetbrains.toolbox",
-				"com.mongodb.compass",
-				"com.electron.ollama",
-				"io.podmandesktop.PodmanDesktop",
-				"com.postmanlabs.mac",
-			},
-			"isEnabled": true,
-			"name":      "在搞研发",
-		},
-		{
-			"bundleIds": []string{
-				"com.bohemiancoding.sketch3",
-				"com.figma.Desktop",
-				"com.adobe.Photoshop",
-			},
-			"isEnabled": true,
-			"name":      "在设计",
-		},
-		{
-			"bundleIds": []string{
-				"us.zoom.xos",
-				"com.tinyspeck.slackmacgap",
-			},
-			"isEnabled": true,
-			"name":      "在开会",
-		},
-		{
-			"bundleIds": []string{
-				"com.apple.Safari",
-				"com.google.Chrome",
-				"org.mozilla.firefox",
-				"com.brave.Browser",
-				"com.operasoftware.Opera",
-				"company.thebrowser.Browser",
-				"com.microsoft.edgemac",
-				"com.vivaldi.Vivaldi",
-			},
-			"isEnabled": true,
-			"name":      "在浏览",
-		},
-		{
-			"bundleIds": []string{
-				"com.apple.Terminal",
-				"com.googlecode.iterm2",
-				"com.googlecode.iterm2.iTermAI",
-				"com.termius-dmg.mac",
-			},
-			"isEnabled": true,
-			"name":      "在终端",
-		},
-		{
-			"bundleIds": []string{
-				"com.bytedance.douyin.desktop",
-				"com.soda.music",
-				"com.xingin.discover",
-				"com.meituan.imovie",
-				"com.netease.163music",
-				"com.tencent.QQMusicMac",
-			},
-			"isEnabled": true,
-			"name":      "在娱乐",
-		},
-		{
-			"bundleIds": []string{
-				"com.apple.iChat",
-				"com.tencent.xinWeChat",
-				"com.apple.MobileSMS",
-				"com.apple.facetime",
-				"com.apple.Messages",
-				"com.tencent.qq",
-			},
-			"isEnabled": true,
-			"name":      "在社交",
-		},
-	}
-
-	musicAppWhitelist := []string{
-		"com.apple.Music",
-		"com.spotify.client",
-		"com.netease.163music",
-		"com.tencent.QQMusicMac",
-		"com.soda.music",
-	}
-
+// 构建推荐配置 JSON。
+//
+// 平台差异很关键:macOS 客户端用 bundleId 识别应用、活动分组字段是 "bundleIds";
+// Windows 客户端用进程 exe 名、字段是 "processNames"。把 macOS 的标识发给 Windows
+// 用户会导致活动分组完全识别不到。此外 Windows 已彻底移除音乐白名单(SMTC 标识不可
+// 靠),所以 Windows 配置不带 musicAppWhitelist;macOS 则下发空白名单(= 允许所有播
+// 放器),不再把用户限制在固定几个 app 上。
+func (h *EventHandler) buildRecommendedConfigJSON(user *model.User, cfg *config.AppConfig, platform string) string {
 	config := map[string]any{
-		"activityGroups":           activityGroups,
 		"activityPollingInterval":  5,
 		"activityReportingEnabled": false,
 		"endpointURL":              cfg.Endpoint + "/api/v1/state/report",
 		"isReportingEnabled":       true,
-		"musicAppWhitelist":        musicAppWhitelist,
 		"musicReportingEnabled":    true,
 		"secretKey":                string(user.SecretKey),
 		"systemPollingInterval":    5,
 		"systemReportingEnabled":   true,
 		"version":                  "1.0",
+	}
+
+	if platform == "windows" {
+		config["activityGroups"] = windowsActivityGroups()
+		// Windows 没有音乐白名单:始终上报正在播放的内容。
+	} else {
+		config["activityGroups"] = macActivityGroups()
+		config["musicAppWhitelist"] = []string{} // 空 = 允许所有播放器
 	}
 
 	b, err := json.MarshalIndent(config, "", "  ")
@@ -615,6 +525,116 @@ func (h *EventHandler) buildRecommendedConfigJSON(user *model.User, cfg *config.
 		return "{}"
 	}
 	return string(b)
+}
+
+// macOS 推荐活动分组(bundleId)。需与客户端 DefaultSettings.swift 保持一致。
+func macActivityGroups() []map[string]any {
+	return []map[string]any{
+		{"name": "在工作&研究", "isEnabled": true, "bundleIds": []string{
+			"com.apple.iWork.Pages", "com.apple.iWork.Numbers", "com.apple.iWork.Keynote",
+			"com.microsoft.Word", "com.microsoft.Excel", "com.microsoft.Powerpoint",
+			"com.microsoft.onenote.mac", "com.microsoft.Outlook", "com.microsoft.teams",
+			"com.electron.lark", "com.volcengine.corplink", "com.raycast.macos",
+			"com.share-my-status.client", "cn.trae.app", "com.trae.app", "com.microsoft.OneDrive",
+		}},
+		{"name": "在搞研发", "isEnabled": true, "bundleIds": []string{
+			"com.microsoft.VSCode", "com.sublimetext.3", "com.apple.dt.Xcode",
+			"com.SweetScape.010Editor", "me.qii404.another-redis-desktop-manager", "cn.apifox.app",
+			"com.todesktop.230313mzl4w4u92", "com.jetbrains.goland", "com.jetbrains.toolbox",
+			"com.mongodb.compass", "com.electron.ollama", "io.podmandesktop.PodmanDesktop",
+			"com.postmanlabs.mac",
+		}},
+		{"name": "在设计", "isEnabled": true, "bundleIds": []string{
+			"com.bohemiancoding.sketch3", "com.figma.Desktop", "com.adobe.Photoshop",
+		}},
+		{"name": "在开会", "isEnabled": true, "bundleIds": []string{
+			"us.zoom.xos", "com.tinyspeck.slackmacgap",
+		}},
+		{"name": "在浏览", "isEnabled": true, "bundleIds": []string{
+			"com.apple.Safari", "com.google.Chrome", "org.mozilla.firefox", "com.brave.Browser",
+			"com.operasoftware.Opera", "company.thebrowser.Browser", "com.microsoft.edgemac",
+			"com.vivaldi.Vivaldi",
+		}},
+		{"name": "在终端", "isEnabled": true, "bundleIds": []string{
+			"com.apple.Terminal", "com.googlecode.iterm2", "com.googlecode.iterm2.iTermAI",
+			"com.termius-dmg.mac",
+		}},
+		{"name": "在娱乐", "isEnabled": true, "bundleIds": []string{
+			"com.bytedance.douyin.desktop", "com.soda.music", "com.xingin.discover",
+			"com.meituan.imovie", "com.netease.163music", "com.tencent.QQMusicMac",
+		}},
+		{"name": "在社交", "isEnabled": true, "bundleIds": []string{
+			"com.apple.iChat", "com.tencent.xinWeChat", "com.apple.MobileSMS",
+			"com.apple.facetime", "com.apple.Messages", "com.tencent.qq",
+		}},
+	}
+}
+
+// Windows 推荐活动分组(进程 exe 名)。需与客户端 DefaultSettings.cs 保持一致。
+func windowsActivityGroups() []map[string]any {
+	return []map[string]any{
+		{"name": "在工作&研究", "isEnabled": true, "processNames": []string{
+			"winword.exe", "excel.exe", "powerpnt.exe", "onenote.exe", "onenotem.exe",
+			"outlook.exe", "msaccess.exe", "mspub.exe", "visio.exe", "winproj.exe",
+			"wps.exe", "et.exe", "wpp.exe", "wpscloudsvr.exe", "pdfpro.exe",
+			"acrobat.exe", "acrord32.exe", "foxitpdfreader.exe", "foxit reader.exe", "sumatrapdf.exe",
+			"feishu.exe", "lark.exe", "dingtalk.exe", "wxwork.exe", "wework.exe",
+			"ms-teams.exe", "teams.exe", "lync.exe", "corplink.exe", "sunloginclient.exe", "todesk.exe",
+			"notion.exe", "obsidian.exe", "logseq.exe", "typora.exe", "evernote.exe",
+			"youdaonote.exe", "wiznote.exe", "joplin.exe", "anytype.exe", "siyuan.exe",
+			"onedrive.exe", "googledrivefs.exe", "dropbox.exe", "baidunetdisk.exe", "alipan.exe",
+		}},
+		{"name": "在搞研发", "isEnabled": true, "processNames": []string{
+			"code.exe", "code - insiders.exe", "cursor.exe", "trae.exe", "windsurf.exe",
+			"zed.exe", "devenv.exe", "rider64.exe", "idea64.exe", "goland64.exe",
+			"pycharm64.exe", "webstorm64.exe", "clion64.exe", "phpstorm64.exe",
+			"rubymine64.exe", "rustrover64.exe", "datagrip64.exe", "studio64.exe",
+			"sublime_text.exe", "notepad++.exe", "atom.exe", "010editor.exe", "fleet.exe",
+			"postman.exe", "apifox.exe", "insomnia.exe", "bruno.exe",
+			"another redis desktop manager.exe", "anotherredisdesktopmanager.exe",
+			"redisinsight.exe", "compass.exe", "navicat.exe", "dbeaver.exe", "heidisql.exe",
+			"tableplus.exe", "fiddler.exe", "fiddler everywhere.exe", "charles.exe", "wireshark.exe",
+			"docker desktop.exe", "podman desktop.exe", "rancher desktop.exe",
+			"gitkraken.exe", "sourcetree.exe", "fork.exe", "github desktop.exe",
+			"tortoisegitproc.exe", "ollama.exe", "ollama app.exe", "lm studio.exe",
+		}},
+		{"name": "在设计", "isEnabled": true, "processNames": []string{
+			"photoshop.exe", "illustrator.exe", "afterfx.exe", "adobe premiere pro.exe",
+			"lightroom.exe", "acrobat.exe", "figma.exe", "xd.exe", "adobe xd.exe",
+			"afdesign.exe", "afphoto.exe", "afpub.exe", "blender.exe", "sketchup.exe",
+			"coreldrw.exe", "axure.exe", "pixso.exe", "mastergo.exe", "cad.exe", "acad.exe",
+		}},
+		{"name": "在开会", "isEnabled": true, "processNames": []string{
+			"zoom.exe", "webex.exe", "atmgr.exe", "voov.exe", "wemeetapp.exe",
+			"feishumeeting.exe", "classin.exe", "gotomeeting.exe", "bluejeans.exe",
+		}},
+		{"name": "在浏览", "isEnabled": true, "processNames": []string{
+			"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe",
+			"vivaldi.exe", "arc.exe", "chromium.exe", "thorium.exe", "librewolf.exe",
+			"floorp.exe", "zen.exe", "360se.exe", "360chromex.exe", "qqbrowser.exe",
+			"sogouexplorer.exe", "maxthon.exe", "ucbrowser.exe", "tor browser.exe", "dragon.exe",
+		}},
+		{"name": "在终端", "isEnabled": true, "processNames": []string{
+			"windowsterminal.exe", "wt.exe", "powershell.exe", "pwsh.exe", "cmd.exe",
+			"mintty.exe", "alacritty.exe", "wezterm-gui.exe", "conemu64.exe", "hyper.exe",
+			"tabby.exe", "putty.exe", "kitty.exe", "mobaxterm.exe", "xshell.exe",
+			"securecrt.exe", "termius.exe", "finalshell.exe", "warp.exe",
+		}},
+		{"name": "在娱乐", "isEnabled": true, "processNames": []string{
+			"spotify.exe", "cloudmusic.exe", "qqmusic.exe", "kugou.exe", "kuwo.exe",
+			"applemusic.exe", "aimp.exe", "musicbee.exe", "foobar2000.exe",
+			"bilibili.exe", "douyin.exe", "potplayermini64.exe", "potplayermini.exe",
+			"vlc.exe", "mpv.exe", "mpc-hc64.exe", "kmplayer.exe", "qqlive.exe",
+			"qyclient.exe", "youku.exe", "miguvideo.exe", "netflix.exe",
+			"steam.exe", "epicgameslauncher.exe", "wegame.exe", "battle.net.exe",
+			"obs64.exe", "obs32.exe",
+		}},
+		{"name": "在社交", "isEnabled": true, "processNames": []string{
+			"qq.exe", "tim.exe", "weixin.exe", "wechat.exe", "telegram.exe",
+			"discord.exe", "whatsapp.exe", "messenger.exe", "skype.exe", "signal.exe",
+			"line.exe", "kakaotalk.exe", "viber.exe", "slack.exe", "element.exe", "zalo.exe",
+		}},
+	}
 }
 
 // 以富文本(Post)回复消息
