@@ -11,4 +11,4 @@ backend: 1.0.6-5
 frontend: 1.0.5-2
 chart: 1.0.5-4
 macos: 1.7-74
-windows: 1.0-3
+windows: 1.0-4
