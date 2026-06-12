@@ -84,7 +84,7 @@ func TestBuildConfigCardUsesV2InteractiveSkeleton(t *testing.T) {
 		SharingKey: "preview-sharing-key",
 	}
 
-	card := buildConfigCard(`{"endpointURL":"https://status-sharing.mjclouds.com/api/v1/state/report"}`, user, app)
+	card := buildConfigCard(`{"endpointURL":"https://status-sharing.mjclouds.com/api/v1/state/report"}`, user, app, "mac")
 	requireCardSkeleton(t, card)
 
 	raw := mustJSON(t, card)
