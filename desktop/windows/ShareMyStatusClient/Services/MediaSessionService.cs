@@ -88,7 +88,10 @@ public sealed class MediaSessionService : IDisposable
         }
 
         _manager.CurrentSessionChanged += OnCurrentSessionChanged;
-        HookSession(_manager.GetCurrentSession());
+        // Some apps (e.g. QQ Music) never claim the system "current session", so
+        // CurrentSessionChanged never fires for them — but they DO appear in
+        // GetSessions() and raise SessionsChanged. Listen to both.
+        _manager.SessionsChanged += OnSessionsChanged;
 
         // Publish callback and running together so RefreshAsync (which snapshots both
         // under _gate) never sees a half-initialized state, and events arriving before
@@ -114,7 +117,10 @@ public sealed class MediaSessionService : IDisposable
         }
 
         if (_manager != null)
+        {
             _manager.CurrentSessionChanged -= OnCurrentSessionChanged;
+            _manager.SessionsChanged -= OnSessionsChanged;
+        }
         UnhookSession();
         _manager = null;
 
@@ -136,6 +142,49 @@ public sealed class MediaSessionService : IDisposable
             session.MediaPropertiesChanged += OnMediaPropertiesChanged;
             session.PlaybackInfoChanged += OnPlaybackInfoChanged;
         }
+    }
+
+    /// <summary>Hooks <paramref name="session"/> only if it differs from the currently
+    /// hooked one, avoiding needless unsubscribe/resubscribe churn on every refresh.</summary>
+    private void EnsureHooked(GlobalSystemMediaTransportControlsSession? session)
+    {
+        lock (_gate)
+        {
+            if (ReferenceEquals(_session, session))
+                return;
+        }
+        HookSession(session);
+    }
+
+    /// <summary>Chooses the most relevant media session. Prefers one that's actually
+    /// Playing — because <c>GetCurrentSession()</c> can be null even while an app plays
+    /// (it never claimed the system "current" slot, common with QQ Music / NetEase) —
+    /// then falls back to the system current session, then any session at all.</summary>
+    private GlobalSystemMediaTransportControlsSession? PickBestSession()
+    {
+        GlobalSystemMediaTransportControlsSessionManager? manager;
+        lock (_gate) { manager = _manager; }
+        if (manager == null)
+            return null;
+
+        IReadOnlyList<GlobalSystemMediaTransportControlsSession> sessions;
+        try { sessions = manager.GetSessions(); }
+        catch { return manager.GetCurrentSession(); }
+
+        GlobalSystemMediaTransportControlsSession? firstAny = null;
+        foreach (var s in sessions)
+        {
+            firstAny ??= s;
+            try
+            {
+                if (s.GetPlaybackInfo()?.PlaybackStatus
+                    == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing)
+                    return s;
+            }
+            catch { /* ignore sessions we can't read */ }
+        }
+
+        return manager.GetCurrentSession() ?? firstAny;
     }
 
     private void UnhookSession()
@@ -162,7 +211,19 @@ public sealed class MediaSessionService : IDisposable
             if (!_running)
                 return; // ignore events arriving during/after Stop
         }
-        HookSession(sender.GetCurrentSession());
+        // RefreshAsync re-picks the best session itself, so we don't hook here.
+        _ = RefreshAsync(forceEmit: false);
+    }
+
+    private void OnSessionsChanged(
+        GlobalSystemMediaTransportControlsSessionManager sender,
+        SessionsChangedEventArgs args)
+    {
+        lock (_gate)
+        {
+            if (!_running)
+                return; // ignore events arriving during/after Stop
+        }
         _ = RefreshAsync(forceEmit: false);
     }
 
@@ -188,13 +249,17 @@ public sealed class MediaSessionService : IDisposable
         await _refreshLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            GlobalSystemMediaTransportControlsSession? session;
             HashSet<string> whitelist;
             lock (_gate)
             {
-                session = _session;
                 whitelist = _whitelist;
             }
+
+            // Re-pick the best session every refresh (don't trust a statically hooked
+            // one): apps like QQ Music play without ever becoming the system "current
+            // session", so we must scan GetSessions() for whoever is actually Playing.
+            var session = PickBestSession();
+            EnsureHooked(session);
 
             var snapshot = session == null
                 ? null
