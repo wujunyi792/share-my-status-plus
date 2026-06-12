@@ -480,9 +480,12 @@ func (h *EventHandler) replyInteractiveMessage(ctx context.Context, messageID st
 //
 // 一个活动分组同时带 macOS 的 bundleId(字段 "bundleIds")和 Windows 的进程 exe 名
 // (字段 "processNames"):macOS 客户端只解 "bundleIds"、Windows 只解 "processNames",
-// 各自忽略对方字段(Swift Codable 与 System.Text.Json 默认都忽略未知键)。音乐白名单
-// 下发空数组:macOS 视作"允许所有播放器",Windows 已彻底移除该字段会直接忽略。这样
-// 一条 /config 同时适配两端,用户不必区分平台。
+// 各自忽略对方字段(Swift Codable 与 System.Text.Json 默认都忽略未知键)。这样一条
+// /config 同时适配两端,用户不必区分平台。
+//
+// musicAppWhitelist 下发 macOS 的默认白名单(bundle ID 可靠,白名单在 macOS 上一直
+// 有效,保持存量用户的既有行为);Windows 已彻底移除该字段,导入时直接忽略,所以这份
+// macOS 白名单不会影响 Windows(Windows 始终上报正在播放的内容)。
 func (h *EventHandler) buildRecommendedConfigJSON(user *model.User, cfg *config.AppConfig) string {
 	config := map[string]any{
 		"activityGroups":           unifiedActivityGroups(),
@@ -490,7 +493,7 @@ func (h *EventHandler) buildRecommendedConfigJSON(user *model.User, cfg *config.
 		"activityReportingEnabled": false,
 		"endpointURL":              cfg.Endpoint + "/api/v1/state/report",
 		"isReportingEnabled":       true,
-		"musicAppWhitelist":        []string{}, // 空 = 允许所有播放器(macOS);Windows 忽略此字段
+		"musicAppWhitelist":        macMusicAppWhitelist(), // macOS 默认白名单;Windows 忽略此字段
 		"musicReportingEnabled":    true,
 		"secretKey":                string(user.SecretKey),
 		"systemPollingInterval":    5,
@@ -504,6 +507,17 @@ func (h *EventHandler) buildRecommendedConfigJSON(user *model.User, cfg *config.
 		return "{}"
 	}
 	return string(b)
+}
+
+// macOS 默认音乐白名单(bundle ID)。需与客户端 DefaultSettings.swift 保持一致。
+func macMusicAppWhitelist() []string {
+	return []string{
+		"com.apple.Music",
+		"com.spotify.client",
+		"com.netease.163music",
+		"com.tencent.QQMusicMac",
+		"com.soda.music",
+	}
 }
 
 // 合并 macOS / Windows 默认分组为单份配置:同名分组各带 bundleIds + processNames。
