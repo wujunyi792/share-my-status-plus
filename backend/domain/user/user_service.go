@@ -2,7 +2,6 @@ package user
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"share-my-status/model"
@@ -177,10 +176,10 @@ func (s *UserService) RotateSecretKey(userID uint64) (string, error) {
 		return "", fmt.Errorf("failed to generate new secret key: %w", err)
 	}
 
-	hash := sha256.Sum256([]byte(newSecretKey))
-	secretKeyHash := hex.EncodeToString(hash[:])
-
-	err = s.db.Model(&model.User{}).Where("id = ?", userID).Update("secret_key", secretKeyHash).Error
+	// Store the secret key in the SAME form CreateUser and SecretKeyAuth use (plaintext bytes).
+	// Previously this stored a SHA256 hash while auth compared plaintext, so any rotated key
+	// could never authenticate — locking the user out of reporting.
+	err = s.db.Model(&model.User{}).Where("id = ?", userID).Update("secret_key", []byte(newSecretKey)).Error
 	if err != nil {
 		return "", fmt.Errorf("failed to update secret key: %w", err)
 	}
