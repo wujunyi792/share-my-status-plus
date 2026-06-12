@@ -100,9 +100,20 @@ public partial class App : Application
 
         UpdateTrayUi();
 
+        // Just relaunched by the in-place updater? Confirm success — otherwise the silent
+        // update is invisible and the user can't tell it worked.
+        var updatedVersion = GetFlagValue(e.Args, "--updated");
+        if (updatedVersion != null)
+        {
+            ShowBalloon(
+                "Share My Status 已更新",
+                $"已成功更新到 v{updatedVersion}，正在后台继续运行。",
+                ToolTipIcon.Info);
+        }
+
         // One-time hint: Windows hides new tray icons in the overflow (▲), so users often
         // can't find where the app went. Tell them once.
-        if (!_config.HasShownTrayHint)
+        else if (!_config.HasShownTrayHint)
         {
             _config.HasShownTrayHint = true;
             SaveConfig();
@@ -475,7 +486,13 @@ public partial class App : Application
         try
         {
             ShowBalloon("Share My Status", "正在下载更新…", ToolTipIcon.Info);
-            await _updateService.DownloadAndRestartAsync(info); // process exits and relaunches
+            await _updateService.DownloadAsync(info); // resumes on the UI thread
+            // ApplyAndRestart terminates this process abruptly (OnExit never runs), so the
+            // tray icon + its "正在下载更新…" balloon would linger in Action Center as a
+            // ghost. Remove the tray icon now, then relaunch flagged with the new version
+            // so the freshly-started process can confirm the update succeeded.
+            RemoveTrayIcon();
+            _updateService.ApplyAndRestart(info, new[] { "--updated", version });
         }
         catch (Exception ex)
         {
@@ -490,6 +507,28 @@ public partial class App : Application
         MessageBox.Show(
             $"Share My Status — Windows 客户端\n版本 {version}\n\n采集音乐 / 系统 / 活动并上报到你配置的服务器。\n{ReleasesUrl}",
             "关于 Share My Status");
+    }
+
+    /// <summary>Hides and disposes the notification-area icon (idempotent). Also called
+    /// before an in-place update restart so the tray balloon doesn't ghost in Action Center.</summary>
+    /// <summary>Returns the value following <paramref name="flag"/> in the args (e.g.
+    /// "--updated 1.0.4" → "1.0.4"), or null if the flag is absent or has no value.</summary>
+    private static string? GetFlagValue(string[] args, string flag)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+            if (string.Equals(args[i], flag, StringComparison.OrdinalIgnoreCase))
+                return args[i + 1];
+        return null;
+    }
+
+    private void RemoveTrayIcon()
+    {
+        if (_trayIcon != null)
+        {
+            _trayIcon.Visible = false;
+            _trayIcon.Dispose();
+            _trayIcon = null;
+        }
     }
 
     private void ShowBalloon(string title, string text, ToolTipIcon icon)
@@ -562,12 +601,7 @@ public partial class App : Application
         if (_reporter != null)
             _reporter.Changed -= OnReporterChanged;
 
-        if (_trayIcon != null)
-        {
-            _trayIcon.Visible = false;
-            _trayIcon.Dispose();
-            _trayIcon = null;
-        }
+        RemoveTrayIcon();
 
         // Dispose the icon we created (after the tray no longer uses it).
         _trayIconImage?.Dispose();
