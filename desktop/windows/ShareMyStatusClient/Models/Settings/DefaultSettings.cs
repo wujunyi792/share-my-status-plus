@@ -9,6 +9,10 @@ namespace ShareMyStatusClient.Models.Settings;
 /// </summary>
 public static class DefaultSettings
 {
+    /// <summary>Bumped when the built-in default activity groups / whitelist expand, so existing
+    /// users' saved configs can additively merge in the new entries on next launch.</summary>
+    public const int CurrentConfigVersion = 2;
+
     // ---- Network ----
 
     /// <summary>Full report endpoint. The user must point this at their server.</summary>
@@ -46,11 +50,18 @@ public static class DefaultSettings
         "cloudmusic.exe",      // 网易云音乐
         "QQMusic.exe",         // QQ 音乐
         "kugou.exe",           // 酷狗
+        "kuwo.exe",            // 酷我
         "foobar2000.exe",
+        "AIMP.exe",
+        "musicbee.exe",
+        "iTunes.exe",
         "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", // Apple Music (Store)
+        "AppleMusic.exe",
         "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic", // Media Player / Groove
+        "Microsoft.Media.Player.exe",
         "msedge.exe",
         "chrome.exe",
+        "firefox.exe",
     };
 
     // ---- Activity groups (process exe names, lower-cased) ----
@@ -60,47 +71,82 @@ public static class DefaultSettings
     {
         new ActivityGroup("在工作&研究", new[]
         {
-            "winword.exe", "excel.exe", "powerpnt.exe", "onenote.exe", "outlook.exe",
-            "ms-teams.exe", "teams.exe", "feishu.exe", "lark.exe", "corplink.exe",
-            "notion.exe", "obsidian.exe", "onedrive.exe", "wps.exe", "et.exe", "wpp.exe",
+            // Office / 文档
+            "winword.exe", "excel.exe", "powerpnt.exe", "onenote.exe", "onenotem.exe",
+            "outlook.exe", "msaccess.exe", "mspub.exe", "visio.exe", "winproj.exe",
+            "wps.exe", "et.exe", "wpp.exe", "wpscloudsvr.exe", "pdfpro.exe",
+            "acrobat.exe", "acrord32.exe", "foxitpdfreader.exe", "foxit reader.exe", "sumatrapdf.exe",
+            // 企业 IM / 协作(归到工作)
+            "feishu.exe", "lark.exe", "dingtalk.exe", "wxwork.exe", "wework.exe",
+            "ms-teams.exe", "teams.exe", "lync.exe", "corplink.exe", "sunloginclient.exe", "todesk.exe",
+            // 笔记 / 知识
+            "notion.exe", "obsidian.exe", "logseq.exe", "typora.exe", "evernote.exe",
+            "youdaonote.exe", "wiznote.exe", "joplin.exe", "anytype.exe", "siyuan.exe",
+            // 云盘
+            "onedrive.exe", "googledrivefs.exe", "dropbox.exe", "baidunetdisk.exe", "alipan.exe",
         }),
         new ActivityGroup("在搞研发", new[]
         {
-            "code.exe", "cursor.exe", "trae.exe", "devenv.exe", "rider64.exe",
-            "idea64.exe", "goland64.exe", "pycharm64.exe", "webstorm64.exe", "clion64.exe",
-            "datagrip64.exe", "sublime_text.exe", "010editor.exe", "postman.exe",
-            "another redis desktop manager.exe", "apifox.exe", "compass.exe",
-            "podman desktop.exe", "docker desktop.exe", "windowsterminal.exe",
+            // 编辑器 / IDE
+            "code.exe", "code - insiders.exe", "cursor.exe", "trae.exe", "windsurf.exe",
+            "zed.exe", "devenv.exe", "rider64.exe", "idea64.exe", "goland64.exe",
+            "pycharm64.exe", "webstorm64.exe", "clion64.exe", "phpstorm64.exe",
+            "rubymine64.exe", "rustrover64.exe", "datagrip64.exe", "studio64.exe",
+            "sublime_text.exe", "notepad++.exe", "atom.exe", "010editor.exe", "fleet.exe",
+            // 数据库 / API / 调试
+            "postman.exe", "apifox.exe", "insomnia.exe", "bruno.exe",
+            "another redis desktop manager.exe", "anotherredisdesktopmanager.exe",
+            "redisinsight.exe", "compass.exe", "navicat.exe", "dbeaver.exe", "heidisql.exe",
+            "tableplus.exe", "fiddler.exe", "fiddler everywhere.exe", "charles.exe", "wireshark.exe",
+            // 容器 / 版本控制 / 工具
+            "docker desktop.exe", "podman desktop.exe", "rancher desktop.exe",
+            "gitkraken.exe", "sourcetree.exe", "fork.exe", "github desktop.exe",
+            "tortoisegitproc.exe", "ollama.exe", "ollama app.exe", "lm studio.exe",
         }),
         new ActivityGroup("在设计", new[]
         {
-            "photoshop.exe", "figma.exe", "illustrator.exe", "xd.exe", "afdesign.exe",
-            "afphoto.exe", "blender.exe",
+            "photoshop.exe", "illustrator.exe", "afterfx.exe", "adobe premiere pro.exe",
+            "lightroom.exe", "acrobat.exe", "figma.exe", "xd.exe", "adobe xd.exe",
+            "afdesign.exe", "afphoto.exe", "afpub.exe", "blender.exe", "sketchup.exe",
+            "coreldrw.exe", "axure.exe", "pixso.exe", "mastergo.exe", "cad.exe", "acad.exe",
         }),
         new ActivityGroup("在开会", new[]
         {
-            "zoom.exe", "slack.exe", "webex.exe", "voov.exe", "wemeetapp.exe",
+            "zoom.exe", "webex.exe", "atmgr.exe", "voov.exe", "wemeetapp.exe",
+            "feishumeeting.exe", "classin.exe", "gotomeeting.exe", "bluejeans.exe",
         }),
         new ActivityGroup("在浏览", new[]
         {
             "chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe",
-            "vivaldi.exe", "arc.exe",
+            "vivaldi.exe", "arc.exe", "chromium.exe", "thorium.exe", "librewolf.exe",
+            "floorp.exe", "zen.exe", "360se.exe", "360chromex.exe", "qqbrowser.exe",
+            "sogouexplorer.exe", "maxthon.exe", "ucbrowser.exe", "tor browser.exe", "dragon.exe",
         }),
         new ActivityGroup("在终端", new[]
         {
-            "windowsterminal.exe", "powershell.exe", "pwsh.exe", "cmd.exe",
-            "mintty.exe", "alacritty.exe", "wezterm-gui.exe", "conemu64.exe",
+            "windowsterminal.exe", "wt.exe", "powershell.exe", "pwsh.exe", "cmd.exe",
+            "mintty.exe", "alacritty.exe", "wezterm-gui.exe", "conemu64.exe", "hyper.exe",
+            "tabby.exe", "putty.exe", "kitty.exe", "mobaxterm.exe", "xshell.exe",
+            "securecrt.exe", "termius.exe", "finalshell.exe", "warp.exe",
         }),
         new ActivityGroup("在娱乐", new[]
         {
-            "spotify.exe", "cloudmusic.exe", "qqmusic.exe", "kugou.exe",
-            "bilibili.exe", "douyin.exe", "potplayermini64.exe", "vlc.exe",
-            "applemusic.exe",
+            // 音乐
+            "spotify.exe", "cloudmusic.exe", "qqmusic.exe", "kugou.exe", "kuwo.exe",
+            "applemusic.exe", "aimp.exe", "musicbee.exe", "foobar2000.exe",
+            // 视频 / 播放器
+            "bilibili.exe", "douyin.exe", "potplayermini64.exe", "potplayermini.exe",
+            "vlc.exe", "mpv.exe", "mpc-hc64.exe", "kmplayer.exe", "qqlive.exe",
+            "qyclient.exe", "youku.exe", "miguvideo.exe", "netflix.exe",
+            // 游戏 / 直播
+            "steam.exe", "epicgameslauncher.exe", "wegame.exe", "battle.net.exe",
+            "obs64.exe", "obs32.exe",
         }),
         new ActivityGroup("在社交", new[]
         {
-            "qq.exe", "telegram.exe", "discord.exe", "whatsapp.exe", "weixin.exe",
-            "wechat.exe", "tim.exe",
+            "qq.exe", "tim.exe", "weixin.exe", "wechat.exe", "telegram.exe",
+            "discord.exe", "whatsapp.exe", "messenger.exe", "skype.exe", "signal.exe",
+            "line.exe", "kakaotalk.exe", "viber.exe", "slack.exe", "element.exe", "zalo.exe",
         }),
     };
 }

@@ -33,6 +33,10 @@ public sealed class AppConfiguration
     /// <summary>Whether the one-time "running in the tray" hint has been shown.</summary>
     public bool HasShownTrayHint { get; set; }
 
+    /// <summary>Schema version of the built-in defaults this config was last migrated to.
+    /// Missing in old configs (=0), triggering an additive merge of new default entries.</summary>
+    public int ConfigVersion { get; set; }
+
     // ---- Persistence ----
 
     private static readonly JsonSerializerOptions FileJson = new()
@@ -49,6 +53,23 @@ public sealed class AppConfiguration
     public static string ConfigPath => Path.Combine(ConfigDirectory, "config.json");
 
     public static AppConfiguration Load()
+    {
+        var config = LoadRaw();
+
+        // Additively merge newly-added default activity groups / whitelist entries into
+        // existing users' configs so coverage improvements reach them without losing
+        // their own customizations.
+        if (config.ConfigVersion < DefaultSettings.CurrentConfigVersion)
+        {
+            config.MergeNewDefaults();
+            config.ConfigVersion = DefaultSettings.CurrentConfigVersion;
+            try { config.Save(); } catch { /* best-effort */ }
+        }
+
+        return config;
+    }
+
+    private static AppConfiguration LoadRaw()
     {
         try
         {
@@ -69,6 +90,36 @@ public sealed class AppConfiguration
         }
 
         return new AppConfiguration();
+    }
+
+    /// <summary>Add any default activity-group process names / music whitelist entries that
+    /// aren't already present. Never removes user entries.</summary>
+    private void MergeNewDefaults()
+    {
+        ActivityGroups ??= new List<ActivityGroup>();
+        foreach (var dg in DefaultSettings.ActivityGroups())
+        {
+            var existing = ActivityGroups.FirstOrDefault(g => string.Equals(g.Name, dg.Name, StringComparison.Ordinal));
+            if (existing == null)
+            {
+                ActivityGroups.Add(dg.Clone());
+                continue;
+            }
+            var have = new HashSet<string>(existing.ProcessNames, StringComparer.OrdinalIgnoreCase);
+            foreach (var p in dg.ProcessNames)
+                if (have.Add(p))
+                    existing.ProcessNames.Add(p);
+        }
+
+        // Only extend a non-empty whitelist (empty = "allow all", must stay that way).
+        MusicAppWhitelist ??= new List<string>();
+        if (MusicAppWhitelist.Count > 0)
+        {
+            var have = new HashSet<string>(MusicAppWhitelist, StringComparer.OrdinalIgnoreCase);
+            foreach (var m in DefaultSettings.MusicAppWhitelist())
+                if (have.Add(m))
+                    MusicAppWhitelist.Add(m);
+        }
     }
 
     public void Save()
@@ -124,6 +175,7 @@ public sealed class AppConfiguration
         ReporterEnabled = ReporterEnabled,
         LaunchAtLogin = LaunchAtLogin,
         HasShownTrayHint = HasShownTrayHint,
+        ConfigVersion = ConfigVersion,
     };
 
     /// <summary>Copy editable fields from another instance (used when applying the settings dialog).</summary>

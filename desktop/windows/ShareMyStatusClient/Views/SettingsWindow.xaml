@@ -13,10 +13,10 @@
         <Border DockPanel.Dock="Bottom" Background="#F3F3F3" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
             <Grid Margin="12,10">
                 <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="#666"
-                           Text="保存后将自动开始上报"/>
+                           Text="保存后自动开始上报，窗口保持打开"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="BtnSave" Content="保存并上报" Width="110" Margin="0,0,8,0" IsDefault="True" Click="OnSaveClick"/>
-                    <Button x:Name="BtnCancel" Content="取消" Width="90" IsCancel="True" Click="OnCancelClick"/>
+                    <Button x:Name="BtnCancel" Content="关闭" Width="90" IsCancel="True" Click="OnCancelClick"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -33,7 +33,7 @@
             </Grid>
         </Border>
 
-        <TabControl Margin="10">
+        <TabControl x:Name="Tabs" Margin="10">
             <!-- Live status -->
             <TabItem Header="实时状态">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">

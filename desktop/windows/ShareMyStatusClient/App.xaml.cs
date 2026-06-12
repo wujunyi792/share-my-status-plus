@@ -40,6 +40,8 @@ public partial class App : Application
     private UpdateService? _updateService;
     private SettingsWindow? _settingsWindow;
     private string? _lastNotifiedError;
+    private Action? _balloonClickAction;
+    private System.Windows.Threading.DispatcherTimer? _updateTimer;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -110,8 +112,12 @@ public partial class App : Application
                 ToolTipIcon.Info);
         }
 
-        // Best-effort silent update check shortly after launch.
+        // Best-effort silent update check shortly after launch, then periodically — so a
+        // long-running tray app (or one launched offline) still picks up updates.
         _ = CheckUpdatesAsync(silent: true);
+        _updateTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(6) };
+        _updateTimer.Tick += (_, _) => _ = CheckUpdatesAsync(silent: true);
+        _updateTimer.Start();
     }
 
     // ---- Tray ----
@@ -168,7 +174,13 @@ public partial class App : Application
                 OpenSettings();
         };
         // Clicking a notification opens settings (e.g. the first-run "where's the icon" hint).
-        _trayIcon.BalloonTipClicked += (_, _) => OpenSettings();
+        _trayIcon.BalloonTipClicked += (_, _) =>
+        {
+            // Context-aware: e.g. the "发现新版本" balloon starts the update; others open settings.
+            var action = _balloonClickAction;
+            _balloonClickAction = null;
+            (action ?? OpenSettings).Invoke();
+        };
     }
 
     private static Icon LoadTrayIcon()
@@ -315,7 +327,13 @@ public partial class App : Application
 
         if (_settingsWindow != null)
         {
+            // Restore from minimized, otherwise Activate() does nothing visible.
+            if (_settingsWindow.WindowState == WindowState.Minimized)
+                _settingsWindow.WindowState = WindowState.Normal;
+            _settingsWindow.Show();
             _settingsWindow.Activate();
+            _settingsWindow.Topmost = true;
+            _settingsWindow.Topmost = false;
             return;
         }
 
@@ -441,7 +459,10 @@ public partial class App : Application
         {
             if (_updateItem != null)
                 _updateItem.Text = $"更新到 v{version}";
-            ShowBalloon("发现新版本 v" + version, $"点击托盘菜单「更新到 v{version}」立即更新", ToolTipIcon.Info);
+            // Clicking the balloon directly starts the update (matches the text). Set AFTER
+            // ShowBalloon, which clears any prior balloon action.
+            ShowBalloon("发现新版本 v" + version, "点此立即下载并更新", ToolTipIcon.Info);
+            _balloonClickAction = () => _ = CheckUpdatesAsync(silent: false);
             return;
         }
 
@@ -473,6 +494,8 @@ public partial class App : Application
 
     private void ShowBalloon(string title, string text, ToolTipIcon icon)
     {
+        // Default: clicking a balloon opens settings. The update balloon re-sets this after.
+        _balloonClickAction = null;
         try
         {
             _trayIcon?.ShowBalloonTip(4000, title, text, icon);
@@ -533,6 +556,9 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _updateTimer?.Stop();
+        _updateTimer = null;
+
         if (_reporter != null)
             _reporter.Changed -= OnReporterChanged;
 

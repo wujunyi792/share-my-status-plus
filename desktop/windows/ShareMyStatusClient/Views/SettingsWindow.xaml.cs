@@ -42,6 +42,11 @@ public partial class SettingsWindow : Window
         _reporter.Changed += OnReporterChanged;
         Closed += (_, _) => _reporter.Changed -= OnReporterChanged;
         UpdateReportingUi();
+
+        // When unconfigured (first run), open straight to the 常规 (config) tab instead of
+        // the live-status tab, so the user lands on the fields they actually need to fill.
+        if (!_working.IsValid())
+            Tabs.SelectedIndex = 1;
     }
 
     private async void OnCheckUpdateClick(object sender, RoutedEventArgs e)
@@ -176,9 +181,9 @@ public partial class SettingsWindow : Window
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
-        // Window is shown modeless from the tray, so don't touch DialogResult.
-        if (ApplyCurrent())
-            Close();
+        // Apply but keep the window open — closing is the user's choice (via 取消/关闭 or X).
+        // The top status strip reflects the result so the user gets immediate feedback.
+        ApplyCurrent();
     }
 
     /// <summary>Validate and apply the edited config (which auto-starts reporting when valid).
