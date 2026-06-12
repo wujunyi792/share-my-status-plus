@@ -22,51 +22,12 @@ public sealed class MediaSessionService : IDisposable
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private GlobalSystemMediaTransportControlsSession? _session;
     private Action<MusicSnapshot?>? _callback;
-    private HashSet<string> _whitelist = new(StringComparer.OrdinalIgnoreCase);
     private string? _lastEmittedKey;
     private bool _running;
 
     public bool IsActive
     {
         get { lock (_gate) { return _running; } }
-    }
-
-    /// <summary>Enumerates the SourceAppUserModelId of every current media session
-    /// (so the settings UI can offer them as whitelist candidates).</summary>
-    public static async Task<List<string>> GetActiveSourceIdsAsync()
-    {
-        try
-        {
-            var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync()
-                .AsTask().WaitAsync(WinRtTimeout);
-            var ids = new List<string>();
-            foreach (var session in manager.GetSessions())
-            {
-                try
-                {
-                    var id = session.SourceAppUserModelId;
-                    if (!string.IsNullOrEmpty(id))
-                        ids.Add(id);
-                }
-                catch
-                {
-                    // ignore individual sessions we can't read
-                }
-            }
-            return ids.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        }
-        catch
-        {
-            return new List<string>();
-        }
-    }
-
-    public void UpdateWhitelist(IEnumerable<string> ids)
-    {
-        lock (_gate)
-        {
-            _whitelist = new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
-        }
     }
 
     public async Task StartAsync(Action<MusicSnapshot?> callback)
@@ -249,12 +210,6 @@ public sealed class MediaSessionService : IDisposable
         await _refreshLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            HashSet<string> whitelist;
-            lock (_gate)
-            {
-                whitelist = _whitelist;
-            }
-
             // Re-pick the best session every refresh (don't trust a statically hooked
             // one): apps like QQ Music play without ever becoming the system "current
             // session", so we must scan GetSessions() for whoever is actually Playing.
@@ -263,7 +218,7 @@ public sealed class MediaSessionService : IDisposable
 
             var snapshot = session == null
                 ? null
-                : await BuildSnapshotAsync(session, whitelist).ConfigureAwait(false);
+                : await BuildSnapshotAsync(session).ConfigureAwait(false);
 
             var key = snapshot == null
                 ? "<none>"
@@ -294,19 +249,12 @@ public sealed class MediaSessionService : IDisposable
     }
 
     private async Task<MusicSnapshot?> BuildSnapshotAsync(
-        GlobalSystemMediaTransportControlsSession session,
-        HashSet<string> whitelist)
+        GlobalSystemMediaTransportControlsSession session)
     {
+        // No whitelist on Windows: the SMTC source id is an unreliable filter key (empty
+        // for QQ Music / NetEase, exe-name for others), so we report whatever is playing.
         string? sourceId = null;
         try { sourceId = session.SourceAppUserModelId; } catch { /* ignore */ }
-
-        // Empty whitelist = allow all (matches macOS semantics). Otherwise filter by the
-        // SMTC source id — BUT only when the source actually reports one. Some popular
-        // players (QQ Music / NetEase) expose an EMPTY SourceAppUserModelId, which can
-        // never be added to a whitelist; filtering them out would silently drop the very
-        // apps users care about. So a blank-id source is always allowed.
-        if (whitelist.Count > 0 && !string.IsNullOrEmpty(sourceId) && !whitelist.Contains(sourceId))
-            return null;
 
         GlobalSystemMediaTransportControlsSessionMediaProperties props;
         try

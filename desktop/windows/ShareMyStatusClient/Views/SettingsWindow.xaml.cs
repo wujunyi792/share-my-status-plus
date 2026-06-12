@@ -92,7 +92,7 @@ public partial class SettingsWindow : Window
         }
         else
         {
-            LblMusic.Text = "未在播放（或当前播放源不在白名单）";
+            LblMusic.Text = "未在播放";
         }
 
         var sys = _reporter.CurrentSystem;
@@ -143,7 +143,6 @@ public partial class SettingsWindow : Window
         SldSystem.Value = cfg.SystemPollingInterval;
         SldActivity.Value = cfg.ActivityPollingInterval;
         ChkAutostart.IsChecked = cfg.LaunchAtLogin;
-        TxtWhitelist.Text = string.Join(Environment.NewLine, cfg.MusicAppWhitelist);
 
         _groups.Clear();
         foreach (var g in cfg.ActivityGroups)
@@ -164,18 +163,12 @@ public partial class SettingsWindow : Window
         cfg.SystemPollingInterval = SldSystem.Value;
         cfg.ActivityPollingInterval = SldActivity.Value;
         cfg.LaunchAtLogin = ChkAutostart.IsChecked == true;
-        cfg.MusicAppWhitelist = ParseLines(TxtWhitelist.Text);
         cfg.ActivityGroups = _groups
             .Select(g => g.ToGroup())
             .Where(g => !string.IsNullOrWhiteSpace(g.Name))
             .ToList();
         return cfg;
     }
-
-    private static List<string> ParseLines(string text) =>
-        text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Distinct()
-            .ToList();
 
     // ---- Actions ----
 
@@ -393,20 +386,6 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private void OnPickMusicClick(object sender, RoutedEventArgs e)
-    {
-        var existing = ParseLines(TxtWhitelist.Text);
-        var picked = PickApps("选择媒体应用 (音乐白名单)", includeMediaSources: true);
-        if (picked == null)
-            return;
-
-        var merged = existing
-            .Concat(picked)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        TxtWhitelist.Text = string.Join(Environment.NewLine, merged);
-    }
-
     private void OnPickActivityClick(object sender, RoutedEventArgs e)
     {
         if (GroupsList.SelectedItem is not ActivityGroupEditModel model)
@@ -416,7 +395,7 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        var picked = PickApps("选择应用 (添加到分组)", includeMediaSources: false);
+        var picked = PickApps("选择应用 (添加到分组)");
         if (picked == null)
             return;
 
@@ -429,9 +408,9 @@ public partial class SettingsWindow : Window
         model.ProcessNamesText = string.Join(Environment.NewLine, merged);
     }
 
-    private IReadOnlyList<string>? PickApps(string title, bool includeMediaSources)
+    private IReadOnlyList<string>? PickApps(string title)
     {
-        var picker = new ProcessPickerWindow(title, includeMediaSources) { Owner = this };
+        var picker = new ProcessPickerWindow(title) { Owner = this };
         return picker.ShowDialog() == true ? picker.SelectedIdentifiers : null;
     }
 

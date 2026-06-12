@@ -94,7 +94,6 @@ public sealed class StatusReporter : IDisposable
 
         _network.UpdateConfiguration(clone.EndpointUrl, clone.SecretKey);
         _cover.UpdateConfiguration(clone.EndpointUrl, clone.SecretKey);
-        _media.UpdateWhitelist(clone.MusicAppWhitelist);
 
         _logger.Info("Configuration applied");
 
